@@ -68,19 +68,25 @@ if ticker:
 
             # --- Financials ---
             with st.expander("💰 Financials", expanded=False):
-                st.write(f"**Free Cash Flow:** {format_currency(info.get('freeCashflow'))}")
-                st.write(f"**Net Income:** {format_currency(info.get('netIncomeToCommon'))}")
-                st.write(f"**Total Revenue:** {format_currency(info.get('totalRevenue'))}")
-                st.write(f"**Total Debt:** {format_currency(info.get('totalDebt'))}")
-                st.write(f"**Total Cash:** {format_currency(info.get('totalCash'))}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Free Cash Flow:** {format_currency(info.get('freeCashflow'))}")
+                    st.write(f"**Net Income:** {format_currency(info.get('netIncomeToCommon'))}")
+                    st.write(f"**Total Revenue:** {format_currency(info.get('totalRevenue'))}")
+                with col2:
+                    st.write(f"**Total Debt:** {format_currency(info.get('totalDebt'))}")
+                    st.write(f"**Total Cash:** {format_currency(info.get('totalCash'))}")
 
-            # --- Margins & Growth ---
+                # --- Margins & Growth ---
             with st.expander("📊 Margins & Growth", expanded=False):
-                st.write(f"**Gross Margin:** {format_percent(info.get('grossMargins'))}")
-                st.write(f"**Operating Margin:** {format_percent(info.get('operatingMargins'))}")
-                st.write(f"**Profit Margin:** {format_percent(info.get('profitMargins'))}")
-                st.write(f"**Earnings Growth:** {format_percent(info.get('earningsGrowth'))}")
-                st.write(f"**Revenue Growth:** {format_percent(info.get('revenueGrowth'))}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Gross Margin:** {format_percent(info.get('grossMargins'))}")
+                    st.write(f"**Operating Margin:** {format_percent(info.get('operatingMargins'))}")
+                    st.write(f"**Profit Margin:** {format_percent(info.get('profitMargins'))}")
+                with col2:
+                    st.write(f"**Earnings Growth:** {format_percent(info.get('earningsGrowth'))}")
+                    st.write(f"**Revenue Growth:** {format_percent(info.get('revenueGrowth'))}")
 
             # --- Ownership ---
             with st.expander("📦 Ownership", expanded=False):
