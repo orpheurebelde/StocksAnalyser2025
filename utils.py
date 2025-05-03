@@ -20,10 +20,10 @@ def fetch_stock_data_alpha(ticker, apikey):
         return None
 
     df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index")
-    df = df.rename(columns={"5. adjusted close": "adj_close"}).astype(float)
+    df = df.rename(columns={"5. close": "close"}).astype(float)
     df.index = pd.to_datetime(df.index)
     df = df.sort_index()
-    return df[["adj_close"]]
+    return df[["close"]]
 
 def load_cached_data(ticker):
     path = os.path.join(DATA_DIR, f"{ticker.upper()}.csv")
