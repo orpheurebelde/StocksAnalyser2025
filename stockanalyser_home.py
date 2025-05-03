@@ -1,36 +1,71 @@
 import streamlit as st
-from utils import get_stock_analysis
-import pandas as pd
+from utils import get_stock_info
 
-# Streamlit Page Setup
-st.title("Stock Analyzer with Finnhub")
+# Set up Streamlit page config
+st.set_page_config(page_title="Stock Info", layout="wide")
 
-# User Input for stock symbol
-symbol = st.text_input("Enter Stock Symbol", "AAPL")
+st.title("📊 Stock Info")
 
-# User Input for date range (optional)
-start_date = st.date_input("Start Date", value=pd.to_datetime('2015-01-01'))
-end_date = st.date_input("End Date", value=pd.to_datetime('2025-01-01'))
+# Input for stock ticker
+ticker = st.text_input("Enter Stock Ticker", "AAPL")
 
-# Display analysis for the stock symbol
-if symbol:
-    analysis_data = get_stock_analysis(symbol, start_date=str(start_date), end_date=str(end_date))
-    
-    if isinstance(analysis_data, str):  # If the result is an error message
-        st.error(analysis_data)
-    else:
-        # Display stock data (Price, High, Low, etc.)
-        stock_data = analysis_data['stock_data']
-        st.write(f"**Current Price**: {stock_data['c']}")
-        st.write(f"**High**: {stock_data['h']}, **Low**: {stock_data['l']}")
-        st.write(f"**Open**: {stock_data['o']}, **Previous Close**: {stock_data['pc']}")
+if ticker:
+    info = get_stock_info(ticker)
 
-        # Display RSI data
-        rsi_data = analysis_data['rsi_data']
-        st.write("**RSI Data**:")
-        st.write(rsi_data[['time', 'RSI']])
+    # Display company information
+    st.subheader(f"{info.get('shortName', ticker)} ({ticker.upper()})")
 
-        # Display Historical Data (Closing prices)
-        historical_data = analysis_data['historical_data']
-        st.write("**Historical Data (Closing Prices)**:")
-        st.write(historical_data)
+    # Create columns to display data side by side
+    col1, col2 = st.columns(2)
+
+    # Left Column: Basic Info & Company Profile
+    with col1:
+        st.markdown("### Company Profile")
+        st.write(f"**Sector:** {info.get('sector')}")
+        st.write(f"**Industry:** {info.get('industry')}")
+        st.write(f"**Employees:** {info.get('fullTimeEmployees')}")
+        st.write(f"**Location:** {info.get('city')}, {info.get('state')}, {info.get('country')}")
+        st.write(f"**Website:** {info.get('website')}")
+        st.write(f"**Description:**\n{info.get('longBusinessSummary')}")
+
+    # Right Column: Valuation & Financials
+    with col2:
+        st.markdown("### Valuation & Fundamentals")
+        st.metric("Market Cap", f"{info.get('marketCap', 'N/A'):,}")
+        st.metric("Trailing P/E", info.get("trailingPE"))
+        st.metric("Forward P/E", info.get("forwardPE"))
+        st.metric("PEG Ratio", info.get("pegRatio"))
+        st.metric("P/B", info.get("priceToBook"))
+        st.metric("P/S", info.get("priceToSalesTrailing12Months"))
+
+        st.markdown("---")
+
+        st.metric("ROE", info.get("returnOnEquity"))
+        st.metric("EPS (Current Year)", info.get("epsCurrentYear"))
+        st.metric("EPS (Forward)", info.get("forwardEps"))
+        st.metric("Dividend Yield", info.get("dividendYield"))
+
+    # Financials Section
+    st.markdown("### Financials")
+    st.write(f"**Free Cash Flow:** {info.get('freeCashflow'):,}")
+    st.write(f"**Net Income:** {info.get('netIncomeToCommon'):,}")
+    st.write(f"**Total Revenue:** {info.get('totalRevenue'):,}")
+    st.write(f"**Total Debt:** {info.get('totalDebt'):,}")
+    st.write(f"**Total Cash:** {info.get('totalCash'):,}")
+
+    # Margins & Growth Section
+    st.markdown("### Margins & Growth")
+    st.write(f"**Gross Margin:** {info.get('grossMargins')}")
+    st.write(f"**Operating Margin:** {info.get('operatingMargins')}")
+    st.write(f"**Profit Margin:** {info.get('profitMargins')}")
+    st.write(f"**Earnings Growth:** {info.get('earningsGrowth')}")
+    st.write(f"**Revenue Growth:** {info.get('revenueGrowth')}")
+
+    # Ownership Section
+    st.markdown("### Ownership")
+    st.write(f"**Institutional Ownership:** {info.get('heldPercentInstitutions')}")
+    st.write(f"**Insider Ownership:** {info.get('heldPercentInsiders')}")
+
+    # Show the logo image if available
+    if info.get("logo_url") and info["logo_url"].startswith("http"):
+        st.image(info["logo_url"], width=100)

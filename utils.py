@@ -1,119 +1,53 @@
 import os
-import pickle
+import json
+import yfinance as yf
 from datetime import datetime, timedelta
-import pandas as pd
-import requests
-import streamlit as st
 
-FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
-BASE_URL = "https://finnhub.io/api/v1"
-DATA_FOLDER = "data"
+CACHE_DIR = "cache"
+CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
 
-# Make sure the data folder exists
-os.makedirs(DATA_FOLDER, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-# Function to fetch stock data (latest price, open, high, low, etc.)
-def get_stock_data(symbol):
-    url = f"{BASE_URL}/quote?symbol={symbol}&token={FINNHUB_API_KEY}"
-    response = requests.get(url)
-    data = response.json()
+def get_cache_filepath(ticker):
+    """Returns the file path for a specific stock's cache."""
+    return os.path.join(CACHE_DIR, f"{ticker.upper()}_info.json")
+
+def is_cache_valid(filepath):
+    """Check if the cache file exists and is still valid (within 24 hours)."""
+    if not os.path.exists(filepath):
+        return False
+    file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+    return datetime.now() - file_time < timedelta(hours=CACHE_DURATION_HOURS)
+
+def fetch_and_cache_stock_info(ticker):
+    """Fetch stock info using yfinance and cache the result."""
+    ticker = ticker.upper()
+    stock = yf.Ticker(ticker)
+    info = stock.info
+
+    # List of fields to cache
+    fields = [
+        "marketCap", "freeCashflow", "netIncomeToCommon", "grossMargins", "operatingMargins",
+        "profitMargins", "earningsGrowth", "revenueGrowth", "dividendYield", "trailingPE", 
+        "forwardPE", "pegRatio", "priceToBook", "priceToSalesTrailing12Months", "returnOnEquity",
+        "epsCurrentYear", "forwardEps", "totalRevenue", "totalDebt", "totalCash", "heldPercentInstitutions",
+        "heldPercentInsiders", "longBusinessSummary", "sector", "industry", "website", "fullTimeEmployees",
+        "city", "state", "country", "logo_url", "symbol", "shortName"
+    ]
+
+    data = {field: info.get(field, "N/A") for field in fields}
+
+    # Save to cache
+    with open(get_cache_filepath(ticker), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+
     return data
 
-def get_stock_history(symbol, start_date="2018-01-01", end_date=None):
-    if end_date is None:
-        end_date = datetime.today().strftime('%Y-%m-%d')
-
-    cache_filename = os.path.join(DATA_FOLDER, f"{symbol}_{start_date}_{end_date}.pkl")
-
-    # Use cached data if it's less than 1 day old
-    if os.path.exists(cache_filename):
-        file_timestamp = os.path.getmtime(cache_filename)
-        last_modified = datetime.fromtimestamp(file_timestamp)
-        if (datetime.now() - last_modified).days < 1:
-            with open(cache_filename, 'rb') as f:
-                return pickle.load(f)
-
-    # Convert dates to UNIX timestamps
-    try:
-        start_ts = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp())
-        end_ts = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp())
-    except Exception as e:
-        st.error(f"Date parsing error: {e}")
-        return None
-
-    # Call Finnhub daily candle API
-    url = f"{BASE_URL}/stock/candle"
-    params = {
-        "symbol": symbol,
-        "resolution": "D",
-        "from": start_ts,
-        "to": end_ts,
-        "token": FINNHUB_API_KEY
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
-
-    # Handle API errors
-    if data.get("s") != "ok":
-        st.error(f"No historical data found for {symbol}. Response: {data}")
-        return None
-
-    # Convert to DataFrame
-    df = pd.DataFrame({
-        "time": pd.to_datetime(data["t"], unit="s"),
-        "open": data["o"],
-        "high": data["h"],
-        "low": data["l"],
-        "close": data["c"],
-        "volume": data["v"]
-    })
-
-    # Cache to disk
-    with open(cache_filename, 'wb') as f:
-        pickle.dump(df, f)
-
-    return df
-
-# Function to fetch technical indicators (e.g., RSI)
-def get_technical_indicators(symbol, indicator='rsi', start_date='2015-01-01', end_date='2025-01-01'):
-    df = get_stock_history(symbol, start_date, end_date)
-    if df is None:
-        return None  # Return None if no data available
-    
-    if indicator == 'rsi':
-        return calculate_rsi(df)
-    # Add more indicators (e.g., MACD) as needed
-
-# Example function to calculate RSI
-def calculate_rsi(df, window=14):
-    delta = df['close'].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=window).mean()
-    avg_loss = loss.rolling(window=window).mean()
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    df['RSI'] = rsi
-    return df
-
-# Function to get stock data and technical indicators combined
-def get_stock_analysis(symbol, start_date='2015-01-01', end_date='2025-01-01'):
-    # Get Stock Data
-    stock_data = get_stock_data(symbol)
-
-    if stock_data.get('error', False):
-        return f"Error: Could not fetch data for {symbol}."
-    
-    # Get Historical Data and Indicators
-    historical_data = get_stock_history(symbol, start_date, end_date)
-    if historical_data is None:
-        return f"Error: No historical data found for {symbol}."
-    
-    # Get RSI (can add other indicators as well)
-    rsi_data = get_technical_indicators(symbol, indicator='rsi', start_date=start_date, end_date=end_date)
-    
-    return {
-        'stock_data': stock_data,
-        'historical_data': historical_data,
-        'rsi_data': rsi_data
-    }
+def get_stock_info(ticker):
+    """Get stock info, either from cache or by fetching and caching."""
+    cache_file = get_cache_filepath(ticker)
+    if is_cache_valid(cache_file):
+        with open(cache_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    else:
+        return fetch_and_cache_stock_info(ticker)
