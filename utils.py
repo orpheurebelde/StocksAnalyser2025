@@ -46,13 +46,20 @@ def fetch_and_cache_stock_info(ticker):
         
         return data
     
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 401:
+            print(f"Error 401: Authentication failed for {ticker}. Check API keys or permissions.")
+        else:
+            print(f"HTTP Error {e.response.status_code}: {e.response.reason} while fetching {ticker}")
+        return {"error": f"Could not retrieve data for {ticker}. Authentication failed. Please check API keys or permissions."}
+    
     except requests.exceptions.RequestException as e:
-        # Handle request errors (e.g., network problems, invalid ticker)
+        # Handle any request exceptions
         print(f"Error fetching data for {ticker}: {e}")
-        return {"error": f"Could not retrieve data for {ticker}. Please check the ticker symbol or try again later."}
+        return {"error": f"Could not retrieve data for {ticker}. Please try again later."}
     
     except Exception as e:
-        # Handle any other exceptions
+        # Handle other exceptions
         print(f"Unexpected error: {e}")
         return {"error": f"An unexpected error occurred: {e}"}
 
