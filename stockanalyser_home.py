@@ -18,7 +18,7 @@ if "selected_ticker" not in st.session_state:
 
 if search_input:
     # Dynamically fetch matching tickers
-    ticker_options = get_ticker_from_name(search_input)
+    ticker_options = get_stock_info(search_input)
 
     with st.expander("### Matching Companies:"):
         if ticker_options:
