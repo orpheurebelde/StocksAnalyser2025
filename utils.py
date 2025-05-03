@@ -2,6 +2,7 @@ import os
 import json
 import yfinance as yf
 from datetime import datetime, timedelta
+import requests
 
 CACHE_DIR = "cache"
 CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
@@ -23,25 +24,37 @@ def fetch_and_cache_stock_info(ticker):
     """Fetch stock info using yfinance and cache the result."""
     ticker = ticker.upper()
     stock = yf.Ticker(ticker)
-    info = stock.info
-
-    # List of fields to cache
-    fields = [
-        "marketCap", "freeCashflow", "netIncomeToCommon", "grossMargins", "operatingMargins",
-        "profitMargins", "earningsGrowth", "revenueGrowth", "dividendYield", "trailingPE", 
-        "forwardPE", "pegRatio", "priceToBook", "priceToSalesTrailing12Months", "returnOnEquity",
-        "epsCurrentYear", "forwardEps", "totalRevenue", "totalDebt", "totalCash", "heldPercentInstitutions",
-        "heldPercentInsiders", "longBusinessSummary", "sector", "industry", "website", "fullTimeEmployees",
-        "city", "state", "country", "logo_url", "symbol", "shortName"
-    ]
-
-    data = {field: info.get(field, "N/A") for field in fields}
-
-    # Save to cache
-    with open(get_cache_filepath(ticker), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-
-    return data
+    
+    try:
+        info = stock.info
+        # List of fields to cache
+        fields = [
+            "marketCap", "freeCashflow", "netIncomeToCommon", "grossMargins", "operatingMargins",
+            "profitMargins", "earningsGrowth", "revenueGrowth", "dividendYield", "trailingPE", 
+            "forwardPE", "pegRatio", "priceToBook", "priceToSalesTrailing12Months", "returnOnEquity",
+            "epsCurrentYear", "forwardEps", "totalRevenue", "totalDebt", "totalCash", "heldPercentInstitutions",
+            "heldPercentInsiders", "longBusinessSummary", "sector", "industry", "website", "fullTimeEmployees",
+            "city", "state", "country", "logo_url", "symbol", "shortName"
+        ]
+        
+        # Collect necessary data from the info
+        data = {field: info.get(field, "N/A") for field in fields}
+        
+        # Save to cache
+        with open(get_cache_filepath(ticker), "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+        
+        return data
+    
+    except requests.exceptions.RequestException as e:
+        # Handle request errors (e.g., network problems, invalid ticker)
+        print(f"Error fetching data for {ticker}: {e}")
+        return {"error": f"Could not retrieve data for {ticker}. Please check the ticker symbol or try again later."}
+    
+    except Exception as e:
+        # Handle any other exceptions
+        print(f"Unexpected error: {e}")
+        return {"error": f"An unexpected error occurred: {e}"}
 
 def get_stock_info(ticker):
     """Get stock info, either from cache or by fetching and caching."""
