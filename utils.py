@@ -11,21 +11,21 @@ os.makedirs(DATA_DIR, exist_ok=True)
 def fetch_stock_data_alpha(ticker, apikey):
     url = (
         f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY"
-        f"&symbol={ticker}&outputsize=full&apikey={apikey}"
+        f"&symbol={ticker}&apikey={apikey}"
     )
     r = requests.get(url)
     data = r.json()
 
-    # Check if the response contains valid time series data
+    # Ensure the response contains valid data
     if "Time Series (Daily)" not in data:
-        return None
+        return None  # If the API returns an error or invalid data
 
-    # Parse the response and convert it to a DataFrame
+    # Convert the time series data to a DataFrame
     df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index")
     df = df.rename(columns={"5. close": "close"}).astype(float)
     df.index = pd.to_datetime(df.index)
-    df = df.sort_index()
-    return df[["close"]]
+    df = df.sort_index()  # Sort by date
+    return df[["close"]]  # Return only the 'close' column
 
 # Function to load cached data
 def load_cached_data(ticker):
