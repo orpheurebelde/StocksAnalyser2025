@@ -1,32 +1,35 @@
 import streamlit as st
-from utils import *
-import os
+from utils import pd, get_stock_analysis
 
-st.set_page_config("Stock Info", layout="wide")
+# Streamlit Page Setup
+st.title("Stock Analyzer with Finnhub")
 
-st.title("📈 Stock Info with Finnhub")
-ticker = st.text_input("Enter stock ticker (e.g. AAPL)", value="AAPL").upper()
+# User Input for stock symbol
+symbol = st.text_input("Enter Stock Symbol", "AAPL")
 
-if ticker:
-    apikey = st.secrets["FINNHUB_API_KEY"]  # Using Finnhub API key
+# User Input for date range (optional)
+start_date = st.date_input("Start Date", value=pd.to_datetime('2015-01-01'))
+end_date = st.date_input("End Date", value=pd.to_datetime('2025-01-01'))
 
-    if is_data_stale(ticker):
-        with st.spinner(f"Fetching fresh data for {ticker}..."):
-            df = fetch_stock_data_finnhub(ticker, apikey)
-            if df is not None:
-                save_data(ticker, df)
-            else:
-                st.error("API limit reached or invalid ticker.")
-                st.stop()
+# Display analysis for the stock symbol
+if symbol:
+    analysis_data = get_stock_analysis(symbol, start_date=str(start_date), end_date=str(end_date))
+    
+    if isinstance(analysis_data, str):  # If the result is an error message
+        st.error(analysis_data)
     else:
-        df = load_cached_data(ticker)
+        # Display stock data (Price, High, Low, etc.)
+        stock_data = analysis_data['stock_data']
+        st.write(f"**Current Price**: {stock_data['c']}")
+        st.write(f"**High**: {stock_data['h']}, **Low**: {stock_data['l']}")
+        st.write(f"**Open**: {stock_data['o']}, **Previous Close**: {stock_data['pc']}")
 
-    if df is not None and not df.empty:
-        st.subheader(f"📉 Stock Data for {ticker}")
-        st.line_chart(df.set_index("timestamp")["close"])
+        # Display RSI data
+        rsi_data = analysis_data['rsi_data']
+        st.write("**RSI Data**:")
+        st.write(rsi_data[['time', 'RSI']])
 
-        with st.expander("📊 Key Metrics"):
-            st.markdown("Coming soon: P/E, EPS, Revenue, etc.")
-
-        with st.expander("🏢 Company Info"):
-            st.markdown("Coming soon: Sector, Description, Exchange, etc.")
+        # Display Historical Data (Closing prices)
+        historical_data = analysis_data['historical_data']
+        st.write("**Historical Data (Closing Prices)**:")
+        st.write(historical_data)
