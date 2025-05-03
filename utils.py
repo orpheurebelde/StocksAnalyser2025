@@ -10,7 +10,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # Alpha Vantage URL builder
 def fetch_stock_data_alpha(ticker, apikey):
     url = (
-        f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED"
+        f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY"
         f"&symbol={ticker}&outputsize=full&apikey={apikey}"
     )
     r = requests.get(url)
