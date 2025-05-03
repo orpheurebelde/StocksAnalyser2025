@@ -1,5 +1,6 @@
 import streamlit as st
-from utils import pd, get_stock_analysis
+from utils import get_stock_analysis
+import pandas as pd
 
 # Streamlit Page Setup
 st.title("Stock Analyzer with Finnhub")
