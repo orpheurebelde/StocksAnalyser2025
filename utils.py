@@ -15,14 +15,14 @@ def fetch_stock_data_finnhub(ticker, apikey):
     if 'error' in data:
         return None
 
-    # Get the time series data
+    # Get the stock data (no volume in this endpoint)
     df = pd.DataFrame({
         'timestamp': [datetime.now()],
         'close': [data['c']],  # 'c' is the current close price
-        'high': [data['h']],
-        'low': [data['l']],
-        'open': [data['o']],
-        'volume': [data['v']],
+        'high': [data['h']],   # 'h' is the high price
+        'low': [data['l']],    # 'l' is the low price
+        'open': [data['o']],   # 'o' is the open price
+        'previous_close': [data['pc']],  # 'pc' is the previous close price
     })
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     return df
