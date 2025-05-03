@@ -1,5 +1,5 @@
 import streamlit as st
-from utils import get_stock_info
+from utils import get_stock_info, get_logo_url, safe_metric
 
 # Set page config
 st.set_page_config(page_title="Stock Info", layout="wide")

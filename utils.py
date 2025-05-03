@@ -71,3 +71,19 @@ def get_stock_info(ticker):
             return json.load(f)
     else:
         return fetch_and_cache_stock_info(ticker)
+
+# Check if key exists and value is valid before using it
+def safe_metric(value, divisor=1, suffix="", percentage=False):
+        """Safely formats a metric value for Streamlit display."""
+        try:
+            if value is None:
+                return "N/A"
+            if isinstance(value, (int, float)):
+                if math.isnan(value):  # Handle NaN values
+                    return "N/A"
+                if percentage:
+                    return f"{value:.2%}"
+                return f"${value / divisor:.2f}{suffix}" if divisor > 1 else f"${value:.2f}"
+            return "N/A"
+        except Exception as e:
+            return f"Error: {e}"  # Return error message instead of crashing
