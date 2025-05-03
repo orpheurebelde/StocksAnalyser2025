@@ -58,11 +58,13 @@ if ticker:
                     st.metric("P/S", format_ratio(info.get("priceToSalesTrailing12Months")))
 
                 st.divider()
-
-                st.metric("ROE", format_percent(info.get("returnOnEquity")))
-                st.metric("EPS (Current Year)", format_currency_dec(info.get("epsCurrentYear")))
-                st.metric("EPS (Forward)", format_currency_dec(info.get("forwardEps")))
-                st.metric("Dividend Yield", format_percent(info.get("dividendYield")))
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("ROE", format_percent(info.get("returnOnEquity")))
+                    st.metric("EPS (Current Year)", format_currency_dec(info.get("epsCurrentYear")))
+                with col2:
+                    st.metric("EPS (Forward)", format_currency_dec(info.get("forwardEps")))
+                    st.metric("Dividend Yield", format_percent(info.get("dividendYield")))
 
             # --- Financials ---
             with st.expander("💰 Financials", expanded=False):
