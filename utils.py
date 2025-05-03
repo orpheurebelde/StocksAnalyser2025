@@ -12,6 +12,13 @@ DATA_FOLDER = "data"
 # Make sure the data folder exists
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
+# Function to fetch stock data (latest price, open, high, low, etc.)
+def get_stock_data(symbol):
+    url = f"{BASE_URL}/quote?symbol={symbol}&token={FINNHUB_API_KEY}"
+    response = requests.get(url)
+    data = response.json()
+    return data
+
 def get_stock_history(symbol, start_date="2018-01-01", end_date=None):
     if end_date is None:
         end_date = datetime.today().strftime('%Y-%m-%d')
