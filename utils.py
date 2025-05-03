@@ -66,3 +66,47 @@ def get_stock_history(symbol, start_date="2018-01-01", end_date=None):
         pickle.dump(df, f)
 
     return df
+
+# Function to fetch technical indicators (e.g., RSI)
+def get_technical_indicators(symbol, indicator='rsi', start_date='2015-01-01', end_date='2025-01-01'):
+    df = get_stock_history(symbol, start_date, end_date)
+    if df is None:
+        return None  # Return None if no data available
+    
+    if indicator == 'rsi':
+        return calculate_rsi(df)
+    # Add more indicators (e.g., MACD) as needed
+
+# Example function to calculate RSI
+def calculate_rsi(df, window=14):
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=window).mean()
+    avg_loss = loss.rolling(window=window).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    df['RSI'] = rsi
+    return df
+
+# Function to get stock data and technical indicators combined
+def get_stock_analysis(symbol, start_date='2015-01-01', end_date='2025-01-01'):
+    # Get Stock Data
+    stock_data = get_stock_data(symbol)
+
+    if stock_data.get('error', False):
+        return f"Error: Could not fetch data for {symbol}."
+    
+    # Get Historical Data and Indicators
+    historical_data = get_stock_history(symbol, start_date, end_date)
+    if historical_data is None:
+        return f"Error: No historical data found for {symbol}."
+    
+    # Get RSI (can add other indicators as well)
+    rsi_data = get_technical_indicators(symbol, indicator='rsi', start_date=start_date, end_date=end_date)
+    
+    return {
+        'stock_data': stock_data,
+        'historical_data': historical_data,
+        'rsi_data': rsi_data
+    }
