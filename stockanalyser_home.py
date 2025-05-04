@@ -32,7 +32,7 @@ if ticker:
         st.subheader(f"{info.get('shortName', ticker)} ({ticker.upper()})")
 
         # Use wide layout but center logical content into wide columns
-        #left, main, right = st.columns([0.5, 10, 0.5])
+        left, main, right = st.columns([0.5, 10, 0.5])
 
         with main:
 
