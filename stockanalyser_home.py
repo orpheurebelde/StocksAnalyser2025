@@ -15,14 +15,20 @@ def load_stock_list():
 
 stock_df = load_stock_list()
 
-# Input with dynamic search
+# Insert a placeholder first option
+options = ["Select a stock..."] + stock_df["Display"].tolist()
+
 selected_display = st.selectbox(
-    "Search Stock by Ticker or Name",
-    stock_df["Display"].tolist()
+    "🔎 Search Stock by Ticker or Name",
+    options,
+    index=0,  # This makes the placeholder appear initially
 )
 
-# Extract selected ticker
-ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
+# Only proceed if a real stock is selected
+if selected_display != "Select a stock...":
+    ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
+    # Now you can use `ticker` with get_stock_info(ticker)
+    st.success(f"You selected: {ticker}")
 
 def format_currency(val):
     return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
