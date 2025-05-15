@@ -22,7 +22,7 @@ selected_display = st.selectbox(
 )
 
 # Extract selected ticker
-ticker = stock_df.loc[stock_df["Display"] == selected_display, "Symbol"].values[0]
+ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
 
 def format_currency(val):
     return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
