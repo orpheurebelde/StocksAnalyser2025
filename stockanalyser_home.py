@@ -1,12 +1,28 @@
 import streamlit as st
+import pandas as pd
 from utils import get_stock_info
 
 # Set page config
 st.set_page_config(page_title="Stock Info", layout="wide")
 st.title("📊 Stock Info")
 
-# Input
-ticker = st.text_input("Enter Stock Ticker", "AAPL")
+# Load stock list
+@st.cache_data
+def load_stock_list():
+    df = pd.read_csv("stocks_list.csv")
+    df["Display"] = df["Symbol"] + " - " + df["Name"]
+    return df
+
+stock_df = load_stock_list()
+
+# Input with dynamic search
+selected_display = st.selectbox(
+    "Search Stock by Ticker or Name",
+    stock_df["Display"].tolist()
+)
+
+# Extract selected ticker
+ticker = stock_df.loc[stock_df["Display"] == selected_display, "Symbol"].values[0]
 
 def format_currency(val):
     return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
