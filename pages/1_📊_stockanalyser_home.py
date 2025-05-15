@@ -2,6 +2,16 @@ import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
 
+st.set_page_config(page_title="Finance Dashboard", layout="wide")
+st.title("📁 Welcome to Your Finance App")
+
+st.markdown("""
+### Choose a section from the left sidebar:
+- 📊 Stock Info
+- 📈 Market Analysis
+- 🧠 Forecasting
+""")
+
 # Set page config
 st.set_page_config(page_title="Stock Info", layout="wide")
 st.title("📊 Stock Info")
