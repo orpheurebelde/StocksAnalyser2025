@@ -10,7 +10,7 @@ st.title("📊 Stock Info")
 @st.cache_data
 def load_stock_list():
     df = pd.read_csv("stocks_list.csv")
-    df["Display"] = df["Symbol"] + " - " + df["Name"]
+    df["Display"] = df["Ticker"] + " - " + df["Name"]
     return df
 
 stock_df = load_stock_list()
