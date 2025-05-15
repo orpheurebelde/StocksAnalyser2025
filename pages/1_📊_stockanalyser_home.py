@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import get_stock_info
+from utils.utils import get_stock_info
 
 # Set page config
 st.set_page_config(page_title="Stock Info", layout="wide")
