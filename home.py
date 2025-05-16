@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 from utils.utils import get_vix_data, create_vix_gauge
+import plotly.graph_objects as go
 
 # --- Set page config ---
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
