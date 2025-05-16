@@ -2,9 +2,8 @@ import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
 
-# Set page config
-st.set_page_config(page_title="Stock Info", layout="wide")
-st.title("📊 Stock Info")
+st.set_page_config(page_title="Finance Dashboard", layout="wide")
+st.title("📁 Welcome to Your Finance App")
 
 # Load stock list
 @st.cache_data
