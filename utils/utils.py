@@ -99,27 +99,35 @@ def get_vix_data():
         return data["Close"].iloc[-1]
     return None
 
-def create_vix_gauge(value):
-    """Create a Plotly gauge chart for the VIX index."""
+def create_vix_gauge(vix_value):
     fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=value,
-        title={'text': "VIX Fear & Greed Gauge"},
+        mode="gauge+number",
+        value=vix_value,
+        number={
+            "font": {"size": 36},  # Control number size
+        },
         gauge={
-            'axis': {'range': [0, 50]},
-            'bar': {'color': "darkblue"},
-            'steps': [
-                {'range': [0, 12], 'color': 'red'},          # Extreme Greed
-                {'range': [12, 20], 'color': 'orange'},      # Greed
-                {'range': [20, 28], 'color': 'yellow'},      # Neutral
-                {'range': [28, 35], 'color': 'lightgreen'},  # Fear
-                {'range': [35, 50], 'color': 'green'},       # Extreme Fear
+            "axis": {"range": [0, 50], "tickwidth": 1, "tickcolor": "darkgray"},
+            "bar": {"color": "darkblue", "thickness": 0.25},
+            "steps": [
+                {"range": [0, 12], "color": "#00cc44"},    # Extreme Greed
+                {"range": [12, 20], "color": "#ffcc00"},   # Greed
+                {"range": [20, 28], "color": "#cccccc"},   # Neutral
+                {"range": [28, 35], "color": "#ff9933"},   # Fear
+                {"range": [35, 50], "color": "#ff3333"},   # Extreme Fear
             ],
-            'threshold': {
-                'line': {'color': "black", 'width': 4},
-                'thickness': 0.75,
-                'value': value
+            "threshold": {
+                "line": {"color": "black", "width": 4},
+                "thickness": 0.75,
+                "value": vix_value,
             }
-        }
+        },
+        domain={'x': [0, 1], 'y': [0, 1]}  # Ensure full center
     ))
+
+    fig.update_layout(
+        margin=dict(t=40, b=40, l=40, r=40),
+        height=400,  # Optional: adjust size
+    )
+
     return fig
