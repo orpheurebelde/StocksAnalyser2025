@@ -40,9 +40,10 @@ else:
 
     vix_value = fetch_vix_cached()
 
-    left_col, right_col = st.columns([2, 1])
-
     with st.expander("🏢 Market Sentiment Indicator", expanded=True):
+
+        left_col, right_col = st.columns([2, 1])
+        
         with left_col:
             if vix_value is not None:
                 st.plotly_chart(create_vix_gauge(vix_value), use_container_width=True)
