@@ -31,7 +31,7 @@ with left_col:
         st.error("Could not load VIX data. Please try again later.")
 
 with right_col:
-    st.markdown('<div style="height: 50px;"></div>', unsafe_allow_html=True)  # Adds 50px of vertical space
+    st.markdown('<div style="height: 65px;"></div>', unsafe_allow_html=True)  # Adds 50px of vertical space
     st.markdown(
         """
         <div style="
