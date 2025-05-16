@@ -1,5 +1,5 @@
 import streamlit as st
-from utils import get_vix_data, create_vix_gauge
+from utils.utils import get_vix_data, create_vix_gauge
 
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
@@ -26,7 +26,7 @@ else:
 # Zone legend
 st.markdown("""
 ### Gauge Zones
-- **0–12**: 🟢 *Extreme Greed*
+- **00–12**: 🟢 *Extreme Greed*
 - **12–20**: 🟡 *Greed*
 - **20–28**: ⚪️ *Neutral*
 - **28–35**: 🟠 *Fear*

@@ -4,6 +4,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import requests
 import plotly.graph_objects as go
+import math
 
 CACHE_DIR = "cache"
 CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
@@ -88,7 +89,8 @@ def safe_metric(value, divisor=1, suffix="", percentage=False):
             return "N/A"
         except Exception as e:
             return f"Error: {e}"  # Return error message instead of crashing
-        
+
+#Get VIX data        
 def get_vix_data():
     """Fetch the latest VIX value from Yahoo Finance."""
     vix = yf.Ticker("^VIX")
