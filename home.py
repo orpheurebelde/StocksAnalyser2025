@@ -26,17 +26,21 @@ left_col, right_col = st.columns([2, 1])  # Wider for chart
 with left_col:
     if vix_value is not None:
         st.plotly_chart(create_vix_gauge(vix_value), use_container_width=True)
-        st.success(f"Current VIX: **{vix_value:.2f}**")
+        st.success(f"**Current VIX: {vix_value:.2f}**")  # ✅ moved inside left_col
     else:
         st.error("Could not load VIX data. Please try again later.")
 
-# Zone legend
 with right_col:
-    st.markdown("""
-    ### Gauge Zones
-    - **00–12**: 🟢 *Extreme Greed*
-    - **12–20**: 🟡 *Greed*
-    - **20–28**: ⚪️ *Neutral*
-    - **28–35**: 🟠 *Fear*
-    - **35–50**: 🔴 *Extreme Fear*
-    """)
+    st.markdown(
+        """
+        <div style='text-align: center'>
+            <h4>Gauge Zones</h4>
+            <p><b>00–12</b>: 🟢 <i>Extreme Greed</i></p>
+            <p><b>12–20</b>: 🟡 <i>Greed</i></p>
+            <p><b>20–28</b>: ⚪️ <i>Neutral</i></p>
+            <p><b>28–35</b>: 🟠 <i>Fear</i></p>
+            <p><b>35–50</b>: 🔴 <i>Extreme Fear</i></p>
+        </div>
+        """,
+        unsafe_allow_html=True  # ✅ enables center alignment via HTML
+    )
