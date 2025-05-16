@@ -45,7 +45,7 @@ else:
     with left_col:
         if vix_value is not None:
             st.plotly_chart(create_vix_gauge(vix_value), use_container_width=True)
-            st.success(f"**Current VIX: {vix_value:.2f}**")
+            #st.success(f"**Current VIX: {vix_value:.2f}**")
         else:
             st.error("Could not load VIX data. Please try again later.")
 
