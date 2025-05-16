@@ -33,14 +33,25 @@ with left_col:
 with right_col:
     st.markdown(
         """
-        <div style='text-align: center'>
-            <h4>Gauge Zones</h4>
-            <p><b>00–12</b>: 🟢 <i>Extreme Greed</i></p>
-            <p><b>12–20</b>: 🟡 <i>Greed</i></p>
-            <p><b>20–28</b>: ⚪️ <i>Neutral</i></p>
-            <p><b>28–35</b>: 🟠 <i>Fear</i></p>
-            <p><b>35–50</b>: 🔴 <i>Extreme Fear</i></p>
+        <div style="
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        ">
+            <div style="
+                margin: auto;
+                text-align: justify;
+                max-width: 250px;
+            ">
+                <h4 style="text-align: center;">Gauge Zones</h4>
+                <p><b>00–12</b>: 🟢 <i>Extreme Greed</i></p>
+                <p><b>12–20</b>: 🟡 <i>Greed</i></p>
+                <p><b>20–28</b>: ⚪️ <i>Neutral</i></p>
+                <p><b>28–35</b>: 🟠 <i>Fear</i></p>
+                <p><b>35–50</b>: 🔴 <i>Extreme Fear</i></p>
+            </div>
         </div>
         """,
-        unsafe_allow_html=True  # ✅ enables center alignment via HTML
+        unsafe_allow_html=True
     )
