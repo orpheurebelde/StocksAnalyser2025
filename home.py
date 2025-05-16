@@ -3,8 +3,9 @@ from utils.utils import get_vix_data, create_vix_gauge
 
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 
-USERNAME = "stockanalyser"
-PASSWORD = "stockanalyser"
+# Read credentials from secrets
+USERNAME = st.secrets["login"]["username"]
+PASSWORD = st.secrets["login"]["password"]
 
 def login():
     st.title("🔐 Please Log In")
@@ -16,7 +17,6 @@ def login():
         if username == USERNAME and password == PASSWORD:
             st.session_state["logged_in"] = True
             st.success("Logged in successfully!")
-            # Instead of calling rerun here, set a flag
             st.session_state["rerun"] = True
         else:
             st.error("Incorrect username or password")
@@ -25,7 +25,6 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if "rerun" in st.session_state and st.session_state["rerun"]:
-    # Clear the rerun flag and rerun the app
     st.session_state["rerun"] = False
     st.experimental_rerun()
 
