@@ -1,78 +1,87 @@
 import os
 import json
 import yfinance as yf
+import pandas as pd
 from datetime import datetime, timedelta
 import requests
-import plotly.graph_objects as go
+from hashlib import md5
 import math
+import plotly.graph_objects as go
 
 CACHE_DIR = "cache"
+CSV_PATH = os.path.join(CACHE_DIR, "all_stock_info.csv")
 CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-def get_cache_filepath(ticker):
-    """Returns the file path for a specific stock's cache."""
-    return os.path.join(CACHE_DIR, f"{ticker.upper()}_info.json")
-
-def is_cache_valid(filepath):
-    """Check if the cache file exists and is still valid (within 24 hours)."""
-    if not os.path.exists(filepath):
+def is_cache_valid(ticker):
+    """Check if the ticker's data in CSV is still valid (within 24 hours)."""
+    if not os.path.exists(CSV_PATH):
         return False
-    file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+    file_time = datetime.fromtimestamp(os.path.getmtime(CSV_PATH))
     return datetime.now() - file_time < timedelta(hours=CACHE_DURATION_HOURS)
 
 def fetch_and_cache_stock_info(ticker):
-    """Fetch stock info using yfinance and cache the result."""
+    """Fetch stock info using yfinance and cache all fields in a shared CSV file."""
     ticker = ticker.upper()
     stock = yf.Ticker(ticker)
-    
+
     try:
         info = stock.info
-        # List of fields to cache
-        fields = [
-            "marketCap", "freeCashflow", "netIncomeToCommon", "grossMargins", "operatingMargins",
-            "profitMargins", "earningsGrowth", "revenueGrowth", "dividendYield", "trailingPE", 
-            "forwardPE", "pegRatio", "priceToBook", "priceToSalesTrailing12Months", "returnOnEquity",
-            "epsCurrentYear", "forwardEps", "totalRevenue", "totalDebt", "totalCash", "heldPercentInstitutions",
-            "heldPercentInsiders", "longBusinessSummary", "sector", "industry", "website", "fullTimeEmployees",
-            "city", "state", "country", "logo_url", "symbol", "shortName"
-        ]
-        
-        # Collect necessary data from the info
-        data = {field: info.get(field, "N/A") for field in fields}
-        
-        # Save to cache
-        with open(get_cache_filepath(ticker), "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
-        
-        return data
-    
+        if not info or "symbol" not in info:
+            raise ValueError("Invalid ticker or empty data.")
+
+        df_new = pd.DataFrame([info])
+
+        if os.path.exists(CSV_PATH):
+            df_existing = pd.read_csv(CSV_PATH)
+            df_existing.set_index("symbol", inplace=True)
+        else:
+            df_existing = pd.DataFrame().set_index("symbol")
+
+        new_hash = md5(json.dumps(info, sort_keys=True).encode()).hexdigest()
+        existing_hash = None
+        if ticker in df_existing.index:
+            existing_data = df_existing.loc[ticker].dropna().to_dict()
+            existing_hash = md5(json.dumps(existing_data, sort_keys=True).encode()).hexdigest()
+
+        if new_hash != existing_hash:
+            df_new.set_index("symbol", inplace=True)
+            df_combined = pd.concat([df_existing.drop(index=ticker, errors='ignore'), df_new])
+            df_combined.to_csv(CSV_PATH)
+            print(f"✅ Cached info for {ticker} updated.")
+        else:
+            print(f"ℹ️ No changes for {ticker}. Cache untouched.")
+
+        return info
+
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 401:
             print(f"Error 401: Authentication failed for {ticker}. Check API keys or permissions.")
         else:
             print(f"HTTP Error {e.response.status_code}: {e.response.reason} while fetching {ticker}")
         return {"error": f"Could not retrieve data for {ticker}. Authentication failed. Please check API keys or permissions."}
-    
+
     except requests.exceptions.RequestException as e:
-        # Handle any request exceptions
         print(f"Error fetching data for {ticker}: {e}")
         return {"error": f"Could not retrieve data for {ticker}. Please try again later."}
-    
+
     except Exception as e:
-        # Handle other exceptions
         print(f"Unexpected error: {e}")
         return {"error": f"An unexpected error occurred: {e}"}
 
 def get_stock_info(ticker):
-    """Get stock info, either from cache or by fetching and caching."""
-    cache_file = get_cache_filepath(ticker)
-    if is_cache_valid(cache_file):
-        with open(cache_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    else:
-        return fetch_and_cache_stock_info(ticker)
+    """Get stock info, either from CSV cache or by fetching and caching."""
+    ticker = ticker.upper()
+    if is_cache_valid(ticker) and os.path.exists(CSV_PATH):
+        try:
+            df = pd.read_csv(CSV_PATH, index_col="symbol")
+            if ticker in df.index:
+                return df.loc[ticker].to_dict()
+        except Exception as e:
+            print(f"Error reading cached CSV: {e}")
+
+    return fetch_and_cache_stock_info(ticker)
 
 # Check if key exists and value is valid before using it
 def safe_metric(value, divisor=1, suffix="", percentage=False):
