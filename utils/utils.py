@@ -3,6 +3,7 @@ import json
 import yfinance as yf
 from datetime import datetime, timedelta
 import requests
+import plotly.graph_objects as go
 
 CACHE_DIR = "cache"
 CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
@@ -87,3 +88,36 @@ def safe_metric(value, divisor=1, suffix="", percentage=False):
             return "N/A"
         except Exception as e:
             return f"Error: {e}"  # Return error message instead of crashing
+        
+def get_vix_data():
+    """Fetch the latest VIX value from Yahoo Finance."""
+    vix = yf.Ticker("^VIX")
+    data = vix.history(period="1d", interval="1m")
+    if not data.empty:
+        return data["Close"].iloc[-1]
+    return None
+
+def create_vix_gauge(value):
+    """Create a Plotly gauge chart for the VIX index."""
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=value,
+        title={'text': "VIX Fear & Greed Gauge"},
+        gauge={
+            'axis': {'range': [0, 50]},
+            'bar': {'color': "darkblue"},
+            'steps': [
+                {'range': [0, 12], 'color': 'red'},          # Extreme Greed
+                {'range': [12, 20], 'color': 'orange'},      # Greed
+                {'range': [20, 28], 'color': 'yellow'},      # Neutral
+                {'range': [28, 35], 'color': 'lightgreen'},  # Fear
+                {'range': [35, 50], 'color': 'green'},       # Extreme Fear
+            ],
+            'threshold': {
+                'line': {'color': "black", 'width': 4},
+                'thickness': 0.75,
+                'value': value
+            }
+        }
+    ))
+    return fig
