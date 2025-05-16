@@ -11,7 +11,6 @@ st.header("🧭 Market Sentiment Gauge (VIX)")
 refresh = st.button("🔄 Refresh VIX Data")
 
 # Cache for 24h unless manually refreshed
-@st.cache_data(ttl=86400)
 def fetch_vix_cached():
     return get_vix_data()
 
