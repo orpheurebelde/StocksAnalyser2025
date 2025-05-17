@@ -8,7 +8,7 @@ st.title("📁 Welcome to Your Finance App")
 # Load stock list
 @st.cache_data
 def load_stock_list():
-    df = pd.read_csv("stocks_list.csv")
+    df = pd.read_csv("stocks_list.csv", sep=";")
     df["Display"] = df["Ticker"] + " - " + df["Name"]
     return df
 
