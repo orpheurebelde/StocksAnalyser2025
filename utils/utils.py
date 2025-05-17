@@ -28,30 +28,31 @@ def fetch_and_cache_stock_info(ticker):
 
     try:
         info = stock.info
-        info["Ticker"] = ticker  # ✅ Ensure the Ticker field is added manually
-
         if not info:
             raise ValueError("Invalid ticker or empty data.")
 
+        info["Ticker"] = ticker  # ✅ Ensure 'Ticker' is present
         df_new = pd.DataFrame([info])
+        df_new.set_index("Ticker", inplace=True)
 
+        # Load existing CSV or create empty one
         if os.path.exists(CSV_PATH):
             df_existing = pd.read_csv(CSV_PATH)
             if "Ticker" not in df_existing.columns:
-                print("❌ Ticker column missing in existing CSV.")
-                df_existing["Ticker"] = None  # fallback
+                raise ValueError("CSV missing 'Ticker' column.")
             df_existing.set_index("Ticker", inplace=True)
         else:
-            df_existing = pd.DataFrame().set_index("Ticker")
+            df_existing = pd.DataFrame(columns=df_new.columns).set_index("Ticker")
 
+        # Hashing for change detection
         new_hash = md5(json.dumps(info, sort_keys=True).encode()).hexdigest()
         existing_hash = None
         if ticker in df_existing.index:
             existing_data = df_existing.loc[ticker].dropna().to_dict()
             existing_hash = md5(json.dumps(existing_data, sort_keys=True).encode()).hexdigest()
 
+        # Update cache if changed
         if new_hash != existing_hash:
-            df_new.set_index("Ticker", inplace=True)
             df_combined = pd.concat([df_existing.drop(index=ticker, errors='ignore'), df_new])
             df_combined.to_csv(CSV_PATH)
             print(f"✅ Cached info for {ticker} updated.")
@@ -60,19 +61,8 @@ def fetch_and_cache_stock_info(ticker):
 
         return info
 
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 401:
-            print(f"Error 401: Authentication failed for {ticker}. Check API keys or permissions.")
-        else:
-            print(f"HTTP Error {e.response.status_code}: {e.response.reason} while fetching {ticker}")
-        return {"error": f"Could not retrieve data for {ticker}. Authentication failed."}
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching data for {ticker}: {e}")
-        return {"error": f"Could not retrieve data for {ticker}. Please try again later."}
-
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"❌ Unexpected error: {e}")
         return {"error": f"An unexpected error occurred: {e}"}
 
 def get_stock_info(ticker):
