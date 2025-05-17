@@ -35,9 +35,9 @@ def fetch_and_cache_stock_info(ticker):
 
         if os.path.exists(CSV_PATH):
             df_existing = pd.read_csv(CSV_PATH)
-            df_existing.set_index("symbol", inplace=True)
+            df_existing.set_index("Ticker", inplace=True)
         else:
-            df_existing = pd.DataFrame().set_index("symbol")
+            df_existing = pd.DataFrame().set_index("Ticker")
 
         new_hash = md5(json.dumps(info, sort_keys=True).encode()).hexdigest()
         existing_hash = None
@@ -46,7 +46,7 @@ def fetch_and_cache_stock_info(ticker):
             existing_hash = md5(json.dumps(existing_data, sort_keys=True).encode()).hexdigest()
 
         if new_hash != existing_hash:
-            df_new.set_index("symbol", inplace=True)
+            df_new.set_index("Ticker", inplace=True)
             df_combined = pd.concat([df_existing.drop(index=ticker, errors='ignore'), df_new])
             df_combined.to_csv(CSV_PATH)
             print(f"✅ Cached info for {ticker} updated.")
@@ -75,7 +75,7 @@ def get_stock_info(ticker):
     ticker = ticker.upper()
     if is_cache_valid(ticker) and os.path.exists(CSV_PATH):
         try:
-            df = pd.read_csv(CSV_PATH, index_col="symbol")
+            df = pd.read_csv(CSV_PATH, index_col="Ticker")
             if ticker in df.index:
                 return df.loc[ticker].to_dict()
         except Exception as e:
