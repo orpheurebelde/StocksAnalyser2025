@@ -49,6 +49,13 @@ if selected_display != "Select a stock...":
         left, main, right = st.columns([0.5, 10, 0.5])
 
         with main:
+
+            with st.expander("📉 Click to Expand TradingView Chart"):
+                st.markdown(
+                    f'<iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol={ticker}&interval=D&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=Dark&style=2&timezone=Etc%2FGMT%2B3&hideideas=1" width="100%" height="400" frameborder="0" allowtransparency="true" scrolling="no"></iframe>',
+                    unsafe_allow_html=True,
+                )
+
             with st.expander("🏢 Company Profile", expanded=True):
                 st.write(f"**Sector:** {info.get('sector', 'N/A')}")
                 st.write(f"**Industry:** {info.get('industry', 'N/A')}")

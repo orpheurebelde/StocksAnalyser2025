@@ -7,6 +7,7 @@ import requests
 from hashlib import md5
 import math
 import plotly.graph_objects as go
+import streamlit as st
 
 # Constants
 CACHE_DIR = "cache"
