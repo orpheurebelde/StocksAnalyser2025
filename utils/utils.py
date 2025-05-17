@@ -70,9 +70,11 @@ def get_stock_info(ticker):
     ticker = ticker.upper()
     if is_cache_valid() and os.path.exists(CSV_PATH):
         try:
-            df = pd.read_csv(CSV_PATH, index_col="Ticker")
+            df = pd.read_csv(CSV_PATH)
+            if "Ticker" not in df.columns:
+                raise ValueError("CSV is corrupted: Missing 'Ticker' column.")
+            df.set_index("Ticker", inplace=True)
             if ticker in df.index:
-                print(f"✅ Loaded cached info for {ticker}")
                 return df.loc[ticker].to_dict()
         except Exception as e:
             print(f"Error reading cached CSV: {e}")
