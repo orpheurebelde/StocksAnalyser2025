@@ -8,56 +8,61 @@ from hashlib import md5
 import math
 import plotly.graph_objects as go
 
+# Constants
 CACHE_DIR = "cache"
 CSV_PATH = os.path.join(CACHE_DIR, "all_stock_info.csv")
-CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
+CACHE_DURATION_HOURS = 24
 
+# Ensure cache folder exists
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 def is_cache_valid():
-    """Check if the shared CSV cache is still valid (within 24 hours)."""
-    if not os.path.exists(CSV_PATH):
-        return False
-    file_time = datetime.fromtimestamp(os.path.getmtime(CSV_PATH))
-    return datetime.now() - file_time < timedelta(hours=CACHE_DURATION_HOURS)
+    """Check if cache file exists and is fresh."""
+    return os.path.exists(CSV_PATH) and (
+        datetime.now() - datetime.fromtimestamp(os.path.getmtime(CSV_PATH))
+        < timedelta(hours=CACHE_DURATION_HOURS)
+    )
 
 def fetch_and_cache_stock_info(ticker):
-    """Fetch stock info using yfinance and cache all fields in a shared CSV file."""
+    """Fetch info and save to CSV cache."""
     ticker = ticker.upper()
-    stock = yf.Ticker(ticker)
-
     try:
+        stock = yf.Ticker(ticker)
         info = stock.info
         if not info:
-            raise ValueError("Invalid ticker or empty data.")
+            raise ValueError("Empty info returned.")
 
-        info["Ticker"] = ticker  # ✅ Ensure 'Ticker' is present
+        info["Ticker"] = ticker  # ✅ Ensure Ticker is always added
         df_new = pd.DataFrame([info])
         df_new.set_index("Ticker", inplace=True)
 
-        # Load existing CSV or create empty one
+        # Load or create cache
         if os.path.exists(CSV_PATH):
-            df_existing = pd.read_csv(CSV_PATH)
-            if "Ticker" not in df_existing.columns:
-                raise ValueError("CSV missing 'Ticker' column.")
-            df_existing.set_index("Ticker", inplace=True)
+            try:
+                df_existing = pd.read_csv(CSV_PATH)
+                if "Ticker" not in df_existing.columns:
+                    raise ValueError("Missing 'Ticker' column")
+                df_existing.set_index("Ticker", inplace=True)
+            except Exception as e:
+                print(f"⚠️ Corrupted cache. Removing: {e}")
+                os.remove(CSV_PATH)
+                df_existing = pd.DataFrame()
         else:
-            df_existing = pd.DataFrame(columns=df_new.columns).set_index("Ticker")
+            df_existing = pd.DataFrame()
 
-        # Hashing for change detection
+        # Check if info changed
         new_hash = md5(json.dumps(info, sort_keys=True).encode()).hexdigest()
         existing_hash = None
         if ticker in df_existing.index:
-            existing_data = df_existing.loc[ticker].dropna().to_dict()
-            existing_hash = md5(json.dumps(existing_data, sort_keys=True).encode()).hexdigest()
+            existing_info = df_existing.loc[ticker].dropna().to_dict()
+            existing_hash = md5(json.dumps(existing_info, sort_keys=True).encode()).hexdigest()
 
-        # Update cache if changed
         if new_hash != existing_hash:
-            df_combined = pd.concat([df_existing.drop(index=ticker, errors='ignore'), df_new])
+            df_combined = pd.concat([df_existing.drop(index=ticker, errors="ignore"), df_new])
             df_combined.to_csv(CSV_PATH)
-            print(f"✅ Cached info for {ticker} updated.")
+            print(f"✅ Cache updated for {ticker}")
         else:
-            print(f"ℹ️ No changes for {ticker}. Cache untouched.")
+            print(f"ℹ️ No change for {ticker}")
 
         return info
 
@@ -66,55 +71,48 @@ def fetch_and_cache_stock_info(ticker):
         return {"error": f"An unexpected error occurred: {e}"}
 
 def get_stock_info(ticker):
-    """Get stock info, either from CSV cache or by fetching and caching."""
+    """Get stock info from cache or fetch if needed."""
     ticker = ticker.upper()
     if os.path.exists(CSV_PATH):
         try:
             df = pd.read_csv(CSV_PATH)
             if "Ticker" not in df.columns:
-                print("⚠️ CSV is corrupted or incomplete (missing 'Ticker'). Deleting it.")
-                os.remove(CSV_PATH)  # 🔥 Delete the corrupted file
+                print("⚠️ CSV missing Ticker column. Deleting.")
+                os.remove(CSV_PATH)
                 return fetch_and_cache_stock_info(ticker)
-
             df.set_index("Ticker", inplace=True)
             if ticker in df.index:
                 return df.loc[ticker].to_dict()
-
         except Exception as e:
-            print(f"❌ Error reading cached CSV: {e}")
+            print(f"⚠️ Read error: {e}")
             try:
-                os.remove(CSV_PATH)  # 🔥 Delete if unreadable
-                print("🗑️ Corrupted cache deleted.")
-            except Exception as delete_error:
-                print(f"❌ Failed to delete corrupted cache: {delete_error}")
+                os.remove(CSV_PATH)
+            except:
+                pass
             return fetch_and_cache_stock_info(ticker)
 
-    # No cache or invalid: fetch fresh
     return fetch_and_cache_stock_info(ticker)
 
+# Utility: Safe metric formatting
 def safe_metric(value, divisor=1, suffix="", percentage=False):
-    """Safely formats a metric value for Streamlit display."""
     try:
-        if value is None:
+        if value is None or (isinstance(value, float) and math.isnan(value)):
             return "N/A"
-        if isinstance(value, (int, float)):
-            if math.isnan(value):  # Handle NaN values
-                return "N/A"
-            if percentage:
-                return f"{value:.2%}"
-            return f"${value / divisor:.2f}{suffix}" if divisor > 1 else f"${value:.2f}"
-        return "N/A"
+        if percentage:
+            return f"{value:.2%}"
+        return f"${value / divisor:.2f}{suffix}" if divisor > 1 else f"${value:.2f}"
     except Exception as e:
-        return f"Error: {e}"  # Return error message instead of crashing
+        return f"Err: {e}"
 
+# Get VIX value
 def get_vix_data():
-    """Fetch the latest VIX value from Yahoo Finance."""
     vix = yf.Ticker("^VIX")
     data = vix.history(period="1d", interval="1m")
     if not data.empty:
         return data["Close"].iloc[-1]
     return None
 
+# Create VIX gauge
 def create_vix_gauge(vix_value):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -124,24 +122,16 @@ def create_vix_gauge(vix_value):
             "axis": {"range": [0, 50], "tickwidth": 1, "tickcolor": "darkgray"},
             "bar": {"color": "darkblue", "thickness": 0.25},
             "steps": [
-                {"range": [0, 12], "color": "#00cc44"},    # Extreme Greed
-                {"range": [12, 20], "color": "#ffcc00"},   # Greed
-                {"range": [20, 28], "color": "#cccccc"},   # Neutral
-                {"range": [28, 35], "color": "#ff9933"},   # Fear
-                {"range": [35, 50], "color": "#ff3333"},   # Extreme Fear
+                {"range": [0, 12], "color": "#00cc44"},
+                {"range": [12, 20], "color": "#ffcc00"},
+                {"range": [20, 28], "color": "#cccccc"},
+                {"range": [28, 35], "color": "#ff9933"},
+                {"range": [35, 50], "color": "#ff3333"},
             ],
-            "threshold": {
-                "line": {"color": "black", "width": 4},
-                "thickness": 0.75,
-                "value": vix_value,
-            }
+            "threshold": {"line": {"color": "black", "width": 4}, "thickness": 0.75, "value": vix_value}
         },
         domain={'x': [0, 1], 'y': [0, 1]}
     ))
 
-    fig.update_layout(
-        margin=dict(t=40, b=40, l=40, r=40),
-        height=400,
-    )
-
+    fig.update_layout(margin=dict(t=40, b=40, l=40, r=40), height=400)
     return fig
