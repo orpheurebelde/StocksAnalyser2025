@@ -68,17 +68,28 @@ def fetch_and_cache_stock_info(ticker):
 def get_stock_info(ticker):
     """Get stock info, either from CSV cache or by fetching and caching."""
     ticker = ticker.upper()
-    if is_cache_valid() and os.path.exists(CSV_PATH):
+    if os.path.exists(CSV_PATH):
         try:
             df = pd.read_csv(CSV_PATH)
             if "Ticker" not in df.columns:
-                raise ValueError("CSV is corrupted: Missing 'Ticker' column.")
+                print("⚠️ CSV is corrupted or incomplete (missing 'Ticker'). Deleting it.")
+                os.remove(CSV_PATH)  # 🔥 Delete the corrupted file
+                return fetch_and_cache_stock_info(ticker)
+
             df.set_index("Ticker", inplace=True)
             if ticker in df.index:
                 return df.loc[ticker].to_dict()
-        except Exception as e:
-            print(f"Error reading cached CSV: {e}")
 
+        except Exception as e:
+            print(f"❌ Error reading cached CSV: {e}")
+            try:
+                os.remove(CSV_PATH)  # 🔥 Delete if unreadable
+                print("🗑️ Corrupted cache deleted.")
+            except Exception as delete_error:
+                print(f"❌ Failed to delete corrupted cache: {delete_error}")
+            return fetch_and_cache_stock_info(ticker)
+
+    # No cache or invalid: fetch fresh
     return fetch_and_cache_stock_info(ticker)
 
 def safe_metric(value, divisor=1, suffix="", percentage=False):
