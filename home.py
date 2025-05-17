@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 from utils.utils import get_vix_data, create_vix_gauge
 
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
@@ -28,7 +27,7 @@ if not st.session_state["logged_in"]:
     login()
 else:
     # Main app content here
-    st.title("📁 Welcome to Your Finance App")
+    st.title("📁 Home | Análise de Ações e Mercado")
 
     #if st.button("Clear Cache"):
         #CACHE_DIR = "cache"
@@ -37,8 +36,8 @@ else:
             #os.remove(CSV_PATH)
             #st.success("Cache cleared.")
 
-    st.header("🧭 Market Sentiment Gauge (VIX)")
-    refresh = st.button("🔄 Refresh VIX Data")
+    st.header("🧭 Indicador de Volatilidade (VIX)")
+    refresh = st.button("🔄 Refresh VIX")
 
     def fetch_vix_cached():
         return get_vix_data()
@@ -48,7 +47,7 @@ else:
 
     vix_value = fetch_vix_cached()
 
-    with st.expander("🏢 Market Sentiment Indicator", expanded=True):
+    with st.expander("🏢 Indicador de Sentimento de Mercado", expanded=True):
 
         left_col, right_col = st.columns([2, 1])
         
