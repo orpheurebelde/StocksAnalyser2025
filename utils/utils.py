@@ -14,8 +14,8 @@ CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-def is_cache_valid(ticker):
-    """Check if the ticker's data in CSV is still valid (within 24 hours)."""
+def is_cache_valid():
+    """Check if the shared CSV cache is still valid (within 24 hours)."""
     if not os.path.exists(CSV_PATH):
         return False
     file_time = datetime.fromtimestamp(os.path.getmtime(CSV_PATH))
@@ -28,13 +28,18 @@ def fetch_and_cache_stock_info(ticker):
 
     try:
         info = stock.info
-        if not info or "symbol" not in info:
+        info["Ticker"] = ticker  # ✅ Ensure the Ticker field is added manually
+
+        if not info:
             raise ValueError("Invalid ticker or empty data.")
 
         df_new = pd.DataFrame([info])
 
         if os.path.exists(CSV_PATH):
             df_existing = pd.read_csv(CSV_PATH)
+            if "Ticker" not in df_existing.columns:
+                print("❌ Ticker column missing in existing CSV.")
+                df_existing["Ticker"] = None  # fallback
             df_existing.set_index("Ticker", inplace=True)
         else:
             df_existing = pd.DataFrame().set_index("Ticker")
@@ -60,7 +65,7 @@ def fetch_and_cache_stock_info(ticker):
             print(f"Error 401: Authentication failed for {ticker}. Check API keys or permissions.")
         else:
             print(f"HTTP Error {e.response.status_code}: {e.response.reason} while fetching {ticker}")
-        return {"error": f"Could not retrieve data for {ticker}. Authentication failed. Please check API keys or permissions."}
+        return {"error": f"Could not retrieve data for {ticker}. Authentication failed."}
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data for {ticker}: {e}")
@@ -73,33 +78,32 @@ def fetch_and_cache_stock_info(ticker):
 def get_stock_info(ticker):
     """Get stock info, either from CSV cache or by fetching and caching."""
     ticker = ticker.upper()
-    if is_cache_valid(ticker) and os.path.exists(CSV_PATH):
+    if is_cache_valid() and os.path.exists(CSV_PATH):
         try:
             df = pd.read_csv(CSV_PATH, index_col="Ticker")
             if ticker in df.index:
+                print(f"✅ Loaded cached info for {ticker}")
                 return df.loc[ticker].to_dict()
         except Exception as e:
             print(f"Error reading cached CSV: {e}")
 
     return fetch_and_cache_stock_info(ticker)
 
-# Check if key exists and value is valid before using it
 def safe_metric(value, divisor=1, suffix="", percentage=False):
-        """Safely formats a metric value for Streamlit display."""
-        try:
-            if value is None:
-                return "N/A"
-            if isinstance(value, (int, float)):
-                if math.isnan(value):  # Handle NaN values
-                    return "N/A"
-                if percentage:
-                    return f"{value:.2%}"
-                return f"${value / divisor:.2f}{suffix}" if divisor > 1 else f"${value:.2f}"
+    """Safely formats a metric value for Streamlit display."""
+    try:
+        if value is None:
             return "N/A"
-        except Exception as e:
-            return f"Error: {e}"  # Return error message instead of crashing
+        if isinstance(value, (int, float)):
+            if math.isnan(value):  # Handle NaN values
+                return "N/A"
+            if percentage:
+                return f"{value:.2%}"
+            return f"${value / divisor:.2f}{suffix}" if divisor > 1 else f"${value:.2f}"
+        return "N/A"
+    except Exception as e:
+        return f"Error: {e}"  # Return error message instead of crashing
 
-#Get VIX data        
 def get_vix_data():
     """Fetch the latest VIX value from Yahoo Finance."""
     vix = yf.Ticker("^VIX")
@@ -112,9 +116,7 @@ def create_vix_gauge(vix_value):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=vix_value,
-        number={
-            "font": {"size": 36},  # Control number size
-        },
+        number={"font": {"size": 36}},
         gauge={
             "axis": {"range": [0, 50], "tickwidth": 1, "tickcolor": "darkgray"},
             "bar": {"color": "darkblue", "thickness": 0.25},
@@ -131,12 +133,12 @@ def create_vix_gauge(vix_value):
                 "value": vix_value,
             }
         },
-        domain={'x': [0, 1], 'y': [0, 1]}  # Ensure full center
+        domain={'x': [0, 1], 'y': [0, 1]}
     ))
 
     fig.update_layout(
         margin=dict(t=40, b=40, l=40, r=40),
-        height=400,  # Optional: adjust size
+        height=400,
     )
 
     return fig
