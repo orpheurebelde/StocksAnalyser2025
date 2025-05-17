@@ -30,12 +30,12 @@ else:
     # Main app content here
     st.title("📁 Welcome to Your Finance App")
 
-    if st.button("Clear Cache"):
-        CACHE_DIR = "cache"
-        CSV_PATH = os.path.join(CACHE_DIR, "all_stock_info.csv")
-        if os.path.exists(CSV_PATH):
-            os.remove(CSV_PATH)
-            st.success("Cache cleared.")
+    #if st.button("Clear Cache"):
+        #CACHE_DIR = "cache"
+        #CSV_PATH = os.path.join(CACHE_DIR, "all_stock_info.csv")
+        #if os.path.exists(CSV_PATH):
+            #os.remove(CSV_PATH)
+            #st.success("Cache cleared.")
 
     st.header("🧭 Market Sentiment Gauge (VIX)")
     refresh = st.button("🔄 Refresh VIX Data")
