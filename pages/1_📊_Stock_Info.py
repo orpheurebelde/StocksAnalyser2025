@@ -2,19 +2,22 @@ import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
 from langchain_community.llms import HuggingFaceHub
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 import os
 
 # Load API key from Streamlit secrets
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACE_API_KEY"]
 
-# Define the prompt
-template = """Generate a detailed financial report and price forecast for the following stock:
+# Define a prompt template
+template = """
+You are a financial analyst. Provide an analysis and forecast for the stock below:
 
 Ticker: {ticker}
-Metrics: {metrics}
+Key Metrics:
+{metrics}
 
-Report:"""
+Write a short investment outlook and expected performance over the next 5 years.
+"""
 prompt = PromptTemplate(input_variables=["ticker", "metrics"], template=template)
 
 # Use a known working model (for example, bigscience/bloom or google/flan-t5-xxl)
@@ -129,15 +132,26 @@ if selected_display != "Select a stock...":
             if info.get("logo_url", "").startswith("http"):
                 st.image(info["logo_url"], width=120)
 
+            # AI Analysis Section in Streamlit
             with st.expander("💡 AI Analysis & Forecast", expanded=False):
                 if selected_display != "Select a stock...":
-                    metrics_str = f"Market Cap: {info.get('marketCap')}, P/E: {info.get('trailingPE')}, Revenue: {info.get('totalRevenue')}"
+                    # Build metrics summary
+                    metrics_str = f"""
+                    - Market Cap: {info.get('marketCap')}
+                    - P/E Ratio: {info.get('trailingPE')}
+                    - Revenue: {info.get('totalRevenue')}
+                    - Sector: {info.get('sector')}
+                    - Dividend Yield: {info.get('dividendYield')}
+                    """
+
                     prompt_text = prompt.format(ticker=ticker, metrics=metrics_str)
 
                     try:
                         ai_response = llm(prompt_text)
-                        st.write(ai_response)
+                        st.markdown(f"**Forecast for {ticker}:**\n\n{ai_response}")
                     except Exception as e:
                         st.error(f"AI analysis failed: {e}")
+                else:
+                    st.info("Please select a stock to generate an AI forecast.")
 else:
     st.info("Please select a stock from the list.")
