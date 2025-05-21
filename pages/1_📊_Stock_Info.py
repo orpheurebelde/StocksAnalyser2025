@@ -8,6 +8,18 @@ import os
 # Load API key from Streamlit secrets
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACE_API_KEY"]
 
+# Define the prompt
+template = """Generate a detailed financial report and price forecast for the following stock:
+
+Ticker: {ticker}
+Metrics: {metrics}
+
+Report:"""
+prompt = PromptTemplate(input_variables=["ticker", "metrics"], template=template)
+
+# Use a known working model (for example, bigscience/bloom or google/flan-t5-xxl)
+llm = HuggingFaceHub(repo_id="google/flan-t5-xxl", model_kwargs={"temperature": 0.7, "max_new_tokens": 300})
+
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
 
