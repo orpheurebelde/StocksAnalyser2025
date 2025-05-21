@@ -5,6 +5,7 @@ from langchain_community.llms import HuggingFaceHub
 from langchain_core.prompts import PromptTemplate
 from huggingface_hub import InferenceClient
 import os
+import traceback
 
 # Get API key from Streamlit secrets
 api_key = st.secrets["HUGGINGFACE_API_KEY"]
@@ -137,8 +138,9 @@ if selected_display != "Select a stock...":
                             )
                             return response
                         except Exception as e:
-                            # Return the full error message so you can debug
-                            return f"Error: {str(e)}"
+                            error_msg = traceback.format_exc()
+                            print("AI analysis failed with exception:\n", error_msg)
+                            return f"Error:\n{error_msg}"
 
                     # Define the prompt using stock data
                     prompt = f"""
@@ -157,7 +159,8 @@ if selected_display != "Select a stock...":
                     """
                 analysis = get_ai_analysis(prompt)
                 if analysis.startswith("Error:"):
-                    st.error(analysis)  # This will show the full error message
+                    st.error("AI analysis failed.")
+                    st.code(analysis, language="text")  # Show full error as formatted code
                 else:
                     st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
 else:
