@@ -155,13 +155,14 @@ if selected_display != "Select a stock...":
                     Include a 3-year and 5-year future outlook.
                     """
                 try:
-                    response = client.text_generation(
-                        model="google/flan-t5-xxl",
-                        prompt=prompt,
-                        max_new_tokens=300,
-                        temperature=0.7,
-                    )
-                    st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{response}")
+                    if st.button("Run AI Analysis"):
+                        analysis = get_ai_analysis(prompt)
+                        if analysis.startswith("Error:"):
+                            st.error(analysis)
+                        else:
+                            st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
+                    else:
+                        st.info("Click the button to run AI analysis")
                 except Exception as e:
                     st.error(f"AI analysis failed: {e}")
 else:
