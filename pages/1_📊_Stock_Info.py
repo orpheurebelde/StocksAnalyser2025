@@ -5,6 +5,10 @@ from huggingface_hub import InferenceClient, HfApi
 import os
 import traceback
 
+# Page config
+st.set_page_config(page_title="Finance Dashboard", layout="wide")
+st.title("📁 Welcome to Your Finance App")
+
 # Set API token
 api_key = st.secrets["HUGGINGFACE_API_KEY"]
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
@@ -16,10 +20,6 @@ model_id = "google/flan-t5-base"
 model_info = api.model_info(model_id)
 if model_info.pipeline_tag != "text-generation":
     st.error("Selected model does not support text generation via the Inference API.")
-
-# Page config
-st.set_page_config(page_title="Finance Dashboard", layout="wide")
-st.title("📁 Welcome to Your Finance App")
 
 # Load stock list
 @st.cache_data
