@@ -3,25 +3,15 @@ import pandas as pd
 from utils.utils import get_stock_info
 from langchain_community.llms import HuggingFaceHub
 from langchain_core.prompts import PromptTemplate
+from huggingface_hub import InferenceClient
 import os
+
+# Get API key from Streamlit secrets
+api_key = st.secrets["HUGGINGFACE_API_KEY"]
 
 # Load API key from Streamlit secrets
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACE_API_KEY"]
-
-# Define a prompt template
-template = """
-You are a financial analyst. Provide an analysis and forecast for the stock below:
-
-Ticker: {ticker}
-Key Metrics:
-{metrics}
-
-Write a short investment outlook and expected performance over the next 5 years.
-"""
-prompt = PromptTemplate(input_variables=["ticker", "metrics"], template=template)
-
-# Use a known working model (for example, bigscience/bloom or google/flan-t5-xxl)
-llm = HuggingFaceHub(repo_id="google/flan-t5-xxl", model_kwargs={"temperature": 0.7, "max_new_tokens": 300})
+client = InferenceClient(token=api_key)
 
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
@@ -135,23 +125,31 @@ if selected_display != "Select a stock...":
             # AI Analysis Section in Streamlit
             with st.expander("💡 AI Analysis & Forecast", expanded=False):
                 if selected_display != "Select a stock...":
-                    # Build metrics summary
-                    metrics_str = f"""
+
+                    # Define the prompt using stock data
+                    prompt = f"""
+                    You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
+
+                    - Company: {info.get('shortName')}
+                    - Sector: {info.get('sector')}
+                    - Industry: {info.get('industry')}
                     - Market Cap: {info.get('marketCap')}
                     - P/E Ratio: {info.get('trailingPE')}
                     - Revenue: {info.get('totalRevenue')}
-                    - Sector: {info.get('sector')}
                     - Dividend Yield: {info.get('dividendYield')}
+                    - Country: {info.get('country')}
+
+                    Include a 3-year and 5-year future outlook.
                     """
-
-                    prompt_text = prompt.format(ticker=ticker, metrics=metrics_str)
-
-                    try:
-                        ai_response = llm(prompt_text)
-                        st.markdown(f"**Forecast for {ticker}:**\n\n{ai_response}")
-                    except Exception as e:
-                        st.error(f"AI analysis failed: {e}")
-                else:
-                    st.info("Please select a stock to generate an AI forecast.")
+                try:
+                    response = client.text_generation(
+                        model="google/flan-t5-xxl",
+                        prompt=prompt,
+                        max_new_tokens=300,
+                        temperature=0.7,
+                    )
+                    st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{response}")
+                except Exception as e:
+                    st.error(f"AI analysis failed: {e}")
 else:
     st.info("Please select a stock from the list.")
