@@ -137,7 +137,8 @@ if selected_display != "Select a stock...":
                             )
                             return response
                         except Exception as e:
-                            return f"Error: {e}"
+                            # Return the full error message so you can debug
+                            return f"Error: {str(e)}"
 
                     # Define the prompt using stock data
                     prompt = f"""
@@ -154,16 +155,10 @@ if selected_display != "Select a stock...":
 
                     Include a 3-year and 5-year future outlook.
                     """
-                try:
-                    if st.button("Run AI Analysis"):
-                        analysis = get_ai_analysis(prompt)
-                        if analysis.startswith("Error:"):
-                            st.error(analysis)
-                        else:
-                            st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
-                    else:
-                        st.info("Click the button to run AI analysis")
-                except Exception as e:
-                    st.error(f"AI analysis failed: {e}")
+                analysis = get_ai_analysis(prompt)
+                if analysis.startswith("Error:"):
+                    st.error(analysis)  # This will show the full error message
+                else:
+                    st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
 else:
     st.info("Please select a stock from the list.")
