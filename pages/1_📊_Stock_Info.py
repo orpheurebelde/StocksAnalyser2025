@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
-from langchain.llms import HuggingFaceHub
+from langchain_community.llms import HuggingFaceHub
 from langchain.prompts import PromptTemplate
 import os
 
