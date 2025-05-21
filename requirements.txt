@@ -6,4 +6,3 @@ plotly
 langchain
 langchain-community
 huggingface_hub
-traceback
