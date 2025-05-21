@@ -126,6 +126,19 @@ if selected_display != "Select a stock...":
             with st.expander("💡 AI Analysis & Forecast", expanded=False):
                 if selected_display != "Select a stock...":
 
+                    @st.cache_data(show_spinner=False)
+                    def get_ai_analysis(prompt: str):
+                        try:
+                            response = client.text_generation(
+                                model="google/flan-t5-base",
+                                prompt=prompt,
+                                max_new_tokens=300,
+                                temperature=0.7,
+                            )
+                            return response
+                        except Exception as e:
+                            return f"Error: {e}"
+
                     # Define the prompt using stock data
                     prompt = f"""
                     You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
