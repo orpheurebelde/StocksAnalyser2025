@@ -1,19 +1,23 @@
 import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
-from langchain_community.llms import HuggingFaceHub
-from langchain_core.prompts import PromptTemplate
-from huggingface_hub import InferenceClient
+from huggingface_hub import InferenceClient, HfApi
 import os
 import traceback
 
-# Get API key from Streamlit secrets
+# Set API token
 api_key = st.secrets["HUGGINGFACE_API_KEY"]
-
-# Load API key from Streamlit secrets
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACE_API_KEY"]
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
+# Check model compatibility
+api = HfApi()
+model_id = "tiiuae/falcon-7b-instruct"
+model_info = api.model_info(model_id)
+if model_info.pipeline_tag != "text-generation":
+    st.error("Selected model does not support text generation via the Inference API.")
+
+# Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
 
@@ -26,27 +30,14 @@ def load_stock_list():
 
 stock_df = load_stock_list()
 options = ["Select a stock..."] + stock_df["Display"].tolist()
+selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, index=0)
 
-selected_display = st.selectbox(
-    "🔎 Search Stock by Ticker or Name",
-    options,
-    index=0,
-)
-
-def format_currency(val):
-    return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
-
-def format_currency_dec(val):
-    return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
-
-def format_percent(val):
-    return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
-
-def format_number(val):
-    return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
-
-def format_ratio(val):
-    return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
+# Format helpers
+def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
+def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
+def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
+def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
+def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
 
 if selected_display != "Select a stock...":
     ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
@@ -56,16 +47,12 @@ if selected_display != "Select a stock...":
         st.error(info['error'])
     else:
         st.subheader(f"{info.get('shortName', ticker)} ({ticker.upper()})")
-
-        # Use wide layout but center logical content into wide columns
         left, main, right = st.columns([0.5, 10, 0.5])
-
         with main:
-
             with st.expander("📉 Click to Expand TradingView Chart"):
                 st.markdown(
                     f'<iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol={ticker}&interval=W&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=Dark&style=2&timezone=Etc%2FGMT%2B3&hideideas=1" width="100%" height="400" frameborder="0" allowtransparency="true" scrolling="no"></iframe>',
-                    unsafe_allow_html=True,
+                    unsafe_allow_html=True
                 )
 
             with st.expander("🏢 Company Profile", expanded=True):
@@ -86,7 +73,6 @@ if selected_display != "Select a stock...":
                     st.metric("PEG Ratio", format_ratio(info.get("pegRatio")))
                     st.metric("P/B", format_ratio(info.get("priceToBook")))
                     st.metric("P/S", format_ratio(info.get("priceToSalesTrailing12Months")))
-
                 st.divider()
                 col1, col2 = st.columns(2)
                 with col1:
@@ -96,7 +82,7 @@ if selected_display != "Select a stock...":
                     st.metric("EPS (Forward)", format_currency_dec(info.get("forwardEps")))
                     st.metric("Dividend Yield", format_percent(info.get("dividendYield")))
 
-            with st.expander("💰 Financials", expanded=False):
+            with st.expander("💰 Financials"):
                 col1, col2 = st.columns(2)
                 with col1:
                     st.write(f"**Free Cash Flow:** {format_currency(info.get('freeCashflow'))}")
@@ -106,7 +92,7 @@ if selected_display != "Select a stock...":
                     st.write(f"**Total Debt:** {format_currency(info.get('totalDebt'))}")
                     st.write(f"**Total Cash:** {format_currency(info.get('totalCash'))}")
 
-            with st.expander("📊 Margins & Growth", expanded=False):
+            with st.expander("📊 Margins & Growth"):
                 col1, col2 = st.columns(2)
                 with col1:
                     st.write(f"**Gross Margin:** {format_percent(info.get('grossMargins'))}")
@@ -116,51 +102,47 @@ if selected_display != "Select a stock...":
                     st.write(f"**Earnings Growth:** {format_percent(info.get('earningsGrowth'))}")
                     st.write(f"**Revenue Growth:** {format_percent(info.get('revenueGrowth'))}")
 
-            with st.expander("📦 Ownership", expanded=False):
+            with st.expander("📦 Ownership"):
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
 
             if info.get("logo_url", "").startswith("http"):
                 st.image(info["logo_url"], width=120)
 
-            # AI Analysis Section in Streamlit
-            with st.expander("💡 AI Analysis & Forecast", expanded=False):
-                if selected_display != "Select a stock...":
+            # AI Analysis Section
+            with st.expander("💡 AI Analysis & Forecast"):
 
-                    @st.cache_data(show_spinner=False)
-                    def get_ai_analysis(prompt: str):
-                        try:
-                            response = client.text_generation(
-                                model="google/flan-t5-base",
-                                prompt=prompt,
-                                max_new_tokens=300,
-                                temperature=0.7,
-                            )
-                            return response
-                        except Exception as e:
-                            error_msg = traceback.format_exc()
-                            print("AI analysis failed with exception:\n", error_msg)
-                            return f"Error:\n{error_msg}"
+                @st.cache_data(show_spinner=False)
+                def get_ai_analysis(prompt: str):
+                    try:
+                        response = client.text_generation(
+                            model=model_id,
+                            prompt=prompt,
+                            max_new_tokens=300,
+                            temperature=0.7,
+                        )
+                        return response
+                    except Exception as e:
+                        error_msg = traceback.format_exc()
+                        return f"Error:\n{error_msg}"
 
-                    # Define the prompt using stock data
-                    prompt = f"""
-                    You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
+                prompt = f"""
+                You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
+                - Company: {info.get('shortName')}
+                - Sector: {info.get('sector')}
+                - Industry: {info.get('industry')}
+                - Market Cap: {info.get('marketCap')}
+                - P/E Ratio: {info.get('trailingPE')}
+                - Revenue: {info.get('totalRevenue')}
+                - Dividend Yield: {info.get('dividendYield')}
+                - Country: {info.get('country')}
+                Include a 3-year and 5-year future outlook.
+                """
 
-                    - Company: {info.get('shortName')}
-                    - Sector: {info.get('sector')}
-                    - Industry: {info.get('industry')}
-                    - Market Cap: {info.get('marketCap')}
-                    - P/E Ratio: {info.get('trailingPE')}
-                    - Revenue: {info.get('totalRevenue')}
-                    - Dividend Yield: {info.get('dividendYield')}
-                    - Country: {info.get('country')}
-
-                    Include a 3-year and 5-year future outlook.
-                    """
                 analysis = get_ai_analysis(prompt)
                 if analysis.startswith("Error:"):
                     st.error("AI analysis failed.")
-                    st.code(analysis, language="text")  # Show full error as formatted code
+                    st.code(analysis, language="text")
                 else:
                     st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
 else:
