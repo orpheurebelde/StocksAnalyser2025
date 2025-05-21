@@ -3,3 +3,5 @@ requests
 pandas
 yfinance
 plotly
+langchain
+huggingface_hub
