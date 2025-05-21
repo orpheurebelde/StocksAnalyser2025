@@ -12,7 +12,7 @@ client = InferenceClient(token=api_key)
 
 # Check model compatibility
 api = HfApi()
-model_id = "tiiuae/falcon-7b-instruct"
+model_id = "google/flan-t5-base"
 model_info = api.model_info(model_id)
 if model_info.pipeline_tag != "text-generation":
     st.error("Selected model does not support text generation via the Inference API.")
@@ -115,19 +115,19 @@ if selected_display != "Select a stock...":
                 @st.cache_data(show_spinner=False)
                 def get_ai_analysis(prompt: str):
                     try:
-                        model = "google/flan-t5-base"  # ✅ reliable and free
+                        model = "google/flan-t5-base"  # ✅ Free model that supports text2text-generation
                         model_info = api.model_info(model)
-                        
-                        if model_info.pipeline_tag != "text2text-generation":
-                            return "Error: This model does not support text generation."
 
-                        response = client.text_generation(
+                        if model_info.pipeline_tag != "text2text-generation":
+                            return "Error: This model does not support text2text-generation."
+
+                        response = client.text2text_generation(
                             model=model,
-                            prompt=prompt,
+                            inputs=prompt,
                             max_new_tokens=300,
                             temperature=0.7,
                         )
-                        return response
+                        return response.generated_text
                     except Exception:
                         return f"Error:\n{traceback.format_exc()}"
 
