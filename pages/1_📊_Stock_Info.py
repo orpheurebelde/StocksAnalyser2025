@@ -115,16 +115,21 @@ if selected_display != "Select a stock...":
                 @st.cache_data(show_spinner=False)
                 def get_ai_analysis(prompt: str):
                     try:
+                        model = "google/flan-t5-base"  # ✅ reliable and free
+                        model_info = api.model_info(model)
+                        
+                        if model_info.pipeline_tag != "text2text-generation":
+                            return "Error: This model does not support text generation."
+
                         response = client.text_generation(
-                            model=model_id,
+                            model=model,
                             prompt=prompt,
                             max_new_tokens=300,
                             temperature=0.7,
                         )
                         return response
-                    except Exception as e:
-                        error_msg = traceback.format_exc()
-                        return f"Error:\n{error_msg}"
+                    except Exception:
+                        return f"Error:\n{traceback.format_exc()}"
 
                 prompt = f"""
                 You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
