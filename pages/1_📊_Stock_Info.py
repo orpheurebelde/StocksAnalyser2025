@@ -117,6 +117,8 @@ if selected_display != "Select a stock...":
             with st.expander("🧠 AI Stock Report & Forecast", expanded=False):
                 with st.spinner("Generating analysis..."):
 
+                    st.write("Available secret keys:", list(st.secrets.keys()))
+
                     os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACE_API_KEY"]
 
                     def build_prompt(ticker, info):
