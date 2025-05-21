@@ -27,10 +27,17 @@ if not st.session_state["logged_in"]:
     login()
 else:
     # Main app content here
-    st.title("📁 Welcome to Your Finance App")
+    st.title("📁 Home | Análise de Ações e Mercado")
 
-    st.header("🧭 Market Sentiment Gauge (VIX)")
-    refresh = st.button("🔄 Refresh VIX Data")
+    #if st.button("Clear Cache"):
+        #CACHE_DIR = "cache"
+        #CSV_PATH = os.path.join(CACHE_DIR, "all_stock_info.csv")
+        #if os.path.exists(CSV_PATH):
+            #os.remove(CSV_PATH)
+            #st.success("Cache cleared.")
+
+    st.header("🧭 Indicador de Volatilidade (VIX)")
+    refresh = st.button("🔄 Refresh VIX")
 
     def fetch_vix_cached():
         return get_vix_data()
@@ -40,7 +47,7 @@ else:
 
     vix_value = fetch_vix_cached()
 
-    with st.expander("🏢 Market Sentiment Indicator", expanded=True):
+    with st.expander("🏢 Indicador de Sentimento de Mercado", expanded=True):
 
         left_col, right_col = st.columns([2, 1])
         
