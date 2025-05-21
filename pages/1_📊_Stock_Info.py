@@ -120,9 +120,6 @@ if selected_display != "Select a stock...":
             with st.expander("🧠 AI Stock Report & Forecast", expanded=False):
                 with st.spinner("Generating analysis..."):
 
-                    st.write("Secrets available:", list(st.secrets.keys()))
-                    st.write("Hugging Face key:", st.secrets.get("HUGGINGFACE_API_KEY", "Not found"))
-
                     def build_prompt(ticker, info):
                         return f"""
                         You are a financial analyst. Analyze the following stock based on current metrics:
