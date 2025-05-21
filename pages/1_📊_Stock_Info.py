@@ -129,46 +129,15 @@ if selected_display != "Select a stock...":
             if info.get("logo_url", "").startswith("http"):
                 st.image(info["logo_url"], width=120)
 
-            with st.expander("🧠 AI Stock Report & Forecast", expanded=False):
-                with st.spinner("Generating analysis..."):
-
-                    def build_prompt(ticker, info):
-                        return f"""
-                        You are a financial analyst. Analyze the following stock based on current metrics:
-
-                        - Ticker: {ticker}
-                        - Sector: {info.get('sector')}
-                        - Industry: {info.get('industry')}
-                        - Market Cap: {info.get('marketCap')}
-                        - Trailing P/E: {info.get('trailingPE')}
-                        - Forward P/E: {info.get('forwardPE')}
-                        - ROE: {info.get('returnOnEquity')}
-                        - EPS (Current Year): {info.get('epsCurrentYear')}
-                        - EPS (Forward): {info.get('forwardEps')}
-                        - Revenue Growth: {info.get('revenueGrowth')}
-                        - Earnings Growth: {info.get('earningsGrowth')}
-                        - Free Cash Flow: {info.get('freeCashflow')}
-                        - Dividend Yield: {info.get('dividendYield')}
-
-                        Write a report with:
-                        1. Performance overview for 2024
-                        2. 3-year and 5-year projections
-                        3. Risks and opportunities
-                        4. Investor recommendation (bullish, bearish, neutral)
-                                                """
-
-                    prompt_text = build_prompt(ticker, info)
-
-                    llm = HuggingFaceHub(
-                        repo_id="google/flan-t5-large",
-                        model_kwargs={"temperature": 0.7, "max_length": 800}
-                    )
+            with st.expander("💡 AI Analysis & Forecast", expanded=False):
+                if selected_display != "Select a stock...":
+                    metrics_str = f"Market Cap: {info.get('marketCap')}, P/E: {info.get('trailingPE')}, Revenue: {info.get('totalRevenue')}"
+                    prompt_text = prompt.format(ticker=ticker, metrics=metrics_str)
 
                     try:
-                        response = llm(prompt_text)
-                        st.write(response)
+                        ai_response = llm(prompt_text)
+                        st.write(ai_response)
                     except Exception as e:
-                        st.error("⚠️ AI analysis failed.")
-                        st.exception(e)
+                        st.error(f"AI analysis failed: {e}")
 else:
     st.info("Please select a stock from the list.")
