@@ -5,6 +5,9 @@ from langchain_community.llms import HuggingFaceHub
 from langchain.prompts import PromptTemplate
 import os
 
+# Load API key from Streamlit secrets
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACE_API_KEY"]
+
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
 
@@ -119,8 +122,6 @@ if selected_display != "Select a stock...":
 
                     st.write("Secrets available:", list(st.secrets.keys()))
                     st.write("Hugging Face key:", st.secrets.get("HUGGINGFACE_API_KEY", "Not found"))
-
-                    os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACE_API_KEY"]
 
                     def build_prompt(ticker, info):
                         return f"""
