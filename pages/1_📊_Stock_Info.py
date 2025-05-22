@@ -114,7 +114,7 @@ if selected_display != "Select a stock...":
                         response = client.text_generation(
                             prompt,
                             model=model_id,
-                            max_new_tokens=500,  # Increased from 150
+                            max_new_tokens=700,  # Increased from 150
                             temperature=0.7,
                             do_sample=True,
                             # You can add `top_p=0.9` or other params if needed
