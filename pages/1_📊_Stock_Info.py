@@ -17,13 +17,6 @@ client = InferenceClient(token=api_key)
 # Use a FREE model
 model_id = "mistralai/Mistral-7B-Instruct-v0.1"
 
-# Check model pipeline
-api = HfApi()
-model_info = api.model_info(model_id)
-if model_info.pipeline_tag != "text2text-generation":
-    st.error("Selected model does not support text2text-generation via the Inference API.")
-    st.stop()
-
 # Load stock list
 @st.cache_data
 def load_stock_list():
@@ -115,6 +108,7 @@ if selected_display != "Select a stock...":
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
 
+                # AI function with caching
                 @st.cache_data(show_spinner=False)
                 def get_ai_analysis(prompt):
                     try:
@@ -126,8 +120,7 @@ if selected_display != "Select a stock...":
                         )
                         return response
                     except Exception as e:
-                        st.error(f"Error from AI: {e}")
-                        return None
+                        return f"ERROR: {e}"
 
                 prompt = f"""
                 You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
@@ -143,7 +136,8 @@ if selected_display != "Select a stock...":
                 """
 
                 analysis = get_ai_analysis(prompt)
-                if analysis.startswith("Error:"):
+
+                if analysis.startswith("ERROR:"):
                     st.error("AI analysis failed.")
                     st.code(analysis, language="text")
                 else:
