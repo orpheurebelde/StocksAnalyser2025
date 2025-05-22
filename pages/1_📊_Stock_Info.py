@@ -13,8 +13,8 @@ api_key = st.secrets["HUGGINGFACE_API_KEY"]
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
-# Use a FREE model
-model_id = "mistralai/Mistral-7B-Instruct-v0.1"
+# Use a FREE model (ensure it's compatible with text_generation)
+model_id = "gpt2"  # Recommended: "gpt2" or any other model that supports free Inference API
 
 # Load stock list
 @st.cache_data
@@ -107,12 +107,12 @@ if selected_display != "Select a stock...":
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
 
-                # AI function with caching
                 @st.cache_data(show_spinner=False)
                 def get_ai_analysis(prompt):
                     try:
                         response = client.text_generation(
                             prompt=prompt,
+                            model=model_id,
                             max_new_tokens=200,
                             temperature=0.7,
                         )
