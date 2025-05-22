@@ -15,7 +15,7 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
 # Use a FREE model (ensure it's compatible with text_generation)
-model_id = "HuggingFaceH4/zephyr-7b-beta"
+model_id = "gpt2-ml/financial-analysis-gpt2"  # Replace with your model ID
 
 # Load stock list
 @st.cache_data
@@ -113,10 +113,11 @@ if selected_display != "Select a stock...":
                         try:
                             response = client.text_generation(
                                 model=model_id,
-                                prompt=prompt,         # <-- use 'prompt' here, not 'inputs'
-                                max_new_tokens=200,
+                                prompt=prompt,
+                                max_new_tokens=150,
                                 temperature=0.7,
                             )
+                            st.write("Raw API response:", response)
                             if isinstance(response, list) and len(response) > 0:
                                 generated_text = response[0].get('generated_text', '').strip()
                             elif isinstance(response, dict):
@@ -127,7 +128,7 @@ if selected_display != "Select a stock...":
                             if not generated_text:
                                 return "ERROR: Empty response from Hugging Face model."
                             return generated_text
-                        except Exception:
+                        except Exception as e:
                             return f"ERROR: {traceback.format_exc()}"
 
                     def format_number(num):
