@@ -183,10 +183,9 @@ if selected_display != "Select a stock...":
                     st.error("AI analysis failed.")
                     st.code(analysis, language="text")
                 else:
-                    # Create a single column container to constrain width
                     col = st.container()
                     with col:
                         st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-                        st.write(analysis)  # Use st.write for automatic text wrapping
+                        st.write(analysis)  # automatic text wrapping, no scrollbars
 else:
     st.info("Please select a stock from the list.")
