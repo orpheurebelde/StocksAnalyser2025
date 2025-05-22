@@ -3,6 +3,7 @@ import pandas as pd
 from utils.utils import get_stock_info
 from huggingface_hub import InferenceClient
 import os
+import traceback
 
 # Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
@@ -112,15 +113,15 @@ if selected_display != "Select a stock...":
                     try:
                         response = client.text_generation(
                             prompt=prompt,
-                            model=model_id,
                             max_new_tokens=200,
                             temperature=0.7,
                         )
-                        if not response or response.strip() == "":
-                            return "ERROR: Empty response from the model."
-                        return response
+                        if not response or not response.strip():
+                            return "ERROR: Empty response from Hugging Face model."
+                        return response.strip()
                     except Exception as e:
-                        return f"ERROR: {str(e)}"
+                        return f"ERROR: {traceback.format_exc()}"
+
 
                 prompt = f"""
                 You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
