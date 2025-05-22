@@ -186,6 +186,14 @@ if selected_display != "Select a stock...":
                     col = st.container()
                     with col:
                         st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-                        st.write(analysis)  # automatic text wrapping, no scrollbars
+
+                        # Split the analysis text by numbers followed by a dot and space (e.g., "1. ", "2. ")
+                        # This will create a list of sections, ignoring the very first part if it doesn't start with number
+                        sections = re.split(r'\n(?=\d+\.)', analysis)
+
+                        # Display each section as a separate paragraph with consistent font
+                        for section in sections:
+                            # Use markdown to render paragraphs with default Streamlit font
+                            st.markdown(section.strip().replace('\n', '  \n'))  # keep line breaks inside paragraphs
 else:
     st.info("Please select a stock from the list.")
