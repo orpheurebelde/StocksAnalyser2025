@@ -114,13 +114,14 @@ if selected_display != "Select a stock...":
                     try:
                         response = client.text_generation(
                             prompt=prompt,
-                            model=model_id,
                             max_new_tokens=200,
                             temperature=0.7,
                         )
+                        if not response or response.strip() == "":
+                            return "ERROR: Empty response from the model."
                         return response
                     except Exception as e:
-                        return f"ERROR: {e}"
+                        return f"ERROR: {str(e)}"
 
                 prompt = f"""
                 You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
@@ -136,7 +137,6 @@ if selected_display != "Select a stock...":
                 """
 
                 analysis = get_ai_analysis(prompt)
-
                 if analysis.startswith("ERROR:"):
                     st.error("AI analysis failed.")
                     st.code(analysis, language="text")
