@@ -111,13 +111,13 @@ if selected_display != "Select a stock...":
                 @st.cache_data(show_spinner=False)
                 def get_ai_analysis(prompt):
                     try:
-                        # Pass prompt as positional arg, specify model as keyword arg
                         response = client.text_generation(
                             prompt,
                             model=model_id,
-                            max_new_tokens=150,
+                            max_new_tokens=500,  # Increased from 150
                             temperature=0.7,
                             do_sample=True,
+                            # You can add `top_p=0.9` or other params if needed
                         )
                         st.write("Raw API response:", response)
                         if isinstance(response, list) and len(response) > 0:
@@ -132,6 +132,27 @@ if selected_display != "Select a stock...":
                         return generated_text
                     except Exception:
                         return f"ERROR: {traceback.format_exc()}"
+
+                # ... your formatting code ...
+
+                analysis = get_ai_analysis(prompt)
+
+                if analysis.startswith("ERROR:"):
+                    st.error("AI analysis failed.")
+                    st.code(analysis, language="text")
+                else:
+                    # Justify text via custom CSS injection
+                    justify_style = """
+                    <style>
+                    .justified-text {
+                        text-align: justify;
+                        text-justify: inter-word;
+                        white-space: pre-wrap;  /* Preserve newlines */
+                    }
+                    </style>
+                    """
+                    st.markdown(justify_style, unsafe_allow_html=True)
+                    st.markdown(f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{analysis}</div>", unsafe_allow_html=True)
 
                 def format_number(num):
                     if isinstance(num, (int, float)):
