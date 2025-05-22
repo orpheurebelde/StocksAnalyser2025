@@ -4,6 +4,7 @@ from utils.utils import get_stock_info
 from huggingface_hub import InferenceClient
 import os
 import traceback
+import re
 
 # Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
