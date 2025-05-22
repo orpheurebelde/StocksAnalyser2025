@@ -108,40 +108,79 @@ if selected_display != "Select a stock...":
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
 
-                @st.cache_data(show_spinner=False)
-                def get_ai_analysis(prompt):
-                    try:
-                        response = client.text_generation(
-                            model=model_id,
-                            prompt=prompt,
-                            max_new_tokens=200,
-                            temperature=0.7,
-                        ) 
-                        if not response or not response.strip():
-                            return "ERROR: Empty response from Hugging Face model."
-                        return response.strip()
-                    except Exception as e:
-                        return f"ERROR: {traceback.format_exc()}"
+                    @st.cache_data(show_spinner=False)
+                    def get_ai_analysis(prompt):
+                        try:
+                            response = client.text_generation(
+                                model=model_id,
+                                inputs=prompt,
+                                max_new_tokens=200,
+                                temperature=0.7,
+                            )
+                            if isinstance(response, list) and len(response) > 0:
+                                generated_text = response[0].get('generated_text', '').strip()
+                            elif isinstance(response, dict):
+                                generated_text = response.get('generated_text', '').strip()
+                            else:
+                                generated_text = ""
 
+                            if not generated_text:
+                                return "ERROR: Empty response from Hugging Face model."
+                            return generated_text
+                        except Exception:
+                            return f"ERROR: {traceback.format_exc()}"
 
-                prompt = f"""
-                You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
-                - Company: {info.get('shortName')}
-                - Sector: {info.get('sector')}
-                - Industry: {info.get('industry')}
-                - Market Cap: {info.get('marketCap')}
-                - P/E Ratio: {info.get('trailingPE')}
-                - Revenue: {info.get('totalRevenue')}
-                - Dividend Yield: {info.get('dividendYield')}
-                - Country: {info.get('country')}
-                Include a 3-year and 5-year future outlook.
+                    def format_number(num):
+                        if isinstance(num, (int, float)):
+                            if num > 1e12:
+                                return f"{num / 1e12:.2f} trillion"
+                            elif num > 1e9:
+                                return f"{num / 1e9:.2f} billion"
+                            elif num > 1e6:
+                                return f"{num / 1e6:.2f} million"
+                            else:
+                                return f"{num}"
+                        return num
+
+                    # Build the prompt from your existing 'info' dict
+                    company_name = info.get("longName") or info.get("shortName") or ticker
+                    sector = info.get("sector", "N/A")
+                    market_cap = format_number(info.get("marketCap", "N/A"))
+                    pe_ratio = info.get("trailingPE", "N/A")
+                    revenue = format_number(info.get("totalRevenue", "N/A"))
+                    net_income = format_number(info.get("netIncomeToCommon", "N/A"))
+                    eps = info.get("trailingEps", "N/A")
+                    dividend_yield_val = info.get("dividendYield", None)
+                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                    summary_of_news = "N/A"  # placeholder, you can add news scraping later
+
+                    prompt = f"""
+                You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
+                - Company Name: {company_name}
+                - Sector: {sector}
+                - Market Cap: {market_cap}
+                - P/E Ratio: {pe_ratio}
+                - Revenue (last FY): {revenue}
+                - Net Income (last FY): {net_income}
+                - EPS: {eps}
+                - Dividend Yield: {dividend_yield}
+                - Recent News: {summary_of_news}
+
+                The analysis should include:
+                1. Executive summary
+                2. Valuation commentary
+                3. Growth potential
+                4. Risks
+                5. Investment outlook
+
+                Start now:
                 """
 
-                analysis = get_ai_analysis(prompt)
-                if analysis.startswith("ERROR:"):
-                    st.error("AI analysis failed.")
-                    st.code(analysis, language="text")
-                else:
-                    st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
+                    analysis = get_ai_analysis(prompt)
+                    if analysis.startswith("ERROR:"):
+                        st.error("AI analysis failed.")
+                        st.code(analysis, language="text")
+                    else:
+                        st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
 else:
     st.info("Please select a stock from the list.")
