@@ -15,7 +15,7 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
 # Use a FREE model (ensure it's compatible with text_generation)
-model_id = "gpt2"  # Replace with your model ID
+model_id = "HuggingFaceH4/zephyr-7b-beta"  # Replace with your model ID
 
 # Load stock list
 @st.cache_data
@@ -108,80 +108,81 @@ if selected_display != "Select a stock...":
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
 
-                    @st.cache_data(show_spinner=False)
-                    def get_ai_analysis(prompt):
-                        try:
-                            response = client.text_generation(
-                                model=model_id,
-                                prompt=prompt,
-                                max_new_tokens=150,
-                                temperature=0.7,
-                            )
-                            st.write("Raw API response:", response)
-                            if isinstance(response, list) and len(response) > 0:
-                                generated_text = response[0].get('generated_text', '').strip()
-                            elif isinstance(response, dict):
-                                generated_text = response.get('generated_text', '').strip()
-                            else:
-                                generated_text = ""
+                @st.cache_data(show_spinner=False)
+                def get_ai_analysis(prompt):
+                    try:
+                        # Pass prompt as positional arg, specify model as keyword arg
+                        response = client.text_generation(
+                            prompt,
+                            model=model_id,
+                            max_new_tokens=150,
+                            temperature=0.7,
+                            do_sample=True,
+                        )
+                        st.write("Raw API response:", response)
+                        if isinstance(response, list) and len(response) > 0:
+                            generated_text = response[0].get('generated_text', '').strip()
+                        elif isinstance(response, dict):
+                            generated_text = response.get('generated_text', '').strip()
+                        else:
+                            generated_text = ""
 
-                            if not generated_text:
-                                return "ERROR: Empty response from Hugging Face model."
-                            return generated_text
-                        except Exception as e:
-                            return f"ERROR: {traceback.format_exc()}"
+                        if not generated_text:
+                            return "ERROR: Empty response from Hugging Face model."
+                        return generated_text
+                    except Exception:
+                        return f"ERROR: {traceback.format_exc()}"
 
-                    def format_number(num):
-                        if isinstance(num, (int, float)):
-                            if num > 1e12:
-                                return f"{num / 1e12:.2f} trillion"
-                            elif num > 1e9:
-                                return f"{num / 1e9:.2f} billion"
-                            elif num > 1e6:
-                                return f"{num / 1e6:.2f} million"
-                            else:
-                                return f"{num}"
-                        return num
+                def format_number(num):
+                    if isinstance(num, (int, float)):
+                        if num > 1e12:
+                            return f"{num / 1e12:.2f} trillion"
+                        elif num > 1e9:
+                            return f"{num / 1e9:.2f} billion"
+                        elif num > 1e6:
+                            return f"{num / 1e6:.2f} million"
+                        else:
+                            return f"{num}"
+                    return num
 
-                    # Build the prompt from your existing 'info' dict
-                    company_name = info.get("longName") or info.get("shortName") or ticker
-                    sector = info.get("sector", "N/A")
-                    market_cap = format_number(info.get("marketCap", "N/A"))
-                    pe_ratio = info.get("trailingPE", "N/A")
-                    revenue = format_number(info.get("totalRevenue", "N/A"))
-                    net_income = format_number(info.get("netIncomeToCommon", "N/A"))
-                    eps = info.get("trailingEps", "N/A")
-                    dividend_yield_val = info.get("dividendYield", None)
-                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
-                    summary_of_news = "N/A"  # placeholder, you can add news scraping later
+                company_name = info.get("longName") or info.get("shortName") or ticker
+                sector = info.get("sector", "N/A")
+                market_cap = format_number(info.get("marketCap", "N/A"))
+                pe_ratio = info.get("trailingPE", "N/A")
+                revenue = format_number(info.get("totalRevenue", "N/A"))
+                net_income = format_number(info.get("netIncomeToCommon", "N/A"))
+                eps = info.get("trailingEps", "N/A")
+                dividend_yield_val = info.get("dividendYield", None)
+                dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                summary_of_news = "N/A"  # placeholder
 
-                    prompt = f"""
-                You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
-                - Company Name: {company_name}
-                - Sector: {sector}
-                - Market Cap: {market_cap}
-                - P/E Ratio: {pe_ratio}
-                - Revenue (last FY): {revenue}
-                - Net Income (last FY): {net_income}
-                - EPS: {eps}
-                - Dividend Yield: {dividend_yield}
-                - Recent News: {summary_of_news}
+                prompt = f"""
+            You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
+            - Company Name: {company_name}
+            - Sector: {sector}
+            - Market Cap: {market_cap}
+            - P/E Ratio: {pe_ratio}
+            - Revenue (last FY): {revenue}
+            - Net Income (last FY): {net_income}
+            - EPS: {eps}
+            - Dividend Yield: {dividend_yield}
+            - Recent News: {summary_of_news}
 
-                The analysis should include:
-                1. Executive summary
-                2. Valuation commentary
-                3. Growth potential
-                4. Risks
-                5. Investment outlook
+            The analysis should include:
+            1. Executive summary
+            2. Valuation commentary
+            3. Growth potential
+            4. Risks
+            5. Investment outlook
 
-                Start now:
-                """
+            Start now:
+            """
 
-                    analysis = get_ai_analysis(prompt)
-                    if analysis.startswith("ERROR:"):
-                        st.error("AI analysis failed.")
-                        st.code(analysis, language="text")
-                    else:
-                        st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
+                analysis = get_ai_analysis(prompt)
+                if analysis.startswith("ERROR:"):
+                    st.error("AI analysis failed.")
+                    st.code(analysis, language="text")
+                else:
+                    st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
 else:
     st.info("Please select a stock from the list.")
