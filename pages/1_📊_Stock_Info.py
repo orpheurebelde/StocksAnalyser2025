@@ -183,7 +183,7 @@ if selected_display != "Select a stock...":
                     st.error("AI analysis failed.")
                     st.code(analysis, language="text")
                 else:
-                    # Justify text via custom CSS injection
+                    # After you get the analysis text:
                     justify_style = """
                     <style>
                     .justified-text {
@@ -192,10 +192,11 @@ if selected_display != "Select a stock...":
                         word-wrap: break-word;
                         word-break: break-word;
                         max-width: 100%;
+                        overflow-x: hidden;
+                        white-space: normal;
                     }
                     </style>
                     """
-
                     st.markdown(justify_style, unsafe_allow_html=True)
                     st.markdown(
                         f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{analysis}</div>",
