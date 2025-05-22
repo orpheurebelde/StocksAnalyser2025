@@ -183,41 +183,10 @@ if selected_display != "Select a stock...":
                     st.error("AI analysis failed.")
                     st.code(analysis, language="text")
                 else:
-                    justify_style = """
-                    <style>
-                    /* Justified text container styling */
-                    .justified-text {
-                        text-align: justify;
-                        white-space: pre-wrap;  /* Preserve line breaks */
-                        word-break: break-word;  /* Break long words to avoid overflow */
-                        overflow-x: hidden;      /* Hide horizontal scrollbar */
-                        max-width: 100%;         /* Limit to container width */
-                        max-height: 400px;       /* Optional: vertical scrollbar if too long */
-                        overflow-y: auto;
-                        padding-right: 10px;
-                        box-sizing: border-box;
-                        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-                        font-size: 14px;
-                    }
-                    </style>
-                    """
-
-                    # Function to insert zero-width space in very long words (over 30 chars)
-                    import re
-                    def insert_zero_width_space(text, max_len=30):
-                        return re.sub(
-                            r'(\S{' + str(max_len) + r',})',
-                            lambda m: '\u200b'.join(m.group(1)[i:i+max_len] for i in range(0, len(m.group(1)), max_len)),
-                            text
-                        )
-
-                    safe_analysis = insert_zero_width_space(analysis)
-
-                    st.markdown(justify_style, unsafe_allow_html=True)
-
-                    st.markdown(
-                        f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{safe_analysis}</div>",
-                        unsafe_allow_html=True
-                    )
+                    # Create a single column container to constrain width
+                    col = st.container()
+                    with col:
+                        st.markdown(f"**AI Analysis for {ticker.upper()}:**")
+                        st.write(analysis)  # Use st.write for automatic text wrapping
 else:
     st.info("Please select a stock from the list.")
