@@ -191,13 +191,20 @@ if selected_display != "Select a stock...":
                         overflow-wrap: break-word;
                         word-wrap: break-word;
                         word-break: break-word;
+                        white-space: pre-wrap;
                         max-width: 100%;
                         overflow-x: hidden;
-                        white-space: normal;
+                        max-height: 400px;
+                        overflow-y: auto;
+                        padding-right: 10px;
+                        box-sizing: border-box;
+                        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                        font-size: 14px;
                     }
                     </style>
                     """
                     st.markdown(justify_style, unsafe_allow_html=True)
+
                     st.markdown(
                         f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{analysis}</div>",
                         unsafe_allow_html=True
