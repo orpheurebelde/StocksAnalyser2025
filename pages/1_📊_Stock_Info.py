@@ -133,27 +133,6 @@ if selected_display != "Select a stock...":
                     except Exception:
                         return f"ERROR: {traceback.format_exc()}"
 
-                # ... your formatting code ...
-
-                analysis = get_ai_analysis(prompt)
-
-                if analysis.startswith("ERROR:"):
-                    st.error("AI analysis failed.")
-                    st.code(analysis, language="text")
-                else:
-                    # Justify text via custom CSS injection
-                    justify_style = """
-                    <style>
-                    .justified-text {
-                        text-align: justify;
-                        text-justify: inter-word;
-                        white-space: pre-wrap;  /* Preserve newlines */
-                    }
-                    </style>
-                    """
-                    st.markdown(justify_style, unsafe_allow_html=True)
-                    st.markdown(f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{analysis}</div>", unsafe_allow_html=True)
-
                 def format_number(num):
                     if isinstance(num, (int, float)):
                         if num > 1e12:
@@ -198,12 +177,23 @@ if selected_display != "Select a stock...":
 
             Start now:
             """
-
                 analysis = get_ai_analysis(prompt)
+
                 if analysis.startswith("ERROR:"):
                     st.error("AI analysis failed.")
                     st.code(analysis, language="text")
                 else:
-                    st.markdown(f"**AI Analysis for {ticker.upper()}:**\n\n{analysis}")
+                    # Justify text via custom CSS injection
+                    justify_style = """
+                    <style>
+                    .justified-text {
+                        text-align: justify;
+                        text-justify: inter-word;
+                        white-space: pre-wrap;  /* Preserve newlines */
+                    }
+                    </style>
+                    """
+                    st.markdown(justify_style, unsafe_allow_html=True)
+                    st.markdown(f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{analysis}</div>", unsafe_allow_html=True)
 else:
     st.info("Please select a stock from the list.")
