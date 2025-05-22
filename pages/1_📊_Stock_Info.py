@@ -15,7 +15,7 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
 # Use a FREE model (ensure it's compatible with text_generation)
-model_id = "gpt2"  # Recommended: "gpt2" or any other model that supports free Inference API
+model_id = "HuggingFaceH4/zephyr-7b-beta"
 
 # Load stock list
 @st.cache_data
@@ -112,10 +112,11 @@ if selected_display != "Select a stock...":
                 def get_ai_analysis(prompt):
                     try:
                         response = client.text_generation(
+                            model=model_id,
                             prompt=prompt,
                             max_new_tokens=200,
                             temperature=0.7,
-                        )
+                        ) 
                         if not response or not response.strip():
                             return "ERROR: Empty response from Hugging Face model."
                         return response.strip()
