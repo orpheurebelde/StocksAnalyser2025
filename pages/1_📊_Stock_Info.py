@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
-from huggingface_hub import InferenceClient, HfApi
+from huggingface_hub import InferenceClient
 import os
 import traceback
 
