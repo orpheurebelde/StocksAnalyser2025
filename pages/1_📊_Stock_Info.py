@@ -15,7 +15,7 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
 # Use a FREE model (ensure it's compatible with text_generation)
-model_id = "gpt2-ml/financial-analysis-gpt2"  # Replace with your model ID
+model_id = "gpt2"  # Replace with your model ID
 
 # Load stock list
 @st.cache_data
