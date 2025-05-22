@@ -6,4 +6,3 @@ langchain
 langchain-community
 huggingface_hub
 requests
-re
