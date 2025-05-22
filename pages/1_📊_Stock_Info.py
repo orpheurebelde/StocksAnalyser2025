@@ -15,7 +15,7 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
 # Use a FREE model
-model_id = "google/flan-t5-base"  # Supports text2text-generation
+model_id = "mistralai/Mistral-7B-Instruct-v0.1"
 
 # Check model pipeline
 api = HfApi()
@@ -116,23 +116,18 @@ if selected_display != "Select a stock...":
             with st.expander("💡 AI Analysis & Forecast"):
 
                 @st.cache_data(show_spinner=False)
-                def get_ai_analysis(prompt: str):
+                def get_ai_analysis(prompt):
                     try:
-                        model = "google/flan-t5-base"  # ✅ Free model that supports text2text-generation
-                        model_info = api.model_info(model)
-
-                        if model_info.pipeline_tag != "text2text-generation":
-                            return "Error: This model does not support text2text-generation."
-
-                        response = client.text2text_generation(
-                            model=model,
-                            inputs=prompt,
-                            max_new_tokens=300,
+                        response = client.text_generation(
+                            prompt=prompt,
+                            model=model_id,
+                            max_new_tokens=200,
                             temperature=0.7,
                         )
-                        return response.generated_text
-                    except Exception:
-                        return f"Error:\n{traceback.format_exc()}"
+                        return response
+                    except Exception as e:
+                        st.error(f"Error from AI: {e}")
+                        return None
 
                 prompt = f"""
                 You are a financial analyst. Provide a brief report for {ticker.upper()} stock based on the following:
