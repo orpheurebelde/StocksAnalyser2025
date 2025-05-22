@@ -189,11 +189,17 @@ if selected_display != "Select a stock...":
                     .justified-text {
                         text-align: justify;
                         text-justify: inter-word;
-                        white-space: pre-wrap;  /* Preserve newlines */
+                        white-space: pre-line;  /* preserves newlines but wraps text */
+                        overflow-wrap: break-word;  /* break long words to avoid overflow */
+                        word-wrap: break-word;  /* fallback for older browsers */
+                        max-width: 100%;  /* prevent container overflow */
                     }
                     </style>
                     """
                     st.markdown(justify_style, unsafe_allow_html=True)
-                    st.markdown(f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{analysis}</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div class='justified-text'>**AI Analysis for {ticker.upper()}:**<br><br>{analysis}</div>", 
+                        unsafe_allow_html=True
+                    )
 else:
     st.info("Please select a stock from the list.")
