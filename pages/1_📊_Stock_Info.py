@@ -113,7 +113,7 @@ if selected_display != "Select a stock...":
                         try:
                             response = client.text_generation(
                                 model=model_id,
-                                inputs=prompt,
+                                prompt=prompt,         # <-- use 'prompt' here, not 'inputs'
                                 max_new_tokens=200,
                                 temperature=0.7,
                             )
