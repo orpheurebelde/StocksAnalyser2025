@@ -173,9 +173,6 @@ def format_number(num):
             return f"{num}"
     return num
 
-USERNAME = st.secrets["login"]["username"]
-PASSWORD = st.secrets["login"]["password"]
-
 def login():
     st.title("Login")
 
