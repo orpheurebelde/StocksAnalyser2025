@@ -4,6 +4,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import requests
+import traceback
 from hashlib import md5
 import math
 import plotly.graph_objects as go
@@ -136,3 +137,38 @@ def create_vix_gauge(vix_value):
 
     fig.update_layout(margin=dict(t=40, b=40, l=40, r=40), height=400)
     return fig
+
+def get_ai_analysis(prompt, api_key):
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 700
+        }
+
+        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        return result["choices"][0]["message"]["content"].strip()
+
+    except Exception:
+        return f"ERROR: {traceback.format_exc()}"
+
+
+def format_number(num):
+    if isinstance(num, (int, float)):
+        if num > 1e12:
+            return f"{num / 1e12:.2f} trillion"
+        elif num > 1e9:
+            return f"{num / 1e9:.2f} billion"
+        elif num > 1e6:
+            return f"{num / 1e6:.2f} million"
+        else:
+            return f"{num}"
+    return num

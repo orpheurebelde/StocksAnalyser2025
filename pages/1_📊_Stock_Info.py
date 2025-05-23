@@ -1,16 +1,13 @@
 import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
-import requests
+from utils import get_ai_analysis, format_number
 import traceback
 import re
 
 # Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
-
-#  Set API token
-MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
 
 # Load stock list
 @st.cache_data
@@ -102,47 +99,7 @@ if selected_display != "Select a stock...":
 
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
-
-                @st.cache_data(show_spinner=False)
-                def get_ai_analysis(prompt):
-                    try:
-                        headers = {
-                            "Authorization": f"Bearer {MISTRAL_API_KEY}",
-                            "Content-Type": "application/json"
-                        }
-
-                        data = {
-                            "model": "mistral-small-latest",
-                            "messages": [{"role": "user", "content": prompt}],
-                            "temperature": 0.7,
-                            "max_tokens": 700
-                        }
-
-                        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data)
-                        response.raise_for_status()
-                        result = response.json()
-
-                        return result["choices"][0]["message"]["content"].strip()
-
-                    except Exception:
-                        return f"ERROR: {traceback.format_exc()}"
-
-
-                def format_number(num):
-                    if isinstance(num, (int, float)):
-                        if num > 1e12:
-                            return f"{num / 1e12:.2f} trillion"
-                        elif num > 1e9:
-                            return f"{num / 1e9:.2f} billion"
-                        elif num > 1e6:
-                            return f"{num / 1e6:.2f} million"
-                        else:
-                            return f"{num}"
-                    return num
-
-
-                # UI Input
-                ticker = ticker
+                MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
 
                 if ticker:
                     info = get_stock_info(ticker)
@@ -156,41 +113,42 @@ if selected_display != "Select a stock...":
                     eps = info.get("trailingEps", "N/A")
                     dividend_yield_val = info.get("dividendYield", None)
                     dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
-                    summary_of_news = "N/A"  # Placeholder for future news integration
+                    summary_of_news = "N/A"
 
                     prompt = f"""
-                You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
+                    You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
 
-                - Company Name: {company_name}
-                - Sector: {sector}
-                - Market Cap: {market_cap}
-                - P/E Ratio: {pe_ratio}
-                - Revenue (last FY): {revenue}
-                - Net Income (last FY): {net_income}
-                - EPS: {eps}
-                - Dividend Yield: {dividend_yield}
-                - Recent News: {summary_of_news}
+                    - Company Name: {company_name}
+                    - Sector: {sector}
+                    - Market Cap: {market_cap}
+                    - P/E Ratio: {pe_ratio}
+                    - Revenue (last FY): {revenue}
+                    - Net Income (last FY): {net_income}
+                    - EPS: {eps}
+                    - Dividend Yield: {dividend_yield}
+                    - Recent News: {summary_of_news}
 
-                The analysis should include:
-                1. Executive summary
-                2. Valuation commentary
-                3. Growth potential
-                4. Risks
-                5. Investment outlook
+                    The analysis should include:
+                    1. Executive summary
+                    2. Valuation commentary
+                    3. Growth potential
+                    4. Risks
+                    5. Investment outlook
 
-                Start now:
-                """
+                    Start now:
+                    """
 
-                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
-                        analysis = get_ai_analysis(prompt)
+                if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
+                    with st.spinner("Generating AI stock analysis..."):
+                        analysis = get_ai_analysis(prompt, MISTRAL_API_KEY)
 
-                        if analysis.startswith("ERROR:"):
-                            st.error("AI analysis failed.")
-                            st.code(analysis, language="text")
-                        else:
-                            st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-                            sections = re.split(r'\n(?=\d+\.)', analysis)
-                            for section in sections:
-                                st.markdown(section.strip().replace('\n', '  \n'))
+                    if analysis.startswith("ERROR:"):
+                        st.error("AI analysis failed.")
+                        st.code(analysis, language="text")
+                    else:
+                        st.markdown(f"**AI Analysis for {ticker.upper()}:**")
+                        sections = re.split(r'\n(?=\d+\.)', analysis)
+                        for section in sections:
+                            st.markdown(section.strip().replace('\n', '  \n'))
 else:
     st.info("Please select a stock from the list.")
