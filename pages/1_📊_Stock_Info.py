@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
 from huggingface_hub import InferenceClient
+from mistral import Client
 import os
 import traceback
 import re
@@ -12,11 +13,10 @@ st.title("📁 Welcome to Your Finance App")
 
 #  Set API token
 api_key = st.secrets["MISTRAL_API_KEY"]
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
-client = InferenceClient(token=api_key)
+client = Client(api_key=api_key)
 
-# Use a FREE model (ensure it's compatible with text_generation)
-model_id = "mistral-small-latest"  # Replace with your model ID
+# Choose a Mistral model (free-tier compatible)
+model_id = "mistral-small-latest"  # Options: mistral-small-latest, mistral-medium-latest, etc.
 
 # Load stock list
 @st.cache_data
