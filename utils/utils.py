@@ -173,15 +173,20 @@ def format_number(num):
             return f"{num}"
     return num
 
-def login(expected_username, expected_password):
-    st.title("Login")
+import streamlit as st
+import time
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+def login(USERNAME, PASSWORD):
+    st.subheader("🔐 Login")
 
-    if st.button("Login"):
-        if username == expected_username and password == expected_password:
+    username = st.text_input("Username", key="login_username")
+    password = st.text_input("Password", type="password", key="login_password")
+
+    if st.button("Login", key="login_button"):
+        if username == USERNAME and password == PASSWORD:
             st.session_state["authenticated"] = True
+            st.session_state["last_activity"] = time.time()
+            st.success("Login successful. Redirecting...")
             st.experimental_rerun()
         else:
-            st.error("Invalid credentials")
+            st.error("Invalid credentials. Please try again.")
