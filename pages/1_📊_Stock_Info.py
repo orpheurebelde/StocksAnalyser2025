@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
-from huggingface_hub import InferenceClient
 from mistral import Client
 import os
 import traceback
