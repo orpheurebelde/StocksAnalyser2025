@@ -91,9 +91,3 @@ if menu == "Home":
         st.write("🔐 Please log in to continue.")
         login(USERNAME, PASSWORD)
         st.stop()
-
-elif menu == "Monte Carlo Simulations":
-    monte_carlo.app()
-
-elif menu == "Stock Info":
-    stock_info.app()
