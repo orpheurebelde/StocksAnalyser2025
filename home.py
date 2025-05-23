@@ -1,30 +1,32 @@
 import streamlit as st
-from utils.utils import get_vix_data, create_vix_gauge
+from utils.utils import get_vix_data, create_vix_gauge, login
+import time
 
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 
-USERNAME = st.secrets["login"]["username"]
-PASSWORD = st.secrets["login"]["password"]
+# Constants
+SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
 
-def login():
-    st.title("🔐 Please Log In")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    login_clicked = st.button("Login")
+# Initialize session tracking
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "last_activity" not in st.session_state:
+    st.session_state["last_activity"] = time.time()
 
-    if login_clicked:
-        if username == USERNAME and password == PASSWORD:
-            st.session_state["logged_in"] = True
-            st.success("Logged in successfully!")
-            st.experimental_rerun()  # Rerun immediately after login success
-        else:
-            st.error("Incorrect username or password")
+# Check session timeout
+if st.session_state["authenticated"]:
+    now = time.time()
+    if now - st.session_state["last_activity"] > SESSION_TIMEOUT_SECONDS:
+        st.session_state["authenticated"] = False
+        st.warning("Session expired. Please log in again.")
+        st.experimental_rerun()
+    else:
+        # Update activity timestamp
+        st.session_state["last_activity"] = now
 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
+if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
     login()
+    st.stop()  # Prevent further execution if not logged in
 else:
     # Main app content here
     st.title("📁 Home | Análise de Ações e Mercado")
