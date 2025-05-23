@@ -112,25 +112,22 @@ if selected_display != "Select a stock...":
                 @st.cache_data(show_spinner=False)
                 def get_ai_analysis(prompt):
                     try:
-                        response = client.text_generation(
-                            prompt,
+                        response = client.chat(
                             model=model_id,
-                            max_new_tokens=700,  # Increased from 150
+                            messages=[{"role": "user", "content": prompt}],
                             temperature=0.7,
-                            do_sample=True,
-                            # You can add `top_p=0.9` or other params if needed
+                            max_tokens=700,
+                            top_p=0.9,
                         )
                         st.write("Raw API response:", response)
-                        if isinstance(response, list) and len(response) > 0:
-                            generated_text = response[0].get('generated_text', '').strip()
-                        elif isinstance(response, dict):
-                            generated_text = response.get('generated_text', '').strip()
-                        else:
-                            generated_text = ""
 
-                        if not generated_text:
-                            return "ERROR: Empty response from Hugging Face model."
+                        if "choices" in response and len(response["choices"]) > 0:
+                            generated_text = response["choices"][0]["message"]["content"].strip()
+                        else:
+                            return "ERROR: No valid response from Mistral model."
+
                         return generated_text
+
                     except Exception:
                         return f"ERROR: {traceback.format_exc()}"
 
@@ -146,6 +143,7 @@ if selected_display != "Select a stock...":
                             return f"{num}"
                     return num
 
+                # Assume `info` and `ticker` are defined earlier in your app
                 company_name = info.get("longName") or info.get("shortName") or ticker
                 sector = info.get("sector", "N/A")
                 market_cap = format_number(info.get("marketCap", "N/A"))
@@ -158,26 +156,27 @@ if selected_display != "Select a stock...":
                 summary_of_news = "N/A"  # placeholder
 
                 prompt = f"""
-            You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
-            - Company Name: {company_name}
-            - Sector: {sector}
-            - Market Cap: {market_cap}
-            - P/E Ratio: {pe_ratio}
-            - Revenue (last FY): {revenue}
-            - Net Income (last FY): {net_income}
-            - EPS: {eps}
-            - Dividend Yield: {dividend_yield}
-            - Recent News: {summary_of_news}
+                You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
+                - Company Name: {company_name}
+                - Sector: {sector}
+                - Market Cap: {market_cap}
+                - P/E Ratio: {pe_ratio}
+                - Revenue (last FY): {revenue}
+                - Net Income (last FY): {net_income}
+                - EPS: {eps}
+                - Dividend Yield: {dividend_yield}
+                - Recent News: {summary_of_news}
 
-            The analysis should include:
-            1. Executive summary
-            2. Valuation commentary
-            3. Growth potential
-            4. Risks
-            5. Investment outlook
+                The analysis should include:
+                1. Executive summary
+                2. Valuation commentary
+                3. Growth potential
+                4. Risks
+                5. Investment outlook
 
-            Start now:
-            """
+                Start now:
+                """
+
                 if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
                     analysis = get_ai_analysis(prompt)
 
@@ -188,14 +187,8 @@ if selected_display != "Select a stock...":
                         col = st.container()
                         with col:
                             st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-
-                            # Split the analysis text by numbers followed by a dot and space (e.g., "1. ", "2. ")
-                            # This will create a list of sections, ignoring the very first part if it doesn't start with number
                             sections = re.split(r'\n(?=\d+\.)', analysis)
-
-                            # Display each section as a separate paragraph with consistent font
                             for section in sections:
-                                # Use markdown to render paragraphs with default Streamlit font
-                                st.markdown(section.strip().replace('\n', '  \n'))  # keep line breaks inside paragraphs
+                                st.markdown(section.strip().replace('\n', '  \n'))
 else:
     st.info("Please select a stock from the list.")
