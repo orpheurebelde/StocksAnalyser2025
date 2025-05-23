@@ -1,4 +1,8 @@
 import pandas as pd
+import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
+from utils.utils import get_stock_info, monte_carlo_simulation
 
 # Load stock list
 @st.cache_data
@@ -13,7 +17,7 @@ selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, 
 
 if selected_display != "Select a stock...":
     selected_ticker = selected_display.split(" - ")[0]
-    data, info = fetch_data(selected_ticker)
+    data, info = get_stock_info(selected_ticker)
     
     st.title(f"🎲 Monte Carlo Simulations - {selected_ticker}")
 
