@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from utils.utils import get_vix_data, create_vix_gauge, login
-from pages import Monte_Carlo_Simulations
+from pages import monte_carlo_simulations
 from pages import stock_info
 import home
 
@@ -16,7 +16,7 @@ if menu == "Home":
 elif menu == "Stock Info":
     stock_info.app()
 elif menu == "Monte Carlo Simulations":
-    Monte_Carlo_Simulations.app()
+    monte_carlo_simulations.app()
 
 # Constants
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
