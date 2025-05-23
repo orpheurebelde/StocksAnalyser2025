@@ -31,7 +31,7 @@ if st.session_state["authenticated"]:
         st.session_state["last_activity"] = now
 
 if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
-    login()
+    login(USERNAME, PASSWORD)
     st.stop()  # Prevent further execution if not logged in
 else:
     # Main app content here
