@@ -142,12 +142,10 @@ if selected_display != "Select a stock...":
 
 
                 # UI Input
-                st.title("📈 AI-Powered Stock Analysis")
-                ticker = st.text_input("Enter a stock ticker symbol (e.g., AAPL, NVDA):")
+                ticker = ticker
 
                 if ticker:
-                    stock = yf.Ticker(ticker)
-                    info = stock.info
+                    info = get_stock_info(ticker)
 
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = info.get("sector", "N/A")
