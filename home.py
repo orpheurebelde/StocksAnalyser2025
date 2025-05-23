@@ -1,9 +1,24 @@
 import streamlit as st
 import time
 from utils.utils import get_vix_data, create_vix_gauge, login
+from pages import Monte_Carlo_Simulations
+from pages import stock_info
+# from pages import home
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
+
+menu = st.sidebar.selectbox("Choose a page", ["Home", "Monte Carlo Simulations"])
+
+if menu == "Home":
+    import home
+    home.app()  # or call the main function for the home page
+
+elif menu == "Stock Info":
+    stock_info.app()  # or call the main function for that page
+
+elif menu == "Monte Carlo Simulations":
+    Monte_Carlo_Simulations.app()  # or call the main function for that page
 
 # Constants
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
