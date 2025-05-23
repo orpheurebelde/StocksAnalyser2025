@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info
-from mistral import Client
-import os
+import requests
 import traceback
 import re
 
@@ -11,11 +10,7 @@ st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
 
 #  Set API token
-api_key = st.secrets["MISTRAL_API_KEY"]
-client = Client(api_key=api_key)
-
-# Choose a Mistral model (free-tier compatible)
-model_id = "mistral-small-latest"  # Options: mistral-small-latest, mistral-medium-latest, etc.
+MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
 
 # Load stock list
 @st.cache_data
@@ -111,24 +106,27 @@ if selected_display != "Select a stock...":
                 @st.cache_data(show_spinner=False)
                 def get_ai_analysis(prompt):
                     try:
-                        response = client.chat(
-                            model=model_id,
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0.7,
-                            max_tokens=700,
-                            top_p=0.9,
-                        )
-                        st.write("Raw API response:", response)
+                        headers = {
+                            "Authorization": f"Bearer {MISTRAL_API_KEY}",
+                            "Content-Type": "application/json"
+                        }
 
-                        if "choices" in response and len(response["choices"]) > 0:
-                            generated_text = response["choices"][0]["message"]["content"].strip()
-                        else:
-                            return "ERROR: No valid response from Mistral model."
+                        data = {
+                            "model": "mistral-small-latest",
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.7,
+                            "max_tokens": 700
+                        }
 
-                        return generated_text
+                        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data)
+                        response.raise_for_status()
+                        result = response.json()
+
+                        return result["choices"][0]["message"]["content"].strip()
 
                     except Exception:
                         return f"ERROR: {traceback.format_exc()}"
+
 
                 def format_number(num):
                     if isinstance(num, (int, float)):
@@ -142,20 +140,29 @@ if selected_display != "Select a stock...":
                             return f"{num}"
                     return num
 
-                # Assume `info` and `ticker` are defined earlier in your app
-                company_name = info.get("longName") or info.get("shortName") or ticker
-                sector = info.get("sector", "N/A")
-                market_cap = format_number(info.get("marketCap", "N/A"))
-                pe_ratio = info.get("trailingPE", "N/A")
-                revenue = format_number(info.get("totalRevenue", "N/A"))
-                net_income = format_number(info.get("netIncomeToCommon", "N/A"))
-                eps = info.get("trailingEps", "N/A")
-                dividend_yield_val = info.get("dividendYield", None)
-                dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
-                summary_of_news = "N/A"  # placeholder
 
-                prompt = f"""
+                # UI Input
+                st.title("📈 AI-Powered Stock Analysis")
+                ticker = st.text_input("Enter a stock ticker symbol (e.g., AAPL, NVDA):")
+
+                if ticker:
+                    stock = yf.Ticker(ticker)
+                    info = stock.info
+
+                    company_name = info.get("longName") or info.get("shortName") or ticker
+                    sector = info.get("sector", "N/A")
+                    market_cap = format_number(info.get("marketCap", "N/A"))
+                    pe_ratio = info.get("trailingPE", "N/A")
+                    revenue = format_number(info.get("totalRevenue", "N/A"))
+                    net_income = format_number(info.get("netIncomeToCommon", "N/A"))
+                    eps = info.get("trailingEps", "N/A")
+                    dividend_yield_val = info.get("dividendYield", None)
+                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                    summary_of_news = "N/A"  # Placeholder for future news integration
+
+                    prompt = f"""
                 You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
+
                 - Company Name: {company_name}
                 - Sector: {sector}
                 - Market Cap: {market_cap}
@@ -176,15 +183,13 @@ if selected_display != "Select a stock...":
                 Start now:
                 """
 
-                if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
-                    analysis = get_ai_analysis(prompt)
+                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
+                        analysis = get_ai_analysis(prompt)
 
-                    if analysis.startswith("ERROR:"):
-                        st.error("AI analysis failed.")
-                        st.code(analysis, language="text")
-                    else:
-                        col = st.container()
-                        with col:
+                        if analysis.startswith("ERROR:"):
+                            st.error("AI analysis failed.")
+                            st.code(analysis, language="text")
+                        else:
                             st.markdown(f"**AI Analysis for {ticker.upper()}:**")
                             sections = re.split(r'\n(?=\d+\.)', analysis)
                             for section in sections:
