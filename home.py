@@ -1,9 +1,12 @@
 import streamlit as st
 import time
 from utils.utils import get_vix_data, create_vix_gauge, login
-import monte_carlo as monte_carlo
+import monte_carlo
 import stock_info
 import home
+from pages import monte_carlo
+from pages import stock_info
+from pages import home
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
