@@ -3,22 +3,20 @@ import time
 from utils.utils import get_vix_data, create_vix_gauge, login
 from pages import Monte_Carlo_Simulations
 from pages import stock_info
-# from pages import home
+import home
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 
-menu = st.sidebar.selectbox("Choose a page", ["Home", "Monte Carlo Simulations"])
+menu = st.sidebar.selectbox("Choose a page", ["Home", "Monte Carlo Simulations", "Stock Info"])
 
+# Now show selected page content
 if menu == "Home":
-    import home
-    home.app()  # or call the main function for the home page
-
+    home.app()  # call function in home.py that renders home page
 elif menu == "Stock Info":
-    stock_info.app()  # or call the main function for that page
-
+    stock_info.app()
 elif menu == "Monte Carlo Simulations":
-    Monte_Carlo_Simulations.app()  # or call the main function for that page
+    Monte_Carlo_Simulations.app()
 
 # Constants
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
