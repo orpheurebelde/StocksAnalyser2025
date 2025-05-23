@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import get_stock_info
-from utils import get_ai_analysis, format_number
-import traceback
+from utils.utils import get_stock_info, get_ai_analysis, format_number
 import re
 
 # Page config
