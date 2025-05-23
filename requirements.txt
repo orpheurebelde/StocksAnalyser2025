@@ -5,4 +5,3 @@ plotly
 langchain
 langchain-community
 requests
-mistral-client
