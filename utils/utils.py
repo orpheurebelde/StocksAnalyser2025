@@ -9,6 +9,7 @@ from hashlib import md5
 import math
 import plotly.graph_objects as go
 import streamlit as st
+import numpy as np
 
 # Constants
 CACHE_DIR = "cache"
@@ -190,3 +191,24 @@ def login(USERNAME, PASSWORD):
             st.stop()  # <- This safely ends this run and allows rerun
         else:
             st.error("Invalid credentials. Please try again.")
+
+def monte_carlo_simulation(data, n_simulations=1000, n_days=252, log_normal=False, volatility=None):
+    daily_returns = data['Close'].pct_change().dropna()
+    mean_return = daily_returns.mean()
+    vol = volatility if volatility else daily_returns.std()
+
+    simulations = np.zeros((n_simulations, n_days))
+    last_price = data['Close'].iloc[-1]
+
+    for i in range(n_simulations):
+        prices = [last_price]
+        for j in range(n_days):
+            shock = np.random.normal(0, vol)
+            drift = mean_return
+            if log_normal:
+                prices.append(prices[-1] * np.exp(drift + shock))
+            else:
+                prices.append(prices[-1] * (1 + drift + shock))
+        simulations[i] = prices[1:]
+
+    return simulations
