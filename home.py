@@ -1,8 +1,6 @@
 import streamlit as st
 import time
 from utils.utils import get_vix_data, create_vix_gauge, login
-from pages import monte_carlo
-from pages import stock_info
 import home
 
 # Page setup
