@@ -212,3 +212,25 @@ def monte_carlo_simulation(data, n_simulations=1000, n_days=252, log_normal=Fals
         simulations[i] = prices[1:]
 
     return simulations
+
+@st.cache_data
+def fetch_data(ticker):
+    try:
+        # Fetch data from Yahoo Finance
+        stock = yf.Ticker(ticker)
+        data = stock.history(period="10y")  # Fetch 10 years of historical data
+        info = stock.info  # Fetch stock information
+
+        # Ensure data and info are not empty
+        if data.empty:
+            st.error(f"No historical data found for ticker: {ticker}")
+            return None, None
+        if not info:
+            st.error(f"No stock information found for ticker: {ticker}")
+            return data, None
+
+        return data, info
+
+    except Exception as e:
+        st.error(f"Error fetching data for ticker {ticker}: {e}")
+        return None, None
