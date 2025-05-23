@@ -11,12 +11,12 @@ st.set_page_config(page_title="Finance Dashboard", layout="wide")
 st.title("📁 Welcome to Your Finance App")
 
 #  Set API token
-api_key = st.secrets["HUGGINGFACE_API_KEY"]
+api_key = st.secrets["MISTRAL_API_KEY"]
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = api_key
 client = InferenceClient(token=api_key)
 
 # Use a FREE model (ensure it's compatible with text_generation)
-model_id = "HuggingFaceH4/zephyr-7b-beta"  # Replace with your model ID
+model_id = "mistral-small-latest"  # Replace with your model ID
 
 # Load stock list
 @st.cache_data
