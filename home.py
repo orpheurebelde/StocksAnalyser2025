@@ -3,6 +3,7 @@ import time
 from utils.utils import get_vix_data, create_vix_gauge, login
 from pages import monte_carlo
 from pages import stock_info
+import home
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
@@ -26,6 +27,7 @@ menu = st.sidebar.selectbox("Choose a page", ["Home", "Monte Carlo Simulations",
 
 # Authentication & timeout check only on Home page
 if menu == "Home":
+    home.app()
     if st.session_state["authenticated"]:
         # Check session timeout
         now = time.time()
