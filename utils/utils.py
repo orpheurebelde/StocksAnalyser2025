@@ -173,18 +173,15 @@ def format_number(num):
             return f"{num}"
     return num
 
-def login():
+def login(expected_username, expected_password):
     st.title("Login")
-
-    if "authenticated" not in st.session_state:
-        st.session_state["authenticated"] = False
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if username == "username" and password == "password":
+        if username == expected_username and password == expected_password:
             st.session_state["authenticated"] = True
-            st.experimental_rerun()  # Safe to rerun now
+            st.experimental_rerun()
         else:
             st.error("Invalid credentials")

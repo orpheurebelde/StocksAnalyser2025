@@ -2,9 +2,31 @@ import streamlit as st
 import pandas as pd
 from utils.utils import get_stock_info, get_ai_analysis, format_number
 import re
+import time
 
 # Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
+
+SESSION_TIMEOUT_SECONDS = 600
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "last_activity" not in st.session_state:
+    st.session_state["last_activity"] = time.time()
+
+if st.session_state["authenticated"]:
+    now = time.time()
+    if now - st.session_state["last_activity"] > SESSION_TIMEOUT_SECONDS:
+        st.session_state["authenticated"] = False
+        st.warning("Session expired.")
+        st.experimental_rerun()
+    else:
+        st.session_state["last_activity"] = now
+
+if not st.session_state["authenticated"]:
+    st.error("Unauthorized. Please go to the home page and log in.")
+    st.stop()
+
 st.title("📁 Welcome to Your Finance App")
 
 # Load stock list

@@ -7,6 +7,9 @@ st.set_page_config(page_title="Finance Dashboard", layout="wide")
 USERNAME = st.secrets["login"]["username"]
 PASSWORD = st.secrets["login"]["password"]
 
+# Pass them to your login() function
+login(USERNAME, PASSWORD)
+
 # Constants
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
 
