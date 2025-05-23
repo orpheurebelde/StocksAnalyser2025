@@ -186,7 +186,7 @@ def login(USERNAME, PASSWORD):
         if username == USERNAME and password == PASSWORD:
             st.session_state["authenticated"] = True
             st.session_state["last_activity"] = time.time()
-            st.success("Login successful. Redirecting...")
-            st.experimental_rerun()
+            st.success("Login successful.")
+            st.stop()  # <- This safely ends this run and allows rerun
         else:
             st.error("Invalid credentials. Please try again.")
