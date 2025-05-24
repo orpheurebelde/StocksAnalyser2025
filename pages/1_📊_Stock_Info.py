@@ -200,20 +200,20 @@ if selected_display != "Select a stock...":
                 col1, col2 = st.columns(2)
                 with col1:
                     #Categorize with green,yellow and red Price To Sales Ratio
-                    roe_ratio = info.get("returnOnEquity")
+                    roe_ratio = format_currency_dec(info.get("returnOnEquity"))
                     # Define value and color
                     if roe_ratio is None:
                         color = "gray"
                         value = "N/A"
                     elif roe_ratio < 10:
                         color = "red"
-                        value = f"{format_currency_dec(roe_ratio):.2f}%"
+                        value = f"{roe_ratio:.2f}%"
                     elif 10 <= roe_ratio <= 20:
                         color = "orange"
-                        value = f"{format_currency_dec(roe_ratio):.2f}%"
+                        value = f"{roe_ratio:.2f}%"
                     else:
                         color = "green"
-                        value = f"{format_currency_dec(roe_ratio):.2f}%"
+                        value = f"{roe_ratio:.2f}%"
                     # Display like st.metric with style
                     st.markdown(f"""
                         <div style='display: flex; flex-direction: column; align-items: start;'>
