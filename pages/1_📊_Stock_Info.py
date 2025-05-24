@@ -214,15 +214,17 @@ if selected_display != "Select a stock...":
                             st.markdown(section.strip().replace('\n', '  \n'))
             # Example ticker
             ticker = ticker
-
-            # Use .get_info() if using latest yfinance, otherwise .info
+            # Try to get info dictionary
+            info = {}
             try:
-                info = ticker.get_info()
-            except AttributeError:
-                info = ticker.info  # fallback for older versions
+                info = ticker.get_info()  # preferred method
+            except Exception as e:
+                st.error(f"Failed to load ticker info: {e}")
 
-            # Show full info in an expander
-            with st.expander("📋 Full Ticker Info"):
-                st.json(info)  # shows nicely formatted dictionary with collapsible keys
-else:
+            # Show full info if available
+            if info:
+                with st.expander("📋 Full Ticker Info"):
+                    st.json(info)
+            else:
+                st.warning("No info data available for this ticker.")
     st.info("Please select a stock from the list.")
