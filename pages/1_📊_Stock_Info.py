@@ -230,16 +230,16 @@ if selected_display != "Select a stock...":
                         value = "N/A"
                     elif eps_current_year < 0:
                         color = "red"
-                        value = f"${eps_current_year:.2f} (Loss)"
+                        value = f"{eps_current_year:.2f} (Loss)"
                     elif 0 <= eps_current_year <= 1:
                         color = "orange"
-                        value = f"${eps_current_year:.2f}"
+                        value = f"{eps_current_year:.2f}"
                     elif 1 < eps_current_year <= 5:
                         color = "green"
-                        value = f"${eps_current_year:.2f}"
+                        value = f"{eps_current_year:.2f}"
                     else:
                         color = "blue"
-                        value = f"${eps_current_year:.2f}$"
+                        value = f"{eps_current_year:.2f}$"
                     eps_current_year = format_currency_dec(eps_current_year)
                     # Display like st.metric with style
                     st.markdown(f"""
