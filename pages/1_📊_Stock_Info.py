@@ -336,7 +336,37 @@ if selected_display != "Select a stock...":
                 with col2:
                     st.write(f"**Total Debt:** {format_currency(total_debt)}")
                     st.write(f"**Total Cash:** {format_currency(total_cash)} ({debt_cat})")
-                    
+                    # Compute overall financial health
+                    scores = {
+                        "green": 2,
+                        "orange": 1,
+                        "red": 0,
+                        "gray": 0
+                    }
+                    # Get colors for scoring
+                    fcf_cat, fcf_color = categorize_cashflow(fcf, revenue)
+                    ni_cat, ni_color = categorize_net_income(net_income)
+                    debt_cat, debt_color = categorize_debt_vs_cash(total_debt, total_cash)
+
+                    # Score total
+                    score = scores[fcf_color] + scores[ni_color] + scores[debt_color]
+
+                    # Final judgment
+                    if score >= 5:
+                        overall = ("🟢 **Healthy Financials**", "green")
+                    elif 3 <= score < 5:
+                        overall = ("🟡 **Mixed Financials**", "orange")
+                    else:
+                        overall = ("🔴 **Weak Financials**", "red")
+
+                    # Display summary
+                    st.markdown(f"""
+                    <hr>
+                    <div style='font-size:20px; font-weight:bold; color:{overall[1]};'>
+                        {overall[0]}
+                    </div>
+                    """, unsafe_allow_html=True)
+
             def categorize_margin(value):
                 if value is None:
                     return "N/A", "gray"
