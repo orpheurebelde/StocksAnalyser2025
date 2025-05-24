@@ -240,7 +240,7 @@ if selected_display != "Select a stock...":
                     else:
                         color = "blue"
                         value = f"{eps_current_year:.2f}"
-                    eps_current_year = format_currency_dec(eps_current_year) if isinstance(eps_current_year, (int, float)) else "N/A"
+                    eps_current_year = format_currency_dec(eps_current_year)
                     # Display like st.metric with style
                     st.markdown(f"""
                         <div style='display: flex; flex-direction: column; align-items: start;'>
