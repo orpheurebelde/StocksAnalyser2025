@@ -250,8 +250,33 @@ if selected_display != "Select a stock...":
                     """, unsafe_allow_html=True)
                 with col2:
                     st.metric("EPS (Forward)", format_currency_dec(info.get("forwardEps")))
-                    st.metric("Dividend Yield", format_percent(info.get("dividendYield")))
+                    #Categorize EBITDA Margin
+                    ebitda = info.get("ebitda")
+                    revenue = info.get("totalRevenue")
 
+                    if ebitda and revenue:
+                        ebitda_margin = ebitda / revenue * 100
+                    else:
+                        ebitda_margin = None
+                    # Define value and color
+                    if ebitda_margin is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif ebitda_margin < 10:
+                        color = "red"
+                        value = f"{ebitda_margin:.1f}%"
+                    elif 10 <= ebitda_margin <= 20:
+                        color = "orange"
+                        value = f"{ebitda_margin:.1f}%"
+                    else:
+                        color = "green"
+                        value = f"{ebitda_margin:.1f}%"    
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start; margin-bottom: 1rem;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>EBITDA Margin</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
             with st.expander("💰 Financials"):
                 col1, col2 = st.columns(2)
                 with col1:
