@@ -361,7 +361,6 @@ if selected_display != "Select a stock...":
 
                     # Display summary
                     st.markdown(f"""
-                    <hr>
                     <div style='font-size:20px; font-weight:bold; color:{overall[1]};'>
                         {overall[0]}
                     </div>
