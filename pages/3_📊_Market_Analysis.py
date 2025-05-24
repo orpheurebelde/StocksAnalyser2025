@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from utils import compute_rsi, compute_macd, compute_fibonacci_level
+from utils.utils import compute_rsi, compute_macd, compute_fibonacci_level
 from datetime import datetime    
 
 st.title("📈 Market Analysis | Buy Signals")
