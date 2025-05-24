@@ -285,16 +285,58 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
+            def categorize_cashflow(fcf, revenue):
+                if fcf is None or revenue is None:
+                    return "N/A", "gray"
+                ratio = fcf / revenue
+                if ratio > 0.15:
+                    return "🟢 Strong", "green"
+                elif 0.05 <= ratio <= 0.15:
+                    return "🟡 Moderate", "orange"
+                else:
+                    return "🔴 Weak", "red"
+
+            def categorize_net_income(ni):
+                if ni is None:
+                    return "N/A", "gray"
+                elif ni > 0:
+                    return "🟢 Profitable", "green"
+                else:
+                    return "🔴 Negative", "red"
+
+            def categorize_debt_vs_cash(debt, cash):
+                if debt is None or cash is None:
+                    return "N/A", "gray"
+                if cash > debt:
+                    return "🟢 More Cash than Debt", "green"
+                elif cash == debt:
+                    return "🟡 Balanced", "orange"
+                else:
+                    return "🔴 High Debt", "red"
+
             with st.expander("💰 Financials"):
                 col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Free Cash Flow:** {format_currency(info.get('freeCashflow'))}")
-                    st.write(f"**Net Income:** {format_currency(info.get('netIncomeToCommon'))}")
-                    st.write(f"**Total Revenue:** {format_currency(info.get('totalRevenue'))}")
-                with col2:
-                    st.write(f"**Total Debt:** {format_currency(info.get('totalDebt'))}")
-                    st.write(f"**Total Cash:** {format_currency(info.get('totalCash'))}")
 
+                fcf = info.get('freeCashflow')
+                revenue = info.get('totalRevenue')
+                fcf_cat, _ = categorize_cashflow(fcf, revenue)
+
+                net_income = info.get('netIncomeToCommon')
+                ni_cat, _ = categorize_net_income(net_income)
+
+                total_debt = info.get('totalDebt')
+                total_cash = info.get('totalCash')
+                debt_cat, _ = categorize_debt_vs_cash(total_debt, total_cash)
+
+                with col1:
+                    st.write(f"**Free Cash Flow:** {format_currency(fcf)} ({fcf_cat})")
+                    st.write(f"**Net Income:** {format_currency(net_income)} ({ni_cat})")
+                    st.write(f"**Total Revenue:** {format_currency(revenue)}")
+
+                with col2:
+                    st.write(f"**Total Debt:** {format_currency(total_debt)}")
+                    st.write(f"**Total Cash:** {format_currency(total_cash)} ({debt_cat})")
+                    
             def categorize_margin(value):
                 if value is None:
                     return "N/A", "gray"
