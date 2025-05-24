@@ -212,5 +212,17 @@ if selected_display != "Select a stock...":
                         sections = re.split(r'\n(?=\d+\.)', analysis)
                         for section in sections:
                             st.markdown(section.strip().replace('\n', '  \n'))
+            # Example ticker
+            ticker = ticker
+
+            # Use .get_info() if using latest yfinance, otherwise .info
+            try:
+                info = ticker.get_info()
+            except AttributeError:
+                info = ticker.info  # fallback for older versions
+
+            # Show full info in an expander
+            with st.expander("📋 Full Ticker Info"):
+                st.json(info)  # shows nicely formatted dictionary with collapsible keys
 else:
     st.info("Please select a stock from the list.")
