@@ -16,6 +16,7 @@ tickers = {
 with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
     col1, col2 = st.columns(2)
 
+    @st.cache_data
     def show_indicators(ticker, title):
         data = yf.Ticker(ticker).history(period="10y")
         if data.empty:
@@ -85,6 +86,8 @@ with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
 
         st.subheader(title)
         st.markdown(f"""
+        - **Ticker**: {ticker}
+        - **Current Price**: ${close.iloc[-1]:,.2f}
         - **52 Week High**: ${close[-252:].max():,.2f}
         - **52 Week Low**: ${close[-252:].min():,.2f}
         - **RSI**: {rsi:.2f} (<span style='color:{rsi_color}; font-size:18px;'> {rsi_signal}</span>)
