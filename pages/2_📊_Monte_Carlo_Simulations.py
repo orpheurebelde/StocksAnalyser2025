@@ -3,6 +3,27 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.utils import get_stock_info, monte_carlo_simulation, fetch_data
+import time
+
+SESSION_TIMEOUT_SECONDS = 600
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "last_activity" not in st.session_state:
+    st.session_state["last_activity"] = time.time()
+
+if st.session_state["authenticated"]:
+    now = time.time()
+    if now - st.session_state["last_activity"] > SESSION_TIMEOUT_SECONDS:
+        st.session_state["authenticated"] = False
+        st.warning("Session expired.")
+        st.experimental_rerun()
+    else:
+        st.session_state["last_activity"] = now
+
+if not st.session_state["authenticated"]:
+    st.error("Unauthorized. Please go to the home page and log in.")
+    st.stop()
 
 # Load stock list
 @st.cache_data
