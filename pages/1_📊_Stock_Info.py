@@ -95,7 +95,7 @@ if selected_display != "Select a stock...":
                     # Display like st.metric with style
                     st.markdown(f"""
                         <div style='display: flex; flex-direction: column; align-items: start;'>
-                            <span style='font-size: 14px; color: #666;'>Trailing P/E</span>
+                            <span style='font-size: 16px; color: #000;'>Trailing P/E</span>
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
