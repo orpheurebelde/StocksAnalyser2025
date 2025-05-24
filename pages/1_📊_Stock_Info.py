@@ -153,7 +153,7 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
                     #Categorize with green,yellow and red Price To Book Ratio
-                    pb_ratio = info.get("pbRatio")
+                    pb_ratio = info.get("priceToBook")
                     # Define value and color
                     if pb_ratio is None:
                         color = "gray"
