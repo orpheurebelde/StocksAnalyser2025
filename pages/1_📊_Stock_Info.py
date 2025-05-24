@@ -219,4 +219,3 @@ if selected_display != "Select a stock...":
                     st.write(info)
                 else:
                     st.warning("No stock selected.")
-    st.info("Please select a stock from the list.")
