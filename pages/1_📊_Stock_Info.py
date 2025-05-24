@@ -212,19 +212,19 @@ if selected_display != "Select a stock...":
                         sections = re.split(r'\n(?=\d+\.)', analysis)
                         for section in sections:
                             st.markdown(section.strip().replace('\n', '  \n'))
-            # Example ticker
-            ticker = ticker
-            # Try to get info dictionary
-            info = {}
-            try:
-                info = ticker.get_info()  # preferred method
-            except Exception as e:
-                st.error(f"Failed to load ticker info: {e}")
+        # Example ticker
+        ticker = ticker
+        # Try to get info dictionary
+        info = {}
+        try:
+            info = ticker.get_info()  # preferred method
+        except Exception as e:
+            st.error(f"Failed to load ticker info: {e}")
 
-            # Show full info if available
-            if info:
-                with st.expander("📋 Full Ticker Info"):
-                    st.json(info)
-            else:
-                st.warning("No info data available for this ticker.")
+        # Show full info if available
+        if info:
+            with st.expander("📋 Full Ticker Info"):
+                st.json(info)
+        else:
+            st.warning("No info data available for this ticker.")
     st.info("Please select a stock from the list.")
