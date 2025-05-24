@@ -19,9 +19,6 @@ if "authenticated" not in st.session_state:
 if "last_activity" not in st.session_state:
     st.session_state["last_activity"] = time.time()
 
-# Sidebar menu
-menu = st.sidebar.selectbox("Choose a page", ["Home", "Monte Carlo Simulations", "Stock Info"])
-
 # Authentication & timeout check only on Home page
 if st.session_state["authenticated"]:
     # Check session timeout
