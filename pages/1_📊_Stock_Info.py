@@ -214,7 +214,7 @@ if selected_display != "Select a stock...":
                             st.markdown(section.strip().replace('\n', '  \n'))
 
             with st.expander("Company Info", expanded=False):
-                _, info = fetch_data(st.session_state.selected_ticker)
+                _, info = fetch_data(ticker)
                 if info:
                     st.write(info)
                 else:
