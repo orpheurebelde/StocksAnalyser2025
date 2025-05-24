@@ -223,7 +223,7 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
                     #Categorize EPS CurrentYear
-                    eps_current_year = format_currency_dec(info.get("epsCurrentYear"))
+                    eps_current_year = info.get("epsCurrentYear")
                     # Define value and color
                     if eps_current_year is None:
                         color = "gray"
