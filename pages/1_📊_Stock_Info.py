@@ -353,11 +353,11 @@ if selected_display != "Select a stock...":
 
                     # Final judgment
                     if score >= 5:
-                        overall = ("🟢 **Healthy Financials**", "green")
+                        overall = ("🟢 Healthy Financials", "green")
                     elif 3 <= score < 5:
-                        overall = ("🟡 **Mixed Financials**", "orange")
+                        overall = ("🟡 Mixed Financials", "orange")
                     else:
-                        overall = ("🔴 **Weak Financials**", "red")
+                        overall = ("🔴 Weak Financials", "red")
 
                     # Display summary
                     st.markdown(f"""
