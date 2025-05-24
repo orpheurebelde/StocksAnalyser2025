@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import get_stock_info, get_ai_analysis, format_number
+from utils.utils import get_stock_info, get_ai_analysis, format_number, fetch_data
 import re
 import time
 
@@ -212,19 +212,12 @@ if selected_display != "Select a stock...":
                         sections = re.split(r'\n(?=\d+\.)', analysis)
                         for section in sections:
                             st.markdown(section.strip().replace('\n', '  \n'))
-        # Example ticker
-        ticker = ticker
-        # Try to get info dictionary
-        info = {}
-        try:
-            info = ticker.get_info()  # preferred method
-        except Exception as e:
-            st.error(f"Failed to load ticker info: {e}")
 
-        # Show full info if available
-        if info:
-            with st.expander("📋 Full Ticker Info"):
-                st.json(info)
-        else:
-            st.warning("No info data available for this ticker.")
+            with st.expander("Company Info", expanded=False):
+                if st.session_state.selected_ticker:
+                    _, info = fetch_data(st.session_state.selected_ticker)
+                    if info:
+                        st.write(info)
+                    else:
+                        st.warning("No stock selected.")
     st.info("Please select a stock from the list.")
