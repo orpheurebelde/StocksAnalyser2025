@@ -207,15 +207,13 @@ if selected_display != "Select a stock...":
                         value = "N/A"
                     else:
                         roe_percent = roe_ratio * 100
-                        if roe_ratio < 10:
+                        if roe_percent < 10:
                             color = "red"
-                            value = f"{roe_ratio:.2f}%"
-                        elif 10 <= roe_ratio <= 20:
+                        elif 10 <= roe_percent <= 20:
                             color = "orange"
-                            value = f"{roe_ratio:.2f}%"
                         else:
                             color = "green"
-                            value = f"{roe_ratio:.2f}%"
+                        value = f"{roe_percent:.2f}%"
                     # Display like st.metric with style
                     st.markdown(f"""
                         <div style='display: flex; flex-direction: column; align-items: start;'>
