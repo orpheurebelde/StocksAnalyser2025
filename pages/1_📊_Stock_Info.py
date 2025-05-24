@@ -77,21 +77,28 @@ if selected_display != "Select a stock...":
                     st.metric("Market Cap", format_currency(info.get('marketCap')))
                     # Categorize with green,yellow and red Trailing P/E
                     trailing_pe = info.get("trailingPE")
-                    # Define color based on value
+
+                    # Define value and color
                     if trailing_pe is None:
                         color = "gray"
-                        label = "N/A"
+                        value = "N/A"
                     elif trailing_pe < 15:
                         color = "green"
-                        label = f"{trailing_pe:.2f}"
+                        value = f"{trailing_pe:.2f}"
                     elif 15 <= trailing_pe <= 25:
                         color = "orange"
-                        label = f"{trailing_pe:.2f}"
+                        value = f"{trailing_pe:.2f}"
                     else:
                         color = "red"
-                        label = f"{trailing_pe:.2f}"
-                    # Display with color
-                    st.markdown(f"**Trailing P/E:** <span style='color:{color}'>{label}</span>", unsafe_allow_html=True)
+                        value = f"{trailing_pe:.2f}"
+
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 14px; color: #666;'>Trailing P/E</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     st.metric("Forward P/E", format_ratio(info.get("forwardPE")))
                 with col2:
                     st.metric("PEG Ratio", format_ratio(info.get("pegRatio")))
