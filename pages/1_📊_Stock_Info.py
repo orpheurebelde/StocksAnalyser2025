@@ -77,7 +77,6 @@ if selected_display != "Select a stock...":
                     st.metric("Market Cap", format_currency(info.get('marketCap')))
                     # Categorize with green,yellow and red Trailing P/E
                     trailing_pe = info.get("trailingPE")
-
                     # Define value and color
                     if trailing_pe is None:
                         color = "gray"
@@ -91,7 +90,6 @@ if selected_display != "Select a stock...":
                     else:
                         color = "red"
                         value = f"{trailing_pe:.2f}"
-
                     # Display like st.metric with style
                     st.markdown(f"""
                         <div style='display: flex; flex-direction: column; align-items: start;'>
@@ -99,7 +97,28 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    st.metric("Forward P/E", format_ratio(info.get("forwardPE")))
+                    # Categorize with green,yellow and red forward P/E
+                    forward_pe = info.get("forwardPE")
+                    # Define value and color
+                    if forward_pe is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif forward_pe < 15:
+                        color = "green"
+                        value = f"{forward_pe:.2f}"
+                    elif 15 <= forward_pe <= 25:
+                        color = "orange"
+                        value = f"{forward_pe:.2f}"
+                    else:
+                        color = "red"
+                        value = f"{forward_pe:.2f}"
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>Forward P/E</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                 with col2:
                     st.metric("PEG Ratio", format_ratio(info.get("pegRatio")))
                     st.metric("P/B", format_ratio(info.get("priceToBook")))
