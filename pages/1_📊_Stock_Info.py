@@ -120,6 +120,28 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
                 with col2:
+                    #Categorize with green,yellow and red PEG Ratio
+                    peg_ratio = info.get("trailingPegRatio")
+                    # Define value and color
+                    if peg_ratio is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif peg_ratio < 1:
+                        color = "green"
+                        value = f"{peg_ratio:.2f}"
+                    elif 1 <= peg_ratio <= 2:
+                        color = "orange"
+                        value = f"{peg_ratio:.2f}"
+                    else:
+                        color = "red"
+                        value = f"{peg_ratio:.2f}"
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>Forward P/E</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     st.metric("PEG Ratio", format_ratio(info.get("trailingPegRatio")))
                     st.metric("P/B", format_ratio(info.get("priceToBook")))
                     st.metric("P/S", format_ratio(info.get("priceToSalesTrailing12Months")))
