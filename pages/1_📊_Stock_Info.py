@@ -76,13 +76,13 @@ if selected_display != "Select a stock...":
                 with col1:
                     st.metric("Market Cap", format_currency(info.get('marketCap')))
                     # Categorize with colors Trailing P/E
-                    pe_ratio = info.get("trailingPE")
-                    if pe_ratio < 10:
-                        st.metric("Trailing P/E", format_ratio(pe_ratio), delta_color="normal")
-                    elif 10 <= pe_ratio < 20:
-                        st.metric("Trailing P/E", format_ratio(pe_ratio), delta_color="inverse")
+                    trail_pe = info.get("trailingPE")
+                    if trail_pe < 10:
+                        st.metric("Trailing P/E", format_ratio(trail_pe), delta_color="normal")
+                    elif 10 <= trail_pe < 20:
+                        st.metric("Trailing P/E", format_ratio(trail_pe), delta_color="inverse")
                     else:
-                        st.metric("Trailing P/E", format_ratio(pe_ratio), delta_color="off")
+                        st.metric("Trailing P/E", format_ratio(trail_pe), delta_color="off")
                     st.metric("Forward P/E", format_ratio(info.get("forwardPE")))
                 with col2:
                     st.metric("PEG Ratio", format_ratio(info.get("pegRatio")))
@@ -134,7 +134,7 @@ if selected_display != "Select a stock...":
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = info.get("sector", "N/A")
                     market_cap = format_number(info.get("marketCap", "N/A"))
-                    pe_ratio = info.get("trailingPE", "N/A")
+                    trail_pe = info.get("trailingPE", "N/A")
                     revenue = format_number(info.get("totalRevenue", "N/A"))
                     net_income = format_number(info.get("netIncomeToCommon", "N/A"))
                     eps = info.get("trailingEps", "N/A")
@@ -148,7 +148,7 @@ if selected_display != "Select a stock...":
                     - Company Name: {company_name}
                     - Sector: {sector}
                     - Market Cap: {market_cap}
-                    - P/E Ratio: {pe_ratio}
+                    - P/E Ratio: {trail_pe}
                     - Revenue (last FY): {revenue}
                     - Net Income (last FY): {net_income}
                     - EPS: {eps}
