@@ -120,7 +120,7 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
                 with col2:
-                    st.metric("PEG Ratio", format_ratio(info.get("pegRatio")))
+                    st.metric("PEG Ratio", format_ratio(info.get("trailingPegRatio")))
                     st.metric("P/B", format_ratio(info.get("priceToBook")))
                     st.metric("P/S", format_ratio(info.get("priceToSalesTrailing12Months")))
                 st.divider()
