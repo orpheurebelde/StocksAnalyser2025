@@ -295,15 +295,53 @@ if selected_display != "Select a stock...":
                     st.write(f"**Total Debt:** {format_currency(info.get('totalDebt'))}")
                     st.write(f"**Total Cash:** {format_currency(info.get('totalCash'))}")
 
+            def categorize_margin(value):
+                if value is None:
+                    return "N/A", "gray"
+                elif value >= 0.4:
+                    return "🟢 Excellent", "green"
+                elif 0.2 <= value < 0.4:
+                    return "🟡 Average", "orange"
+                else:
+                    return "🔴 Weak", "red"
+
+            def categorize_growth(value):
+                if value is None:
+                    return "N/A", "gray"
+                elif value > 0.15:
+                    return "🟢 High Growth", "green"
+                elif 0.05 <= value <= 0.15:
+                    return "🟡 Moderate", "orange"
+                elif value < 0.05:
+                    return "🔴 Low Growth", "red"
+                return "N/A", "gray"
+
             with st.expander("📊 Margins & Growth"):
                 col1, col2 = st.columns(2)
+
+                # Column 1: Margins
                 with col1:
-                    st.write(f"**Gross Margin:** {format_percent(info.get('grossMargins'))}")
-                    st.write(f"**Operating Margin:** {format_percent(info.get('operatingMargins'))}")
-                    st.write(f"**Profit Margin:** {format_percent(info.get('profitMargins'))}")
+                    gm = info.get('grossMargins')
+                    gm_cat, gm_color = categorize_margin(gm)
+                    st.write(f"**Gross Margin:** {format_percent(gm)} ({gm_cat})")
+
+                    om = info.get('operatingMargins')
+                    om_cat, om_color = categorize_margin(om)
+                    st.write(f"**Operating Margin:** {format_percent(om)} ({om_cat})")
+
+                    pm = info.get('profitMargins')
+                    pm_cat, pm_color = categorize_margin(pm)
+                    st.write(f"**Profit Margin:** {format_percent(pm)} ({pm_cat})")
+
+                # Column 2: Growth
                 with col2:
-                    st.write(f"**Earnings Growth:** {format_percent(info.get('earningsGrowth'))}")
-                    st.write(f"**Revenue Growth:** {format_percent(info.get('revenueGrowth'))}")
+                    eg = info.get('earningsGrowth')
+                    eg_cat, eg_color = categorize_growth(eg)
+                    st.write(f"**Earnings Growth:** {format_percent(eg)} ({eg_cat})")
+
+                    rg = info.get('revenueGrowth')
+                    rg_cat, rg_color = categorize_growth(rg)
+                    st.write(f"**Revenue Growth:** {format_percent(rg)} ({rg_cat})")
 
             with st.expander("📦 Ownership"):
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
