@@ -75,14 +75,14 @@ if selected_display != "Select a stock...":
                 col1, col2 = st.columns(2)
                 with col1:
                     st.metric("Market Cap", format_currency(info.get('marketCap')))
-                    # Categorize with colors Trailing P/E
-                    trail_pe = info.get("trailingPE")
-                    if trail_pe < 10:
-                        st.metric("Trailing P/E", format_ratio(trail_pe), delta_color="normal")
-                    elif 10 <= trail_pe < 20:
-                        st.metric("Trailing P/E", format_ratio(trail_pe), delta_color="inverse")
+                    # Categorize with green,yellow and red Trailing P/E
+                    trailing_pe = info.get("trailingPE")
+                    if trailing_pe < 15:
+                        st.metric("Trailing P/E", format_ratio(trailing_pe), delta_color="normal")
+                    elif 15 <= trailing_pe <= 25:
+                        st.metric("Trailing P/E", format_ratio(trailing_pe), delta_color="inverse")
                     else:
-                        st.metric("Trailing P/E", format_ratio(trail_pe), delta_color="off")
+                        st.metric("Trailing P/E", format_ratio(trailing_pe), delta_color="negative")
                     st.metric("Forward P/E", format_ratio(info.get("forwardPE")))
                 with col2:
                     st.metric("PEG Ratio", format_ratio(info.get("pegRatio")))
