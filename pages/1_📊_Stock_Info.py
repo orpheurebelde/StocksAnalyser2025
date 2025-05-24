@@ -214,10 +214,9 @@ if selected_display != "Select a stock...":
                             st.markdown(section.strip().replace('\n', '  \n'))
 
             with st.expander("Company Info", expanded=False):
-                if st.session_state.selected_ticker:
-                    _, info = fetch_data(st.session_state.selected_ticker)
-                    if info:
-                        st.write(info)
-                    else:
-                        st.warning("No stock selected.")
+                _, info = fetch_data(st.session_state.selected_ticker)
+                if info:
+                    st.write(info)
+                else:
+                    st.warning("No stock selected.")
     st.info("Please select a stock from the list.")
