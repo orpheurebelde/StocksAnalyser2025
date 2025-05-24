@@ -142,7 +142,6 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    st.metric("PEG Ratio", format_ratio(info.get("trailingPegRatio")))
                     st.metric("P/B", format_ratio(info.get("priceToBook")))
                     st.metric("P/S", format_ratio(info.get("priceToSalesTrailing12Months")))
                 st.divider()
