@@ -94,8 +94,7 @@ with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
         st.subheader(title)
         st.markdown(f"""
         - **Ticker**: {ticker}
-        - **Current Price**: ${price:,.2f}  
-          <span style='color:{price_color}; font-size:18px;'>({price_category})</span>  
+        - **Current Price**: ${price:,.2f} <span style='color:{price_color}; font-size:18px;'>({price_category})</span>  
         - **52 Week High**: ${high_52w:,.2f}
         - **52 Week Low**: ${low_52w:,.2f}
         - **Trend**: <span style='color:{trend_color}; font-size:18px;'>{trend}</span>  
