@@ -11,6 +11,8 @@ def load_stock_list():
     df["Display"] = df["Ticker"] + " - " + df["Name"]
     return df
 
+st.title("📁 Stock Price Simulations")
+
 stock_df = load_stock_list()
 options = ["Select a stock..."] + stock_df["Display"].tolist()
 selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, index=0)
