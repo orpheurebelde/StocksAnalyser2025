@@ -74,7 +74,7 @@ if selected_display != "Select a stock...":
             with st.expander("📈 Valuation & Fundamentals", expanded=True):
                 col1, col2 = st.columns(2)
                 with col1:
-                    #Format in Millions or Billions Market Cap
+                    #Format in Millions, Billions or Trillions Market Cap
                     def format_currency(val):
                         if isinstance(val, (int, float)):
                             if val >= 1e9:
@@ -152,7 +152,28 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    st.metric("P/B", format_ratio(info.get("priceToBook")))
+                    #Categorize with green,yellow and red Price To Book Ratio
+                    pb_ratio = info.get("trailingPegRatio")
+                    # Define value and color
+                    if pb_ratio is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif pb_ratio < 5:
+                        color = "green"
+                        value = f"{pb_ratio:.2f}"
+                    elif 5 <= pb_ratio <= 15:
+                        color = "orange"
+                        value = f"{pb_ratio:.2f}"
+                    else:
+                        color = "red"
+                        value = f"{pb_ratio:.2f}"
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>P/B Ratio</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     st.metric("P/S", format_ratio(info.get("priceToSalesTrailing12Months")))
                 st.divider()
                 col1, col2 = st.columns(2)
