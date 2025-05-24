@@ -74,6 +74,16 @@ if selected_display != "Select a stock...":
             with st.expander("📈 Valuation & Fundamentals", expanded=True):
                 col1, col2 = st.columns(2)
                 with col1:
+                    #Format in Millions or Billions Market Cap
+                    def format_currency(val):
+                        if isinstance(val, (int, float)):
+                            if val >= 1e9:
+                                return f"${val / 1e9:.2f}B"
+                            elif val >= 1e6:
+                                return f"${val / 1e6:.2f}M"
+                            else:
+                                return f"${val:,.0f}"
+                        return "N/A"
                     st.metric("Market Cap", format_currency(info.get('marketCap')))
                     # Categorize with green,yellow and red Trailing P/E
                     trailing_pe = info.get("trailingPE")
