@@ -24,73 +24,82 @@ with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
             return
 
         close = data["Close"]
+        price = close.iloc[-1]
+        high_52w = close[-252:].max()
+        low_52w = close[-252:].min()
 
-        # Find the first available trading day of the year
+        # First trading day of the year
         try:
-            # Ensure start_of_year is timezone-aware and matches the timezone of close.index
             start_of_year = pd.Timestamp.now(tz=close.index.tz).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
             start_price = close.loc[close.index >= start_of_year].iloc[0] if not close.loc[close.index >= start_of_year].empty else close.iloc[0]
         except Exception as e:
-            st.error(f"Error during selection: {e}")
+            st.error(f"Error selecting start price: {e}")
             start_price = close.iloc[0]
 
-        # Calculate YTD % return
-        ytd = ((close.iloc[-1] / start_price) - 1) * 100
+        # YTD Return
+        ytd = ((price / start_price) - 1) * 100
 
-        # Calculate RSI, MACD, and Fibonacci levels
+        # Indicators
         rsi = compute_rsi(close)
         macd, signal = compute_macd(close)
-        fib_level_3y = compute_fibonacci_level(close[-252*3:])  # Last 3 years
-        fib_level_5y = compute_fibonacci_level(close[-252*5:])  # Last 5 years
-        fib_level_10y = compute_fibonacci_level(close)  # Last 10 years
+        fib_level_3y = compute_fibonacci_level(close[-252*3:])
+        fib_level_5y = compute_fibonacci_level(close[-252*5:])
+        fib_level_10y = compute_fibonacci_level(close)
 
-        #Calculate and categorize MACD signal into a variable
+        # MACD Classification
         macd_signal = "Bullish" if macd.iloc[-1] > signal.iloc[-1] else "Bearish"
         macd_color = "green" if macd_signal == "Bullish" else "red"
 
-        #Calculate and categorize RSI signal for markdown incorporation
-        rsi_signal = None
-        rsi_color = None
+        # RSI Classification
         if rsi < 30:
-            rsi_signal = "Bullish"
-            rsi_color = "green"
+            rsi_signal, rsi_color = "Bullish", "green"
         elif rsi > 70:
-            rsi_signal = "Bearish"
-            rsi_color = "red"
+            rsi_signal, rsi_color = "Bearish", "red"
         else:
-            rsi_signal = "Neutral"
-            rsi_color = "yellow"
-        if isinstance(rsi, (int, float)):
-            rsi = round(rsi, 2)
-        else:
-            rsi = "N/A"
+            rsi_signal, rsi_color = "Neutral", "orange"
+        rsi = round(rsi, 2) if isinstance(rsi, (int, float)) else "N/A"
 
-        #Calculate and classify the YTD % if with Correction, Bear Market, Crash or Bull Market for markdown incorporation
-        ytd_signal = None
-        ytd_color = None
+        # YTD Classification
         if ytd > 0:
-            ytd_signal = "Bull Market"
-            ytd_color = "green"
+            ytd_signal, ytd_color = "Bull Market", "green"
         elif -20 < ytd <= 0:
-            ytd_signal = "Correction"
-            ytd_color = "orange"
+            ytd_signal, ytd_color = "Correction", "orange"
         elif -30 < ytd <= -20:
-            ytd_signal = "Bear Market"
-            ytd_color = "red"
-        elif ytd > -30:
-            ytd_signal = "Crash"
-            ytd_color = "darkred"
+            ytd_signal, ytd_color = "Bear Market", "red"
         else:
-            ytd_signal = "N/A"
-            ytd_color = "gray"
+            ytd_signal, ytd_color = "Crash", "darkred"
+
+        # Price vs 52-week range
+        price_position = (price - low_52w) / (high_52w - low_52w)
+        if price_position > 0.85:
+            price_category, price_color = "Near 52-Week High", "green"
+        elif price_position < 0.15:
+            price_category, price_color = "Near 52-Week Low", "red"
+        else:
+            price_category, price_color = "Mid Range", "orange"
+
+        # Trend from Moving Averages
+        sma_50 = close[-50:].mean()
+        sma_200 = close[-200:].mean()
+        if price > sma_50 and price > sma_200:
+            trend, trend_color = "Uptrend", "green"
+        elif price < sma_50 and price < sma_200:
+            trend, trend_color = "Downtrend", "red"
+        else:
+            trend, trend_color = "Sideways", "orange"
+
+        # Fibonacci context (3Y)
+        fib_comment_3y = "Above 3Y Fib Level (Breakout)" if price > fib_level_3y else "Below 3Y Fib Level (Support)"
 
         st.subheader(title)
         st.markdown(f"""
         - **Ticker**: {ticker}
-        - **Current Price**: ${close.iloc[-1]:,.2f}
-        - **52 Week High**: ${close[-252:].max():,.2f}
-        - **52 Week Low**: ${close[-252:].min():,.2f}
-        - **RSI**: {rsi:.2f} (<span style='color:{rsi_color}; font-size:18px;'> {rsi_signal}</span>)
+        - **Current Price**: ${price:,.2f}  
+          <span style='color:{price_color}; font-size:18px;'>({price_category})</span>  
+        - **52 Week High**: ${high_52w:,.2f}
+        - **52 Week Low**: ${low_52w:,.2f}
+        - **Trend**: <span style='color:{trend_color}; font-size:18px;'>{trend}</span>  
+        - **RSI**: {rsi} (<span style='color:{rsi_color}; font-size:18px;'> {rsi_signal}</span>)
         - **MACD Signal**: {signal.iloc[-1]:.2f} (<span style='color:{macd_color}; font-size:18px;'> {macd_signal}</span>)
         - **YTD %**: {ytd:.2f}% (<span style='color:{ytd_color}; font-size:18px;'> {ytd_signal}</span>)
         - **1D %**: {close.pct_change().iloc[-1]*100:.2f}%
@@ -99,11 +108,12 @@ with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
         - **6M %**: {close.pct_change(126).iloc[-1]*100:.2f}%
         - **1Y %**: {close.pct_change(252).iloc[-1]*100:.2f}%
         - **5Y %**: {close.pct_change(1260).iloc[-1]*100:.2f}%
-        - **Fibonacci Level (3Y Range)**: {fib_level_3y:.2f}%
+        - **Fibonacci Level (3Y Range)**: {fib_level_3y:.2f}% - {fib_comment_3y}
         - **Fibonacci Level (5Y Range)**: {fib_level_5y:.2f}%
         - **Fibonacci Level (10Y Range)**: {fib_level_10y:.2f}%
         """, unsafe_allow_html=True)
 
+    # Show both market indicators
     with col1:
         show_indicators("^GSPC", "S&P 500 Indicators")
 
