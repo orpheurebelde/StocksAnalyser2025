@@ -222,7 +222,31 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    st.metric("EPS (Current Year)", format_currency_dec(info.get("epsCurrentYear")))
+                    #Categorize EPS CurrentYear
+                    eps_current_year = info.get("epsCurrentYear")
+                    # Define value and color
+                    if eps_current_year is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif eps_current_year < 0:
+                        color = "red"
+                        value = f"{eps_current_year:.2f} (Loss)"
+                    elif 0 <= eps_current_year <= 1:
+                        color = "orange"
+                        value = f"{eps_current_year:.2f}"
+                    elif 1 < eps_current_year <= 5:
+                        color = "green"
+                        value = f"{eps_current_year:.2f}"
+                    else:
+                        color = "blue"
+                        value = f"{eps_current_year:.2f}"
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>EPS (Current Year)</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                 with col2:
                     st.metric("EPS (Forward)", format_currency_dec(info.get("forwardEps")))
                     st.metric("Dividend Yield", format_percent(info.get("dividendYield")))
@@ -267,7 +291,7 @@ if selected_display != "Select a stock...":
                     trail_pe = info.get("trailingPE", "N/A")
                     revenue = format_number(info.get("totalRevenue", "N/A"))
                     net_income = format_number(info.get("netIncomeToCommon", "N/A"))
-                    eps = info.get("trailingEps", "N/A")
+                    eps_current_year = info.get("trailingEps", "N/A")
                     dividend_yield_val = info.get("dividendYield", None)
                     dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
                     summary_of_news = "N/A"
@@ -281,7 +305,7 @@ if selected_display != "Select a stock...":
                     - P/E Ratio: {trail_pe}
                     - Revenue (last FY): {revenue}
                     - Net Income (last FY): {net_income}
-                    - EPS: {eps}
+                    - EPS: {eps_current_year}
                     - Dividend Yield: {dividend_yield}
                     - Recent News: {summary_of_news}
 
