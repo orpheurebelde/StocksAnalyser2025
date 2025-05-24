@@ -174,7 +174,28 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    st.metric("P/S", format_ratio(info.get("priceToSalesTrailing12Months")))
+                    #Categorize with green,yellow and red Price To Sales Ratio
+                    ps_ratio = info.get("priceToSalesTrailing12Months")
+                    # Define value and color
+                    if ps_ratio is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif ps_ratio < 4:
+                        color = "green"
+                        value = f"{ps_ratio:.2f}"
+                    elif 4 <= ps_ratio <= 10:
+                        color = "orange"
+                        value = f"{ps_ratio:.2f}"
+                    else:
+                        color = "red"
+                        value = f"{ps_ratio:.2f}"
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>P/S Ratio</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                 st.divider()
                 col1, col2 = st.columns(2)
                 with col1:
