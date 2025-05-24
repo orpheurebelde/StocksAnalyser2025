@@ -199,7 +199,28 @@ if selected_display != "Select a stock...":
                 st.divider()
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("ROE", format_percent(info.get("returnOnEquity")))
+                    #Categorize with green,yellow and red Price To Sales Ratio
+                    roe_ratio = info.get("returnOnEquity")
+                    # Define value and color
+                    if roe_ratio is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif roe_ratio < 10:
+                        color = "red"
+                        value = f"{roe_ratio:.2f}"
+                    elif 10 <= roe_ratio <= 20:
+                        color = "orange"
+                        value = f"{roe_ratio:.2f}"
+                    else:
+                        color = "green"
+                        value = f"{roe_ratio:.2f}"
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>ROE</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     st.metric("EPS (Current Year)", format_currency_dec(info.get("epsCurrentYear")))
                 with col2:
                     st.metric("EPS (Forward)", format_currency_dec(info.get("forwardEps")))
