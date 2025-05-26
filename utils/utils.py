@@ -293,7 +293,7 @@ def display_fundamentals_score(info: dict):
         score += score_metric(info.get("epsCurrentYear"), 1, 5, 5)
         score += score_metric(
             info.get("ebitda") / info.get("totalRevenue") if info.get("ebitda") and info.get("totalRevenue") else None,
-            30, 60, 60
+            20, 80, 80
         )
     except Exception as e:
         st.error(f"Error scoring fundamentals: {e}")
