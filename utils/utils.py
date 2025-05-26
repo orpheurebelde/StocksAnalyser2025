@@ -261,10 +261,6 @@ def compute_fibonacci_level(series):
     current_price = series.iloc[-1]
     return ((current_price - min_price) / (max_price - min_price)) * 100
 
-# utils.py
-
-import streamlit as st
-
 def score_metric(value, low, mid, high, reverse=False):
     if value is None:
         return 0

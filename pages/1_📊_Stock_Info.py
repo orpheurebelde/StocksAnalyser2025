@@ -286,8 +286,9 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
                 st.divider()
-                info = get_stock_info(ticker)
+
                 display_fundamentals_score(info)
+                
             def categorize_cashflow(fcf, revenue):
                 if fcf is None or revenue is None:
                     return "N/A", "gray"
