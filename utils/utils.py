@@ -188,7 +188,10 @@ def login(USERNAME, PASSWORD):
             st.session_state["authenticated"] = True
             st.session_state["last_activity"] = time.time()
             st.success("Login successful.")
-            st.experimental_rerun()  # 🔁 Trigger app rerun to show authenticated content
+            try:
+                st.rerun()  # or st.experimental_rerun()
+            except Exception as e:
+                st.error(f"Failed to rerun app: {e}")
         else:
             st.error("Invalid credentials. Please try again.")
 
