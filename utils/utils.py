@@ -281,7 +281,7 @@ def score_metric(value, low, mid, high, reverse=False):
 
 def display_fundamentals_score(info: dict):
     score = 0
-    max_score = 8 * 2  # 8 metrics, 2 points each
+    max_score = 10 * 2  # 8 metrics, 2 points each
 
     try:
         score += score_metric(info.get("trailingPE"), 15,40, 40, reverse=True)
@@ -293,7 +293,7 @@ def display_fundamentals_score(info: dict):
         score += score_metric(info.get("epsCurrentYear"), 1, 5, 5)
         score += score_metric(
             info.get("ebitda") / info.get("totalRevenue") if info.get("ebitda") and info.get("totalRevenue") else None,
-            10, 20, 20
+            30, 60, 60
         )
     except Exception as e:
         st.error(f"Error scoring fundamentals: {e}")
