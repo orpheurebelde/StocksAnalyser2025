@@ -288,7 +288,7 @@ def display_fundamentals_score(info: dict):
         score += score_metric(info.get("forwardPE"), 15, 50, 50, reverse=True)
         score += score_metric(info.get("trailingPegRatio"), 0.5, 1.5, 1.5, reverse=True)
         score += score_metric(info.get("priceToBook"), 5, 20, 20, reverse=True)
-        score += score_metric(info.get("priceToSalesTrailing12Months"), 8, 12, 12, reverse=True)
+        score += score_metric(info.get("priceToSalesTrailing12Months"), 4, 12, 12, reverse=True)
         score += score_metric(info.get("returnOnEquity"), 0.1, 0.2, 0.2)
         score += score_metric(info.get("epsCurrentYear"), 1, 5, 5)
         score += score_metric(
