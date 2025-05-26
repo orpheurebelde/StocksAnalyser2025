@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import get_stock_info, get_ai_analysis, format_number, fetch_data
+from utils.utils import get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score
 import re
 import time
 
@@ -285,6 +285,9 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
+                st.divider()
+                info = get_stock_info(ticker)
+                display_fundamentals_score(info)
             def categorize_cashflow(fcf, revenue):
                 if fcf is None or revenue is None:
                     return "N/A", "gray"

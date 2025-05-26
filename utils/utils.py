@@ -260,3 +260,65 @@ def compute_fibonacci_level(series):
     max_price = series.max()
     current_price = series.iloc[-1]
     return ((current_price - min_price) / (max_price - min_price)) * 100
+
+# utils.py
+
+import streamlit as st
+
+def score_metric(value, low, mid, high, reverse=False):
+    if value is None:
+        return 0
+    if reverse:  # lower is better
+        if value < low:
+            return 2
+        elif value <= mid:
+            return 1
+        else:
+            return 0
+    else:  # higher is better
+        if value > high:
+            return 2
+        elif value >= mid:
+            return 1
+        else:
+            return 0
+
+def display_fundamentals_score(info: dict):
+    score = 0
+    max_score = 8 * 2  # 8 metrics, 2 points each
+
+    try:
+        score += score_metric(info.get("trailingPE"), 15, 25, 25, reverse=True)
+        score += score_metric(info.get("forwardPE"), 15, 25, 25, reverse=True)
+        score += score_metric(info.get("trailingPegRatio"), 1, 2, 2, reverse=True)
+        score += score_metric(info.get("priceToBook"), 5, 15, 15, reverse=True)
+        score += score_metric(info.get("priceToSalesTrailing12Months"), 4, 10, 10, reverse=True)
+        score += score_metric(info.get("returnOnEquity"), 0.1, 0.2, 0.2)
+        score += score_metric(info.get("epsCurrentYear"), 1, 5, 5)
+        score += score_metric(
+            info.get("ebitda") / info.get("totalRevenue") if info.get("ebitda") and info.get("totalRevenue") else None,
+            10, 20, 20
+        )
+    except Exception as e:
+        st.error(f"Error scoring fundamentals: {e}")
+        return
+
+    score_pct = (score / max_score) * 100
+
+    if score_pct >= 75:
+        label = "Strong"
+        color = "green"
+    elif score_pct >= 40:
+        label = "Average"
+        color = "orange"
+    else:
+        label = "Weak"
+        color = "red"
+
+    st.markdown(f"""
+        <div style='padding: 1rem; border: 2px solid {color}; border-radius: 1rem; background-color: #1e1e1e; margin-bottom: 1rem;'>
+            <h4 style='margin: 0 0 0.5rem 0; color: #FFFFFF;'>🔎 Valuation Quality Score</h4>
+            <span style='font-size: 48px; font-weight: bold; color: {color};'>{label}</span>
+            <div style='font-size: 18px; color: #AAAAAA;'>({score}/16 points)</div>
+        </div>
+    """, unsafe_allow_html=True)
