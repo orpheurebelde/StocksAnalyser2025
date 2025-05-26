@@ -288,9 +288,7 @@ if selected_display != "Select a stock...":
 
                 #Divide sections for displaying Fundamentals Score
                 st.divider()
-                col1 = st.columns(1)
-                with col1:
-                    display_fundamentals_score(info)
+                display_fundamentals_score(info)
 
             def categorize_cashflow(fcf, revenue):
                 if fcf is None or revenue is None:
