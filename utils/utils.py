@@ -301,10 +301,10 @@ def display_fundamentals_score(info: dict):
 
     score_pct = (score / max_score) * 100
 
-    if score_pct >= 75:
+    if score_pct >= 55:
         label = "Strong"
         color = "green"
-    elif score_pct >= 40:
+    elif score_pct >= 35:
         label = "Average"
         color = "orange"
     else:
