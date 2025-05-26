@@ -285,10 +285,13 @@ if selected_display != "Select a stock...":
                             <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                st.divider()
 
-                display_fundamentals_score(info)
-                
+                #Divide sections for displaying Fundamentals Score
+                st.divider()
+                col1 = st.columns(1)
+                with col1:
+                    display_fundamentals_score(info)
+
             def categorize_cashflow(fcf, revenue):
                 if fcf is None or revenue is None:
                     return "N/A", "gray"
