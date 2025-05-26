@@ -284,16 +284,16 @@ def display_fundamentals_score(info: dict):
     max_score = 10 * 2  # 8 metrics, 2 points each
 
     try:
-        score += score_metric(info.get("trailingPE"), 15,50, 50, reverse=True)
-        score += score_metric(info.get("forwardPE"), 15, 50, 50, reverse=True)
-        score += score_metric(info.get("trailingPegRatio"), 0.5, 1.5, 1.5, reverse=True)
-        score += score_metric(info.get("priceToBook"), 5, 20, 20, reverse=True)
-        score += score_metric(info.get("priceToSalesTrailing12Months"), 4, 12, 12, reverse=True)
-        score += score_metric(info.get("returnOnEquity"), 0.1, 0.2, 0.2)
-        score += score_metric(info.get("epsCurrentYear"), 1, 5, 5)
+        score += score_metric(info.get("trailingPE"), 15,25, 50, reverse=True)
+        score += score_metric(info.get("forwardPE"), 15, 25, 50, reverse=True)
+        score += score_metric(info.get("trailingPegRatio"), 0.5, 1.0, 2.5, reverse=True)
+        score += score_metric(info.get("priceToBook"), 5, 15, 30, reverse=True)
+        score += score_metric(info.get("priceToSalesTrailing12Months"), 4, 8, 12, reverse=True)
+        score += score_metric(info.get("returnOnEquity"), 0.1, 0.4, 0.8)
+        score += score_metric(info.get("epsCurrentYear"), 1, 5, 20)
         score += score_metric(
             info.get("ebitda") / info.get("totalRevenue") if info.get("ebitda") and info.get("totalRevenue") else None,
-            20, 80, 80
+            20, 50, 80
         )
     except Exception as e:
         st.error(f"Error scoring fundamentals: {e}")
