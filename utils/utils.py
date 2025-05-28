@@ -330,16 +330,22 @@ def get_last_thursday():
 def load_aaii_sentiment(thursday_key: str):
     url = 'https://www.aaii.com/files/surveys/sentiment.xls'
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'  # <-- important
     }
-    response = requests.get(url, headers=headers)
 
-    if response.status_code == 200:
-        xls_data = BytesIO(response.content)
-        df = pd.read_excel(xls_data)
-        df['Date'] = pd.to_datetime(df['Date'])
-        df.set_index('Date', inplace=True)
-        return df
-    else:
-        raise Exception(f"Failed to download AAII sentiment data. Status: {response.status_code}")
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            xls_data = BytesIO(response.content)
+            df = pd.read_excel(xls_data)
+            df['Date'] = pd.to_datetime(df['Date'])
+            df.set_index('Date', inplace=True)
+            return df
+        else:
+            st.error(f"Failed to download AAII sentiment data. Status: {response.status_code}")
+            return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error downloading AAII sentiment: {e}")
+        return pd.DataFrame()
 
