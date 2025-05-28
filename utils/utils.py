@@ -320,29 +320,3 @@ def display_fundamentals_score(info: dict):
         </div>
     """, unsafe_allow_html=True)
 
-def get_aaii_sentiment():
-    url = "https://www.aaii.com/sentimentsurvey"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        sentiment_table = soup.find("table", {"class": "sentimentsurvey-results"})
-        if not sentiment_table:
-            raise ValueError("Sentiment table not found on the page.")
-
-        rows = sentiment_table.find_all("tr")[1:4]  # Bullish, Neutral, Bearish rows
-
-        sentiment_data = {}
-        for row in rows:
-            cells = row.find_all("td")
-            if len(cells) < 2:
-                continue
-            label = cells[0].text.strip().replace(" Sentiment", "")
-            percentage = cells[1].text.strip()
-            sentiment_data[label] = percentage
-
-        return sentiment_data
-    except Exception as e:
-        return {"error": f"Failed to fetch AAII sentiment: {e}"}
-

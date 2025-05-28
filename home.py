@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 from utils.utils import get_vix_data, create_vix_gauge, login, get_aaii_sentiment
+from PIL import Image
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
@@ -83,29 +84,8 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("🏢 Indicador AAII de Mercado", expanded=True):
-        sentiment = get_aaii_sentiment()
-
-        if "error" in sentiment:
-            st.error(sentiment["error"])
-        else:
-            st.subheader("🧠 AAII Investor Sentiment")
-            st.markdown(f"""
-            - **Bullish**: {sentiment.get('Bullish', 'N/A')}
-            - **Neutral**: {sentiment.get('Neutral', 'N/A')}
-            - **Bearish**: {sentiment.get('Bearish', 'N/A')}
-            """)
-        # Determine market sentiment based on AAII data
-        bullish = float(sentiment['Bullish'].replace('%',''))
-        bearish = float(sentiment['Bearish'].replace('%',''))
-
-        if bullish > 45:
-            market_sentiment = "Strong Bullish Bias"
-        elif bearish > 45:
-            market_sentiment = "Strong Bearish Bias"
-        else:
-            market_sentiment = "Neutral"
-
-        st.markdown(f"**Market Sentiment:** {market_sentiment}")
+        image = Image.open("images/aaii_sentiment.png")
+        st.image(image, caption="AAII Investor Sentiment (Source: AAII.com)", use_column_width=True)
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")

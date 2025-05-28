@@ -6,4 +6,3 @@ langchain
 langchain-community
 requests
 matplotlib
-beautifulsoup4
