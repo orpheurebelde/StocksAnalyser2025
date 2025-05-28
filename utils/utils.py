@@ -10,7 +10,7 @@ import math
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
-from bs4 import BeautifulSoup
+from io import BytesIO
 
 # Constants
 CACHE_DIR = "cache"
@@ -319,4 +319,23 @@ def display_fundamentals_score(info: dict):
             <div style='font-size: 18px; color: #AAAAAA;'>({score}/16 points)</div>
         </div>
     """, unsafe_allow_html=True)
+
+def get_last_thursday():
+    today = datetime.today()
+    offset = (today.weekday() - 3) % 7  # Thursday = 3
+    last_thursday = today - timedelta(days=offset)
+    return last_thursday.strftime('%Y-%m-%d')
+
+@st.cache_data
+def load_aaii_sentiment(thursday_key: str):
+    url = 'https://www.aaii.com/files/surveys/sentiment.xls'
+    response = requests.get(url)
+    if response.status_code == 200:
+        xls_data = BytesIO(response.content)
+        df = pd.read_excel(xls_data)
+        df['Date'] = pd.to_datetime(df['Date'])
+        df.set_index('Date', inplace=True)
+        return df
+    else:
+        raise Exception("Failed to download AAII sentiment data.")
 
