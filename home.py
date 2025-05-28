@@ -94,6 +94,17 @@ if st.session_state["authenticated"]:
             - **Neutral**: {sentiment['Neutral']}
             - **Bearish**: {sentiment['Bearish']}
             """)
+        bullish = float(sentiment['Bullish'].replace('%',''))
+        bearish = float(sentiment['Bearish'].replace('%',''))
+
+        if bullish > 45:
+            market_sentiment = "Strong Bullish Bias"
+        elif bearish > 45:
+            market_sentiment = "Strong Bearish Bias"
+        else:
+            market_sentiment = "Neutral"
+
+        st.markdown(f"**Market Sentiment:** {market_sentiment}")
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
