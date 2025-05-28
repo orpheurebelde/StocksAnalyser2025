@@ -10,6 +10,7 @@ import math
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
+from bs4 import BeautifulSoup
 
 # Constants
 CACHE_DIR = "cache"
@@ -318,3 +319,24 @@ def display_fundamentals_score(info: dict):
             <div style='font-size: 18px; color: #AAAAAA;'>({score}/16 points)</div>
         </div>
     """, unsafe_allow_html=True)
+
+def get_aaii_sentiment():
+    url = "https://www.aaii.com/sentimentsurvey"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    try:
+        sentiment_table = soup.find("table", {"class": "sentimentsurvey-results"})
+        rows = sentiment_table.find_all("tr")[1:4]  # Bullish, Neutral, Bearish rows
+
+        sentiment_data = {}
+        for row in rows:
+            cells = row.find_all("td")
+            label = cells[0].text.strip().replace(" Sentiment", "")
+            percentage = cells[1].text.strip()
+            sentiment_data[label] = percentage
+
+        return sentiment_data
+    except Exception as e:
+        return {"error": f"Failed to fetch AAII sentiment: {e}"}
+
