@@ -113,18 +113,14 @@ with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
         <div><strong>YTD %</strong>: {ytd:.2f}% 
             (<span style='color:{ytd_color}; font-size:18px;'> {ytd_signal}</span>)
         </div>
-
         <hr style='border: 1px solid #444;' />
-
         <div><strong>1D %</strong>: {close.pct_change().iloc[-1]*100:.2f}%</div>
         <div><strong>5D %</strong>: {close.pct_change(5).iloc[-1]*100:.2f}%</div>
         <div><strong>1M %</strong>: {close.pct_change(21).iloc[-1]*100:.2f}%</div>
         <div><strong>6M %</strong>: {close.pct_change(126).iloc[-1]*100:.2f}%</div>
         <div><strong>1Y %</strong>: {close.pct_change(252).iloc[-1]*100:.2f}%</div>
         <div><strong>5Y %</strong>: {close.pct_change(1260).iloc[-1]*100:.2f}%</div>
-
         <hr style='border: 1px solid #444;' />
-
         <div><strong>Fibonacci Level (3Y Range)</strong>: {fib_level_3y:.2f}% - {fib_comment_3y}</div>
         <div><strong>Fibonacci Level (5Y Range)</strong>: {fib_level_5y:.2f}%</div>
         <div><strong>Fibonacci Level (10Y Range)</strong>: {fib_level_10y:.2f}%</div>
