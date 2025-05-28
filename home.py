@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils.utils import get_vix_data, create_vix_gauge, login
+from utils.utils import get_vix_data, create_vix_gauge, login, get_last_thursday, load_aaii_sentiment
 from PIL import Image
 
 # Page setup
@@ -84,7 +84,20 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("🏢 Indicador AAII de Mercado", expanded=True):
-         
+        # Get key for caching
+        thursday_key = get_last_thursday()
+
+        # Load AAII data
+        df = load_aaii_sentiment(thursday_key)
+
+        # Display logic (chart, metrics, etc.)
+        latest = df.iloc[-1]
+        prev = df.iloc[-2]
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("📈 Bullish", f"{latest['Bullish']}%", f"{latest['Bullish'] - prev['Bullish']:+.1f}%")
+        col2.metric("📊 Neutral", f"{latest['Neutral']}%", f"{latest['Neutral'] - prev['Neutral']:+.1f}%")
+        col3.metric("📉 Bearish", f"{latest['Bearish']}%", f"{latest['Bearish'] - prev['Bearish']:+.1f}%")
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
