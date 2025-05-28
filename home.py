@@ -87,7 +87,7 @@ if st.session_state["authenticated"]:
         st.markdown(
             """
             <div style="text-align: center;">
-                <img src="https://www.aaii.com/images/indicators/market-sentiment.png" alt="AAII Market Sentiment" width="600">
+                <img src="https://www.aaii.com/sentimentsurvey/sent_results" alt="AAII Market Sentiment" width="600">
             </div>
             """,
             unsafe_allow_html=True
