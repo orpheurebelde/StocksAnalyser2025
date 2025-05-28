@@ -216,7 +216,6 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
                 st.markdown(f"<span style='color:red;'>**Category**: {category}</span>", unsafe_allow_html=True)
             elif category == 'Neutral':
                 st.markdown(f"<span style='color:orange;'>**Category**: {category}</span>", unsafe_allow_html=True)
-            st.write(f"**Category**: {category}")
         else:
             st.write("No data available for the current month.")
 
