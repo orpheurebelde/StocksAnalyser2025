@@ -90,10 +90,11 @@ if st.session_state["authenticated"]:
         else:
             st.subheader("🧠 AAII Investor Sentiment")
             st.markdown(f"""
-            - **Bullish**: {sentiment['Bullish']}
-            - **Neutral**: {sentiment['Neutral']}
-            - **Bearish**: {sentiment['Bearish']}
+            - **Bullish**: {sentiment.get('Bullish', 'N/A')}
+            - **Neutral**: {sentiment.get('Neutral', 'N/A')}
+            - **Bearish**: {sentiment.get('Bearish', 'N/A')}
             """)
+        # Determine market sentiment based on AAII data
         bullish = float(sentiment['Bullish'].replace('%',''))
         bearish = float(sentiment['Bearish'].replace('%',''))
 
