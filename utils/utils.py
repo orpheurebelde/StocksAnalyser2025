@@ -329,7 +329,11 @@ def get_last_thursday():
 @st.cache_data
 def load_aaii_sentiment(thursday_key: str):
     url = 'https://www.aaii.com/files/surveys/sentiment.xls'
-    response = requests.get(url)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
+    response = requests.get(url, headers=headers)
+
     if response.status_code == 200:
         xls_data = BytesIO(response.content)
         df = pd.read_excel(xls_data)
@@ -337,5 +341,5 @@ def load_aaii_sentiment(thursday_key: str):
         df.set_index('Date', inplace=True)
         return df
     else:
-        raise Exception("Failed to download AAII sentiment data.")
+        raise Exception(f"Failed to download AAII sentiment data. Status: {response.status_code}")
 
