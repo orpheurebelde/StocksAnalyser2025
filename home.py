@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils.utils import get_vix_data, create_vix_gauge, login, get_aaii_sentiment
+from utils.utils import get_vix_data, create_vix_gauge, login
 from PIL import Image
 
 # Page setup
