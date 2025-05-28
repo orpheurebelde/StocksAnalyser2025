@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils.utils import get_vix_data, create_vix_gauge, login
+from utils.utils import get_vix_data, create_vix_gauge, login, get_aaii_sentiment
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
@@ -81,6 +81,19 @@ if st.session_state["authenticated"]:
                 """,
                 unsafe_allow_html=True
             )
+    
+    with st.expander("🏢 Indicador AAII de Mercado", expanded=True):
+        sentiment = get_aaii_sentiment()
+
+        if "error" in sentiment:
+            st.error(sentiment["error"])
+        else:
+            st.subheader("🧠 AAII Investor Sentiment")
+            st.markdown(f"""
+            - **Bullish**: {sentiment['Bullish']}
+            - **Neutral**: {sentiment['Neutral']}
+            - **Bearish**: {sentiment['Bearish']}
+            """)
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
