@@ -110,10 +110,10 @@ with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
         <div><strong>MACD Signal</strong>: {signal.iloc[-1]:.2f} 
             (<span style='color:{macd_color}; font-size:18px;'> {macd_signal}</span>)
         </div>
+        <hr style='border: 1px solid #444;' />
         <div><strong>YTD %</strong>: {ytd:.2f}% 
             (<span style='color:{ytd_color}; font-size:18px;'> {ytd_signal}</span>)
         </div>
-        <hr style='border: 1px solid #444;' />
         <div><strong>1D %</strong>: {close.pct_change().iloc[-1]*100:.2f}%</div>
         <div><strong>5D %</strong>: {close.pct_change(5).iloc[-1]*100:.2f}%</div>
         <div><strong>1M %</strong>: {close.pct_change(21).iloc[-1]*100:.2f}%</div>
