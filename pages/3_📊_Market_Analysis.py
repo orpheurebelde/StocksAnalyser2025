@@ -209,6 +209,13 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
             st.write(f"**Current Month Performance**: {current_performance * 100:.2f}%")
             st.write(f"**Historical Max Monthly Return**: {historical_max * 100:.2f}%")
             st.write(f"**Historical Min Monthly Return**: {historical_min * 100:.2f}%")
+            # Display category with color
+            if category == 'Highest':
+                st.markdown(f"<span style='color:green;'>**Category**: {category}</span>", unsafe_allow_html=True)
+            elif category == 'Lowest':
+                st.markdown(f"<span style='color:red;'>**Category**: {category}</span>", unsafe_allow_html=True)
+            elif category == 'Neutral':
+                st.markdown(f"<span style='color:orange;'>**Category**: {category}</span>", unsafe_allow_html=True)
             st.write(f"**Category**: {category}")
         else:
             st.write("No data available for the current month.")
