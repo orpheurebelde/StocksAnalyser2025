@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils.utils import get_vix_data, create_vix_gauge, login, get_last_thursday, load_aaii_sentiment
+from utils.utils import get_vix_data, create_vix_gauge, login, load_local_aaii_sentiment
 from PIL import Image
 
 # Page setup
@@ -83,13 +83,22 @@ if st.session_state["authenticated"]:
                 unsafe_allow_html=True
             )
     
-    with st.expander("🏢 Indicador AAII de Mercado", expanded=True):
-        thursday_key = get_last_thursday()
-    df = load_aaii_sentiment(thursday_key)
+    with st.expander("📊 AAII Sentiment Survey"):
+        df = load_local_aaii_sentiment()
 
     if not df.empty:
-        st.subheader("🧠 AAII Stock Market Sentiment")
-        st.dataframe(df.tail(10))  # or a nicer chart below
+        st.subheader("Recent Sentiment Data")
+        st.dataframe(df.tail(10).style.format({
+            "Bullish": "{:.1f}%",
+            "Neutral": "{:.1f}%",
+            "Bearish": "{:.1f}%"
+        }))
+
+        # Optional: Line chart
+        st.subheader("Sentiment Trends Over Time")
+        st.line_chart(df[["Bullish", "Neutral", "Bearish"]])
+    else:
+        st.error("No sentiment data available.")
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")

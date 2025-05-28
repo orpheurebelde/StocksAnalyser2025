@@ -320,32 +320,14 @@ def display_fundamentals_score(info: dict):
         </div>
     """, unsafe_allow_html=True)
 
-def get_last_thursday():
-    today = datetime.today()
-    offset = (today.weekday() - 3) % 7  # Thursday = 3
-    last_thursday = today - timedelta(days=offset)
-    return last_thursday.strftime('%Y-%m-%d')
-
-@st.cache_data
-def load_aaii_sentiment(thursday_key: str):
-    url = 'https://www.aaii.com/files/surveys/sentiment.xls'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'  # <-- important
-    }
-
+def load_local_aaii_sentiment():
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-
-        if response.status_code == 200:
-            xls_data = BytesIO(response.content)
-            df = pd.read_excel(xls_data)
-            df['Date'] = pd.to_datetime(df['Date'])
-            df.set_index('Date', inplace=True)
-            return df
-        else:
-            st.error(f"Failed to download AAII sentiment data. Status: {response.status_code}")
-            return pd.DataFrame()
+        df = pd.read_excel("data/aaii_sentiment.xls")
+        df['Date'] = pd.to_datetime(df['Date'])
+        df.set_index('Date', inplace=True)
+        return df
     except Exception as e:
-        st.error(f"Error downloading AAII sentiment: {e}")
+        print(f"Failed to load AAII sentiment file: {e}")
         return pd.DataFrame()
+
 
