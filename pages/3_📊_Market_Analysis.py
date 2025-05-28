@@ -92,27 +92,47 @@ with st.expander("📈 Market Indicators (S&P 500 & Nasdaq 100)"):
         fib_comment_3y = "Above 3Y Fib Level (Breakout)" if price > fib_level_3y else "Below 3Y Fib Level (Support)"
 
         st.subheader(title)
+
         st.markdown(f"""
-        - **Ticker**: {ticker}
-        - **Current Price**: ${price:,.2f} <span style='color:{price_color}; font-size:18px;'>({price_category})</span>  
-        - **52 Week High**: ${high_52w:,.2f}
-        - **52 Week Low**: ${low_52w:,.2f}
-        - **Trend**: <span style='color:{trend_color}; font-size:18px;'>{trend}</span>  
-        - **RSI**: {rsi} (<span style='color:{rsi_color}; font-size:18px;'> {rsi_signal}</span>)
-        - **MACD Signal**: {signal.iloc[-1]:.2f} (<span style='color:{macd_color}; font-size:18px;'> {macd_signal}</span>)
-        - **YTD %**: {ytd:.2f}% (<span style='color:{ytd_color}; font-size:18px;'> {ytd_signal}</span>)<br><br>
-        <hr>
-        - **1D %**: {close.pct_change().iloc[-1]*100:.2f}%
-        - **5D %**: {close.pct_change(5).iloc[-1]*100:.2f}%
-        - **1M %**: {close.pct_change(21).iloc[-1]*100:.2f}%
-        - **6M %**: {close.pct_change(126).iloc[-1]*100:.2f}%
-        - **1Y %**: {close.pct_change(252).iloc[-1]*100:.2f}%
-        - **5Y %**: {close.pct_change(1260).iloc[-1]*100:.2f}%<br><br>
-        <hr>
-        - **Fibonacci Level (3Y Range)**: {fib_level_3y:.2f}% - {fib_comment_3y}
-        - **Fibonacci Level (5Y Range)**: {fib_level_5y:.2f}%
-        - **Fibonacci Level (10Y Range)**: {fib_level_10y:.2f}%
+        <div style='font-size:16px; line-height:1.6;'>
+
+            <div><strong>Ticker</strong>: {ticker}</div>
+            <div><strong>Current Price</strong>: ${price:,.2f} 
+                <span style='color:{price_color}; font-size:18px;'>({price_category})</span>
+            </div>
+            <div><strong>52 Week High</strong>: ${high_52w:,.2f}</div>
+            <div><strong>52 Week Low</strong>: ${low_52w:,.2f}</div>
+            <div><strong>Trend</strong>: 
+                <span style='color:{trend_color}; font-size:18px;'>{trend}</span>
+            </div>
+            <div><strong>RSI</strong>: {rsi} 
+                (<span style='color:{rsi_color}; font-size:18px;'> {rsi_signal}</span>)
+            </div>
+            <div><strong>MACD Signal</strong>: {signal.iloc[-1]:.2f} 
+                (<span style='color:{macd_color}; font-size:18px;'> {macd_signal}</span>)
+            </div>
+            <div><strong>YTD %</strong>: {ytd:.2f}% 
+                (<span style='color:{ytd_color}; font-size:18px;'> {ytd_signal}</span>)
+            </div>
+
+            <hr style='border: 1px solid #444;' />
+
+            <div><strong>1D %</strong>: {close.pct_change().iloc[-1]*100:.2f}%</div>
+            <div><strong>5D %</strong>: {close.pct_change(5).iloc[-1]*100:.2f}%</div>
+            <div><strong>1M %</strong>: {close.pct_change(21).iloc[-1]*100:.2f}%</div>
+            <div><strong>6M %</strong>: {close.pct_change(126).iloc[-1]*100:.2f}%</div>
+            <div><strong>1Y %</strong>: {close.pct_change(252).iloc[-1]*100:.2f}%</div>
+            <div><strong>5Y %</strong>: {close.pct_change(1260).iloc[-1]*100:.2f}%</div>
+
+            <hr style='border: 1px solid #444;' />
+
+            <div><strong>Fibonacci Level (3Y Range)</strong>: {fib_level_3y:.2f}% - {fib_comment_3y}</div>
+            <div><strong>Fibonacci Level (5Y Range)</strong>: {fib_level_5y:.2f}%</div>
+            <div><strong>Fibonacci Level (10Y Range)</strong>: {fib_level_10y:.2f}%</div>
+
+        </div>
         """, unsafe_allow_html=True)
+
 
     # Show both market indicators
     with col1:
