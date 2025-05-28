@@ -84,8 +84,14 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("🏢 Indicador AAII de Mercado", expanded=True):
-        image = Image.open("images/aaii_sentiment.png")
-        st.image(image, caption="AAII Investor Sentiment (Source: AAII.com)", use_column_width=True)
+        st.markdown(
+            """
+            <div style="text-align: center;">
+                <img src="https://www.aaii.com/images/indicators/market-sentiment.png" alt="AAII Market Sentiment" width="600">
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
