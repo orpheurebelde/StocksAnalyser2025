@@ -267,7 +267,14 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
         st.subheader(f"{title} - Yearly Performance")
 
         if current_performance is not None:
-            st.write(f"**Current Year Performance**: {current_performance * 100:.2f}%")
+            if current_performance > historical_max:
+                color = 'green'
+            elif current_performance < historical_min:
+                color = 'red'
+            else:
+                color = 'gray'
+            st.markdown(f"<span style='color:{color};'>**Category**: {current_performance * 100:.2f}%</span>", unsafe_allow_html=True)
+            #st.write(f"**Current Year Performance**: {current_performance * 100:.2f}%")
             st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
             st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
             # Display category with color
