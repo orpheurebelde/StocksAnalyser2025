@@ -322,9 +322,23 @@ def display_fundamentals_score(info: dict):
 
 def load_local_aaii_sentiment():
     try:
-        df = pd.read_excel("data/aaii_sentiment.xls")
-        df['Date'] = pd.to_datetime(df['Date'])
+        # Skip first 3 rows so row 4 becomes header
+        df = pd.read_excel("data/aaii_sentiment.xls", skiprows=3)
+
+        # Clean column names
+        df.columns = df.columns.str.strip()
+        if 'Report Date' in df.columns:
+            df.rename(columns={"Reported Date": "Date"}, inplace=True)
+
+        # Convert to datetime and set as index
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df = df.dropna(subset=['Date'])  # Drop rows without valid dates
         df.set_index('Date', inplace=True)
+
+        # Keep only relevant sentiment columns
+        sentiment_cols = [col for col in df.columns if any(x in col for x in ["Bullish", "Neutral", "Bearish"])]
+        df = df[sentiment_cols]
+
         return df
     except Exception as e:
         print(f"Failed to load AAII sentiment file: {e}")
