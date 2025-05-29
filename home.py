@@ -84,6 +84,7 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("📊 AAII Sentiment Survey"):
+        last_7 = load_aaii_sentiment()  # Load the AAII sentiment data
         df_plot = last_7.reset_index()
 
         fig = px.line(
