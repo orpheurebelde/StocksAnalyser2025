@@ -322,9 +322,9 @@ def display_fundamentals_score(info: dict):
 
 def load_aaii_sentiment():
     df = pd.read_excel("data/aaii_sentiment.xls", skiprows=3)
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df = df.dropna(subset=['Date'])
-    df.set_index('Date', inplace=True)
+    st.write(df.columns)  # Debug line, remove after checking
+    df.rename(columns={df.columns[0]: 'Date'}, inplace=True)
+    df['Date'] = pd.to_datetime(df['Date'])
     return df
 
 
