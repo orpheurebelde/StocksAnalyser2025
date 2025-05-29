@@ -36,7 +36,17 @@ if st.session_state["authenticated"]:
 
     # VIX Indicator Section
     st.header("🧭 Indicador de Volatilidade (VIX)")
-    refresh = st.button("🔄 Refresh VIX")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        refresh = st.button("🔄 Refresh VIX")
+    with col2:
+        if st.button("🔄 Refresh Sentiment Data"):
+            with st.spinner("Downloading latest sentiment data..."):
+                success = download_aaii_sentiment()
+            if success:
+                st.success("Sentiment data refreshed successfully!")
+            else:
+                st.error("Failed to refresh sentiment data.")
 
     @st.cache_data
     def fetch_vix_cached():
@@ -82,14 +92,6 @@ if st.session_state["authenticated"]:
                 """,
                 unsafe_allow_html=True
             )
-    
-    if st.button("🔄 Refresh Sentiment Data"):
-        with st.spinner("Downloading latest sentiment data..."):
-            success = download_aaii_sentiment()
-        if success:
-            st.success("Sentiment data refreshed successfully!")
-        else:
-            st.error("Failed to refresh sentiment data.")
     
     with st.expander("📊 AAII Sentiment Survey", expanded=False):
         df = load_aaii_sentiment()
