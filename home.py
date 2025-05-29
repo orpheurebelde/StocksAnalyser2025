@@ -128,7 +128,7 @@ if st.session_state["authenticated"]:
 
         fig.update_layout(
             barmode='stack',
-            title='AAII Sentiment Survey - Last 7 Reports',
+            title='Last 7 Reports',
             yaxis=dict(title='Percentage (%)', ticksuffix='%'),
             xaxis=dict(title='Date'),
             legend=dict(title='Sentiment'),
