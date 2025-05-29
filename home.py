@@ -86,7 +86,7 @@ if st.session_state["authenticated"]:
     with st.expander("📊 AAII Sentiment Survey"):
         # Select last 7 rows (dates) and keep necessary columns
         last_7 = load_aaii_sentiment()
-        last_7 = df.tail(7).copy()
+        last_7 = last_7.tail(7).copy()
 
         # If 'Date' is index, reset it for plotting
         if last_7.index.name == 'Date' or 'Date' not in last_7.columns:
