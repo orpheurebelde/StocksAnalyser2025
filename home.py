@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from utils.utils import get_vix_data, create_vix_gauge, login, load_aaii_sentiment
-import plotly.express as px
+import plotly.graph_objects as go
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
@@ -97,21 +97,36 @@ if st.session_state["authenticated"]:
         for col in ['Bullish', 'Neutral', 'Bearish']:
             last_7[col] = last_7[col].astype(float)
 
-        # Create plot
-        fig = px.line(
-            last_7,
-            x='Date',
-            y=['Bullish', 'Neutral', 'Bearish'],
-            title='AAII Sentiment Survey - Last 7 Reports',
-            labels={'value': 'Percentage (%)', 'Date': 'Date', 'variable': 'Sentiment'},
-            markers=True
-        )
+        # Create stacked bar chart
+        fig = go.Figure()
+
+        fig.add_trace(go.Bar(
+            x=last_7['Date'],
+            y=last_7['Bearish'],
+            name='Bearish',
+            marker_color='red'
+        ))
+        fig.add_trace(go.Bar(
+            x=last_7['Date'],
+            y=last_7['Neutral'],
+            name='Neutral',
+            marker_color='gray'
+        ))
+        fig.add_trace(go.Bar(
+            x=last_7['Date'],
+            y=last_7['Bullish'],
+            name='Bullish',
+            marker_color='green'
+        ))
 
         fig.update_layout(
-            yaxis=dict(ticksuffix='%'),
-            legend_title_text='Sentiment',
-            hovermode='x unified',
-            template='plotly_white'
+            barmode='stack',
+            title='AAII Sentiment Survey - Last 7 Reports',
+            yaxis=dict(title='Percentage (%)', ticksuffix='%'),
+            xaxis=dict(title='Date'),
+            legend=dict(title='Sentiment'),
+            template='plotly_white',
+            hovermode='x unified'
         )
 
         st.plotly_chart(fig, use_container_width=True)

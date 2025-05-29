@@ -8,4 +8,4 @@ requests
 matplotlib
 BytesIO
 xlrd
-plotly_express
+plotly.graph_objects
