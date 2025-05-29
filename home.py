@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from utils.utils import get_vix_data, create_vix_gauge, login, load_aaii_sentiment
-from PIL import Image
+import plotly.express as px
 
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
