@@ -104,6 +104,9 @@ if st.session_state["authenticated"]:
         # For safety:
         for col in ['Bullish', 'Neutral', 'Bearish']:
             last_7[col] = last_7[col].astype(float)
+        # Convert decimal fractions to percentages
+        for col in ["Bullish", "Neutral", "Bearish"]:
+            last_7[col] = last_7[col] * 100
 
         # Create stacked bar chart
         fig = go.Figure()
