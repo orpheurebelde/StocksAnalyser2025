@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils.utils import get_vix_data, create_vix_gauge, login, load_local_aaii_sentiment
+from utils.utils import get_vix_data, create_vix_gauge, login, load_aaii_sentiment
 from PIL import Image
 
 # Page setup
@@ -84,12 +84,11 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("📊 AAII Sentiment Survey"):
-        df = load_local_aaii_sentiment()
-    if not df.empty:
-        st.dataframe(df.tail(10))  # Optional: recent table
-        st.line_chart(df)          # Auto-plots Bullish, Neutral, Bearish lines
+        df = load_aaii_sentiment()
+    if df.empty:
+        st.write("No sentiment data available.")
     else:
-        st.warning("No sentiment data available.")
+        st.dataframe(df)
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
