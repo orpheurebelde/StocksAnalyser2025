@@ -92,13 +92,10 @@ if st.session_state["authenticated"]:
             st.error("Failed to refresh sentiment data.")
     
     with st.expander("📊 AAII Sentiment Survey"):
-        # Select last 7 rows (dates) and keep necessary columns
-        last_7 = load_aaii_sentiment()
-        last_7 = last_7.tail(7).copy()
-
-        # If 'Date' is index, reset it for plotting
-        if last_7.index.name == 'Date' or 'Date' not in last_7.columns:
-            last_7 = last_7.reset_index()
+        df = load_aaii_sentiment()
+        df = df.dropna(subset=["Date"])  # Ensure we only keep valid dates
+        last_7 = df.sort_values("Date").tail(7).copy()
+        st.dataframe(last_7)
 
         st.write("Full dataframe preview:")
         st.dataframe(df.head(10))
