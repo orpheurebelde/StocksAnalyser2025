@@ -84,11 +84,21 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("📊 AAII Sentiment Survey"):
+        # Load the full sentiment data
         df = load_aaii_sentiment()
-    if df.empty:
-        st.write("No sentiment data available.")
-    else:
-        st.dataframe(df)
+
+        # Sort and filter last 7 dates
+        df = df.sort_values('Date')
+        last_7 = df.tail(7).set_index('Date')
+
+        # Select the sentiment columns (adjust names if different)
+        sentiment_cols = ['Bullish', 'Neutral', 'Bearish']
+
+        # Convert % strings to floats
+        for col in sentiment_cols:
+            last_7[col] = last_7[col].str.rstrip('%').astype(float)
+
+        st.line_chart(last_7[sentiment_cols])
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
