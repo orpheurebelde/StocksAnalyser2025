@@ -105,7 +105,7 @@ if st.session_state["authenticated"]:
         # Convert decimal fractions to percentages
         for col in ["Bullish", "Neutral", "Bearish"]:
             last_7[col] = last_7[col] * 100
-
+        last_7[["Bullish", "Neutral", "Bearish"]] = last_7[["Bullish", "Neutral", "Bearish"]].round(1)
         # Create stacked bar chart
         fig = go.Figure()
 
