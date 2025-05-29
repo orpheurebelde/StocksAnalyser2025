@@ -96,10 +96,6 @@ if st.session_state["authenticated"]:
         df = df.dropna(subset=["Date"])  # Ensure we only keep valid dates
         last_7 = df.sort_values("Date").tail(7).copy()
         st.dataframe(last_7)
-
-        st.write("Full dataframe preview:")
-        st.dataframe(df.head(10))
-        st.write("Columns:", df.columns.tolist())
         # Make sure columns are floats (remove '%' if present, but you said it's already cleaned)
         # For safety:
         for col in ['Bullish', 'Neutral', 'Bearish']:
