@@ -100,7 +100,9 @@ if st.session_state["authenticated"]:
         if last_7.index.name == 'Date' or 'Date' not in last_7.columns:
             last_7 = last_7.reset_index()
 
-        st.write("Columns in last_7:", last_7.columns.tolist())
+        st.write("Full dataframe preview:")
+        st.dataframe(df.head(10))
+        st.write("Columns:", df.columns.tolist())
         # Make sure columns are floats (remove '%' if present, but you said it's already cleaned)
         # For safety:
         for col in ['Bullish', 'Neutral', 'Bearish']:
