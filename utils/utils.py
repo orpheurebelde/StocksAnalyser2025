@@ -324,7 +324,7 @@ def load_aaii_sentiment():
     df = pd.read_excel("data/aaii_sentiment.xls", skiprows=3)
     df.rename(columns={df.columns[0]: 'Date'}, inplace=True)
     
-    st.write(df['Date'].head(10))  # Check data before conversion
+    #st.write(df['Date'].head(10))  # Check data before conversion
     
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df.dropna(subset=['Date'])
