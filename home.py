@@ -84,21 +84,25 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("📊 AAII Sentiment Survey"):
-        # Load the full sentiment data
-        df = load_aaii_sentiment()
+        df_plot = last_7.reset_index()
 
-        # Sort and filter last 7 dates
-        df = df.sort_values('Date')
-        last_7 = df.tail(7).set_index('Date')
+        fig = px.line(
+            df_plot,
+            x='Date',
+            y=['Bullish', 'Neutral', 'Bearish'],
+            title='AAII Sentiment (Last 7 Reports)',
+            labels={'value': 'Percentage', 'Date': 'Date', 'variable': 'Sentiment'},
+            markers=True
+        )
 
-        # Select the sentiment columns (adjust names if different)
-        sentiment_cols = ['Bullish', 'Neutral', 'Bearish']
+        fig.update_layout(
+            yaxis=dict(ticksuffix='%'),  # Show % sign on Y axis labels
+            legend_title_text='Sentiment',
+            hovermode='x unified',
+            template='plotly_white'
+        )
 
-        # Convert % strings to floats
-        for col in sentiment_cols:
-            last_7 = df.tail(7).set_index('Date')
-
-        st.line_chart(last_7[sentiment_cols])
+        st.plotly_chart(fig, use_container_width=True)
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
