@@ -84,20 +84,31 @@ if st.session_state["authenticated"]:
             )
     
     with st.expander("📊 AAII Sentiment Survey"):
-        last_7 = load_aaii_sentiment()  # Load the AAII sentiment data
-        df_plot = last_7.reset_index()
+        # Select last 7 rows (dates) and keep necessary columns
+        last_7 = load_aaii_sentiment()
+        last_7 = df.tail(7).copy()
 
+        # If 'Date' is index, reset it for plotting
+        if last_7.index.name == 'Date' or 'Date' not in last_7.columns:
+            last_7 = last_7.reset_index()
+
+        # Make sure columns are floats (remove '%' if present, but you said it's already cleaned)
+        # For safety:
+        for col in ['Bullish', 'Neutral', 'Bearish']:
+            last_7[col] = last_7[col].astype(float)
+
+        # Create plot
         fig = px.line(
-            df_plot,
+            last_7,
             x='Date',
             y=['Bullish', 'Neutral', 'Bearish'],
-            title='AAII Sentiment (Last 7 Reports)',
-            labels={'value': 'Percentage', 'Date': 'Date', 'variable': 'Sentiment'},
+            title='AAII Sentiment Survey - Last 7 Reports',
+            labels={'value': 'Percentage (%)', 'Date': 'Date', 'variable': 'Sentiment'},
             markers=True
         )
 
         fig.update_layout(
-            yaxis=dict(ticksuffix='%'),  # Show % sign on Y axis labels
+            yaxis=dict(ticksuffix='%'),
             legend_title_text='Sentiment',
             hovermode='x unified',
             template='plotly_white'
