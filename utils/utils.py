@@ -351,6 +351,7 @@ def load_aaii_sentiment():
         print(f"Error loading sentiment data: {e}")
         return pd.DataFrame()
 
+
 def should_download_sentiment():
     """Only download if file is missing or last modified before last Thursday."""
     if not os.path.exists(SENTIMENT_PATH):
