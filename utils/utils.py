@@ -322,16 +322,34 @@ def display_fundamentals_score(info: dict):
         </div>
     """, unsafe_allow_html=True)
 
-def load_aaii_sentiment():
-    df = pd.read_excel("data/aaii_sentiment.xls", skiprows=3)
-    df.rename(columns={df.columns[0]: 'Date'}, inplace=True)
+def clean_aaii_sentiment(df):
+    percent_columns = ['Bullish', 'Neutral', 'Bearish']
     
-    #st.write(df['Date'].head(10))  # Check data before conversion
+    for col in percent_columns:
+        # Convert '37,5%' ➜ 37.5 ➜ 37.5 (float)
+        df[col] = (
+            df[col]
+            .astype(str)                  # ensure all are strings
+            .str.replace('%', '', regex=False)  # remove %
+            .str.replace(',', '.', regex=False)  # convert comma to dot
+            .astype(float)
+        )
     
+    # Convert Date if not already
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df.dropna(subset=['Date'])
     
     return df
+
+def load_aaii_sentiment():
+    try:
+        df = pd.read_excel("data/sentiment.xls", skiprows=3)
+        df = df[['Date', 'Bullish', 'Neutral', 'Bearish']]  # Keep only needed
+        df = clean_aaii_sentiment(df)
+        return df
+    except Exception as e:
+        print(f"Error loading sentiment data: {e}")
+        return pd.DataFrame()
 
 def should_download_sentiment():
     """Only download if file is missing or last modified before last Thursday."""
