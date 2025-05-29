@@ -327,13 +327,5 @@ def load_aaii_sentiment():
     df.set_index('Date', inplace=True)
     return df
 
-st.title("AAII Sentiment Data")
-
-with st.expander("AAII Sentiment"):
-    df = load_aaii_sentiment()
-    if df.empty:
-        st.write("No sentiment data available.")
-    else:
-        st.dataframe(df)
 
 
