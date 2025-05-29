@@ -342,14 +342,22 @@ def clean_aaii_sentiment(df):
     return df
 
 def load_aaii_sentiment():
-    try:
-        df = pd.read_excel("data/sentiment.xls", skiprows=3)
-        df = df[['Date', 'Bullish', 'Neutral', 'Bearish']]  # Keep only needed
-        df = clean_aaii_sentiment(df)
-        return df
-    except Exception as e:
-        print(f"Error loading sentiment data: {e}")
-        return pd.DataFrame()
+    df = pd.read_excel("data/aaii_sentiment.xls", skiprows=3)  # Skip metadata
+    df.columns = df.columns.str.strip()  # Remove extra whitespace
+    df = df.dropna(subset=["Date"])     # Remove empty rows
+
+    # Convert date and percentages
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    for col in ["Bullish", "Neutral", "Bearish"]:
+        if col in df.columns:
+            df[col] = (
+                df[col].astype(str)
+                .str.replace('%', '', regex=False)
+                .str.replace(',', '.', regex=False)
+                .astype(float)
+            )
+
+    return df
 
 
 def should_download_sentiment():
