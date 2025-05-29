@@ -47,7 +47,7 @@ if st.session_state["authenticated"]:
 
     vix_value = fetch_vix_cached()
 
-    with st.expander("🏢 Indicador de Sentimento de Mercado", expanded=True):
+    with st.expander("🏢 Indicador de Sentimento de Mercado", expanded=False):
         left_col, right_col = st.columns([2, 1])
 
         with left_col:
@@ -91,7 +91,7 @@ if st.session_state["authenticated"]:
         else:
             st.error("Failed to refresh sentiment data.")
     
-    with st.expander("📊 AAII Sentiment Survey"):
+    with st.expander("📊 AAII Sentiment Survey", expanded=False):
         df = load_aaii_sentiment()
         df = df.dropna(subset=["Date"])  # Ensure we only keep valid dates
         last_7 = df.sort_values("Date").tail(7).copy()
