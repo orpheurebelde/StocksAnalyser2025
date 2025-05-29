@@ -85,20 +85,11 @@ if st.session_state["authenticated"]:
     
     with st.expander("📊 AAII Sentiment Survey"):
         df = load_local_aaii_sentiment()
-
     if not df.empty:
-        st.subheader("Recent Sentiment Data")
-        st.dataframe(df.tail(10).style.format({
-            "Bullish": "{:.1f}%",
-            "Neutral": "{:.1f}%",
-            "Bearish": "{:.1f}%"
-        }))
-
-        # Optional: Line chart
-        st.subheader("Sentiment Trends Over Time")
-        st.line_chart(df[["Bullish", "Neutral", "Bearish"]])
+        st.dataframe(df.tail(10))  # Optional: recent table
+        st.line_chart(df)          # Auto-plots Bullish, Neutral, Bearish lines
     else:
-        st.error("No sentiment data available.")
+        st.warning("No sentiment data available.")
 else:
     # Not authenticated — show login and stop further execution
     st.write("🔐 Please log in to continue.")
