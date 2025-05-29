@@ -16,6 +16,8 @@ from io import BytesIO
 CACHE_DIR = "cache"
 CSV_PATH = os.path.join(CACHE_DIR, "all_stock_info.csv")
 CACHE_DURATION_HOURS = 24
+SENTIMENT_URL = "https://www.aaii.com/files/surveys/sentiment.xls"
+SENTIMENT_PATH = "data/sentiment.xls"
 
 # Ensure cache folder exists
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -330,6 +332,34 @@ def load_aaii_sentiment():
     df = df.dropna(subset=['Date'])
     
     return df
+
+def should_download_sentiment():
+    """Only download if file is missing or last modified before last Thursday."""
+    if not os.path.exists(SENTIMENT_PATH):
+        return True
+
+    file_time = datetime.fromtimestamp(os.path.getmtime(SENTIMENT_PATH))
+    today = datetime.today()
+    last_thursday = today - timedelta(days=(today.weekday() - 3) % 7 + 7)
+
+    return file_time.date() < last_thursday.date()
+
+def download_aaii_sentiment():
+    """Downloads the AAII sentiment Excel file if needed."""
+    if should_download_sentiment():
+        try:
+            response = requests.get(SENTIMENT_URL)
+            response.raise_for_status()
+
+            os.makedirs("data", exist_ok=True)
+            with open(SENTIMENT_PATH, "wb") as f:
+                f.write(response.content)
+
+            print("Sentiment data downloaded.")
+        except Exception as e:
+            print(f"Failed to download sentiment data: {e}")
+    else:
+        print("Sentiment file is up-to-date.")
 
 
 

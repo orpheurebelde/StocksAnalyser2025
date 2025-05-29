@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils.utils import get_vix_data, create_vix_gauge, login, load_aaii_sentiment
+from utils.utils import get_vix_data, create_vix_gauge, login, load_aaii_sentiment, download_aaii_sentiment
 import plotly.graph_objects as go
 
 # Page setup
@@ -82,6 +82,14 @@ if st.session_state["authenticated"]:
                 """,
                 unsafe_allow_html=True
             )
+    
+    if st.button("🔄 Refresh Sentiment Data"):
+        with st.spinner("Downloading latest sentiment data..."):
+            success = download_aaii_sentiment()
+        if success:
+            st.success("Sentiment data refreshed successfully!")
+        else:
+            st.error("Failed to refresh sentiment data.")
     
     with st.expander("📊 AAII Sentiment Survey"):
         # Select last 7 rows (dates) and keep necessary columns
