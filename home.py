@@ -98,9 +98,6 @@ if st.session_state["authenticated"]:
         for col in sentiment_cols:
             last_7 = df.tail(7).set_index('Date')
 
-        # Check dtype, should be float or int if already numeric
-        print(last_7.dtypes)
-
         st.line_chart(last_7[sentiment_cols])
 else:
     # Not authenticated — show login and stop further execution
