@@ -284,34 +284,36 @@ def score_metric(value, low, mid, high, reverse=False):
 
 def display_fundamentals_score(info: dict):
     score = 0
-    max_score = 4 * 2  # 4 metrics, 2 points each
+    max_score = 5 * 2  # 5 metrics, 2 points each
 
     try:
-        # ROE: 0.1 (10%) = decent, 0.4+ = excellent
-        score += score_metric(info.get("returnOnEquity"), 0.1, 0.4, 0.8)
+        # Return on Equity: high ROE is good
+        score += score_metric(info.get("returnOnEquity"), 0.15, 0.25, 0.4)
 
-        # EBITDA margin: EBITDA / Revenue
+        # EBITDA Margin: ebitda / revenue
         ebitda_margin = (
             info.get("ebitda") / info.get("totalRevenue")
             if info.get("ebitda") and info.get("totalRevenue")
             else None
         )
-        score += score_metric(ebitda_margin, 0.1, 0.3, 0.5)
+        score += score_metric(ebitda_margin, 0.15, 0.3, 0.5)
 
-        # PEG Ratio: Lower is better. Under 1 is considered ideal.
-        score += score_metric(info.get("trailingPegRatio"), 0.5, 1.0, 2.0, reverse=True)
+        # PEG Ratio: < 1 is great, 1–2 is okay
+        score += score_metric(info.get("trailingPegRatio"), 1, 2, 3, reverse=True)
 
-        # EPS Current Year
-        score += score_metric(info.get("epsCurrentYear"), 1, 5, 20)
+        # Forward P/E: adjusted for tech
+        score += score_metric(info.get("forwardPE"), 15, 30, 50, reverse=True)
 
+        # EPS growth (estimate): optional bonus
+        score += score_metric(info.get("epsCurrentYear"), 1, 5, 10)
+        
     except Exception as e:
         st.error(f"Error scoring fundamentals: {e}")
         return
 
     score_pct = (score / max_score) * 100
 
-    # Classification
-    if score_pct >= 70:
+    if score_pct >= 65:
         label = "Strong"
         color = "green"
     elif score_pct >= 40:
@@ -325,7 +327,7 @@ def display_fundamentals_score(info: dict):
         <div style='padding: 1rem; border: 2px solid {color}; border-radius: 1rem; background-color: #1e1e1e; margin-bottom: 1rem;'>
             <h4 style='margin: 0 0 0.5rem 0; color: #FFFFFF;'>🔎 Valuation Quality Score</h4>
             <span style='font-size: 48px; font-weight: bold; color: {color};'>{label}</span>
-            <div style='font-size: 18px; color: #AAAAAA;'>({score}/{max_score} points)</div>
+            <div style='font-size: 18px; color: #AAAAAA;'>({score}/10 points)</div>
         </div>
     """, unsafe_allow_html=True)
 
