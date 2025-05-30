@@ -20,12 +20,12 @@ if st.session_state["authenticated"]:
         st.session_state["authenticated"] = False
         st.warning("Session expired. Redirecting to login...")
         time.sleep(1.5)  # allow user to see warning
-        st.switch_page("Home")  # or use the correct name of your login page
+        st.switch_page("main")  # or use the correct name of your login page
     else:
         st.session_state["last_activity"] = now
 
 if not st.session_state["authenticated"]:
-    st.switch_page("Home")  # redirect unauthenticated users to login
+    st.switch_page("main")  # redirect unauthenticated users to login
 
 st.title("📁 Welcome to Your Finance App")
 
