@@ -273,17 +273,12 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
                 color = 'red'
             else:
                 color = 'orange'
-            st.markdown(f"<span style='color:{color}; font-size:18px;'><strong>Category</strong>: {current_performance * 100:.2f}%</span>",unsafe_allow_html=True)
+            st.markdown(f"<span style='color:{color}; font-size:18px;'><strong>Current Perfomance</strong>: {current_performance * 100:.2f}%</span>",unsafe_allow_html=True)
             #st.write(f"**Current Year Performance**: {current_performance * 100:.2f}%")
             st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
             st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
             # Display category with color
-            if category == 'Highest':
-                st.markdown(f"<span style='color:green;'>**Category**: {category}</span>", unsafe_allow_html=True)
-            elif category == 'Lowest':
-                st.markdown(f"<span style='color:red;'>**Category**: {category}</span>", unsafe_allow_html=True)
-            elif category == 'Neutral':
-                st.markdown(f"<span style='color:orange;'>**Category**: {category}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:{color};'>**Category**: {category}</span>", unsafe_allow_html=True)
         else:
             st.write("No data available for the current year.")
 
