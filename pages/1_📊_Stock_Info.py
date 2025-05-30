@@ -7,8 +7,8 @@ import time
 # Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 
-SESSION_TIMEOUT_SECONDS = 3600  # 60 minutes
-
+# Session management
+SESSION_TIMEOUT_SECONDS = 3600
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 if "last_activity" not in st.session_state:
@@ -18,16 +18,14 @@ if st.session_state["authenticated"]:
     now = time.time()
     if now - st.session_state["last_activity"] > SESSION_TIMEOUT_SECONDS:
         st.session_state["authenticated"] = False
-        st.warning("Session expired. Redirecting to login...")
-        time.sleep(1.5)  # allow user to see warning
-        st.session_state["page"] = "home"
-        st.rerun()
+        st.warning("Session expired.")
+        st.experimental_rerun()
     else:
         st.session_state["last_activity"] = now
 
 if not st.session_state["authenticated"]:
-    st.session_state["page"] = "home"
-    st.rerun()
+    st.error("Unauthorized. Please go to the home page and log in.")
+    st.stop()
 
 st.title("📁 Welcome to Your Finance App")
 
