@@ -184,9 +184,9 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
         historical_min = monthly_returns['Monthly Return'].min()
 
         if current_performance is not None:
-            if current_performance == historical_max:
+            if current_performance > historical_max:
                 category = 'Highest'
-            elif current_performance == historical_min:
+            elif current_performance < historical_min:
                 category = 'Lowest'
             else:
                 category = 'Neutral'
