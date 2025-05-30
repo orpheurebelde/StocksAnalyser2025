@@ -284,30 +284,37 @@ def score_metric(value, low, mid, high, reverse=False):
 
 def display_fundamentals_score(info: dict):
     score = 0
-    max_score = 10 * 2  # 8 metrics, 2 points each
+    max_score = 4 * 2  # 4 metrics, 2 points each
 
     try:
-        score += score_metric(info.get("trailingPE"), 15,25, 50, reverse=True)
-        score += score_metric(info.get("forwardPE"), 15, 25, 50, reverse=True)
-        score += score_metric(info.get("trailingPegRatio"), 0.5, 1.0, 2.5, reverse=True)
-        score += score_metric(info.get("priceToBook"), 5, 15, 30, reverse=True)
-        score += score_metric(info.get("priceToSalesTrailing12Months"), 4, 8, 12, reverse=True)
+        # ROE: 0.1 (10%) = decent, 0.4+ = excellent
         score += score_metric(info.get("returnOnEquity"), 0.1, 0.4, 0.8)
-        score += score_metric(info.get("epsCurrentYear"), 1, 5, 20)
-        score += score_metric(
-            info.get("ebitda") / info.get("totalRevenue") if info.get("ebitda") and info.get("totalRevenue") else None,
-            20, 50, 80
+
+        # EBITDA margin: EBITDA / Revenue
+        ebitda_margin = (
+            info.get("ebitda") / info.get("totalRevenue")
+            if info.get("ebitda") and info.get("totalRevenue")
+            else None
         )
+        score += score_metric(ebitda_margin, 0.1, 0.3, 0.5)
+
+        # PEG Ratio: Lower is better. Under 1 is considered ideal.
+        score += score_metric(info.get("trailingPegRatio"), 0.5, 1.0, 2.0, reverse=True)
+
+        # EPS Current Year
+        score += score_metric(info.get("epsCurrentYear"), 1, 5, 20)
+
     except Exception as e:
         st.error(f"Error scoring fundamentals: {e}")
         return
 
     score_pct = (score / max_score) * 100
 
-    if score_pct >= 55:
+    # Classification
+    if score_pct >= 70:
         label = "Strong"
         color = "green"
-    elif score_pct >= 35:
+    elif score_pct >= 40:
         label = "Average"
         color = "orange"
     else:
@@ -318,7 +325,7 @@ def display_fundamentals_score(info: dict):
         <div style='padding: 1rem; border: 2px solid {color}; border-radius: 1rem; background-color: #1e1e1e; margin-bottom: 1rem;'>
             <h4 style='margin: 0 0 0.5rem 0; color: #FFFFFF;'>🔎 Valuation Quality Score</h4>
             <span style='font-size: 48px; font-weight: bold; color: {color};'>{label}</span>
-            <div style='font-size: 18px; color: #AAAAAA;'>({score}/16 points)</div>
+            <div style='font-size: 18px; color: #AAAAAA;'>({score}/{max_score} points)</div>
         </div>
     """, unsafe_allow_html=True)
 
