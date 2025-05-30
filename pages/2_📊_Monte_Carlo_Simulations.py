@@ -6,7 +6,7 @@ from utils.utils import get_stock_info, monte_carlo_simulation, fetch_data
 import time
 
 # Session management
-SESSION_TIMEOUT_SECONDS = 600
+SESSION_TIMEOUT_SECONDS = 3600
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 if "last_activity" not in st.session_state:
