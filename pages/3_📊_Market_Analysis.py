@@ -273,7 +273,7 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
                 color = 'red'
             else:
                 color = 'orange'
-            st.markdown(f"<span style='color:{color}; font-size:18px;'><strong>Current Perfomance</strong>: {current_performance * 100:.2f}%</span>",unsafe_allow_html=True)
+            st.markdown(f"<span style='color:{color}; font-size:18px;'><strong>Current Year Perfomance</strong>: {current_performance * 100:.2f}%</span>",unsafe_allow_html=True)
             #st.write(f"**Current Year Performance**: {current_performance * 100:.2f}%")
             st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
             st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
