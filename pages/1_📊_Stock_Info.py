@@ -249,7 +249,32 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
                 with col2:
-                    st.metric("EPS (Forward)", format_currency_dec(info.get("forwardEps")))
+                    #Categorize EPS Forward
+                    eps_forward = info.get("forwardEps")
+                    # Define value and color
+                    if eps_forward is None:
+                        color = "gray"
+                        value = "N/A"
+                    elif eps_forward < 0:
+                        color = "red"
+                        value = f"{eps_forward:.2f}$ (Loss)"
+                    elif 0 <= eps_forward <= 1:
+                        color = "orange"
+                        value = f"{eps_forward:.2f}$"
+                    elif 1 < eps_forward <= 5:
+                        color = "green"
+                        value = f"{eps_forward:.2f}$"
+                    else:
+                        color = "blue"
+                        value = f"{eps_forward:.2f}$"
+                    eps_forward = format_currency_dec(eps_forward)
+                    # Display like st.metric with style
+                    st.markdown(f"""
+                        <div style='display: flex; flex-direction: column; align-items: start;'>
+                            <span style='font-size: 16px; color: #FFFFFF;'>EPS(Forward)</span>
+                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     # Get EBITDA and Revenue from ticker info
                     ebitda = info.get("ebitda")
                     revenue = info.get("totalRevenue")
