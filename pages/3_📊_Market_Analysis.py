@@ -278,7 +278,7 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
             st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
             st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
             # Display category with color
-            st.markdown(f"<span style='color:{color};'>**Category**: {category}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:{color}; font-size:18px;'>**Category**: {category}</span>", unsafe_allow_html=True)
         else:
             st.write("No data available for the current year.")
 
