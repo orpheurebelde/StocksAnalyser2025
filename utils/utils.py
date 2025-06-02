@@ -404,10 +404,6 @@ def fetch_price_data(ticker):
     df.dropna(inplace=True)
     return df
 
-import pandas as pd
-from ta.momentum import RSIIndicator
-from ta.trend import IchimokuIndicator
-
 def analyze_price_action(df):
     import pandas as pd
     from ta.momentum import RSIIndicator
