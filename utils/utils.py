@@ -400,7 +400,7 @@ def download_aaii_sentiment():
         print("Sentiment file is up-to-date.")
 
 def fetch_price_data(ticker):
-    df = yf.download(ticker, period='6mo', interval='1d', progress=False)
+    df = yf.download(ticker, period='3y', interval='1d', progress=False)
     df.dropna(inplace=True)
     return df
 
