@@ -27,7 +27,7 @@ if st.session_state["authenticated"]:
     if now - st.session_state["last_activity"] > SESSION_TIMEOUT_SECONDS:
         st.session_state["authenticated"] = False
         st.warning("Session expired. Please log in again.")
-        st.experimental_rerun()
+        st.rerun()
     else:
         st.session_state["last_activity"] = now
 
