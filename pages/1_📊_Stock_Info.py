@@ -64,6 +64,17 @@ if selected_display != "Select a stock...":
                 )
 
             with st.expander("📊 Price Action Score (RSI, Volume, Ichimoku)", expanded=True):
+                st.markdown(
+                    """
+                    <style>
+                    .custom-font {
+                        font-size: 20px;  /* change to whatever size you want */
+                        font-weight: bold; /* optional */
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
                 data = fetch_price_data(ticker)
                 score, insights = analyze_price_action(data)
 
