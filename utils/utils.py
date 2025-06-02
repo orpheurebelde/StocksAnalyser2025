@@ -406,22 +406,28 @@ def fetch_price_data(ticker):
     return df
 
 def analyze_price_action(df):
+    required_cols = ['Close', 'High', 'Low', 'Volume']
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}")
+
     close = df['Close']
     if isinstance(close, pd.DataFrame):
-        close = close.iloc[:, 0]  # Just in case it’s a DataFrame
+        close = close.iloc[:, 0]
+
     df['RSI'] = RSIIndicator(close).rsi()
+
     ichimoku = IchimokuIndicator(df['High'], df['Low'], window1=9, window2=26, window3=52)
     df['Tenkan_sen'] = ichimoku.ichimoku_conversion_line()
     df['Kijun_sen'] = ichimoku.ichimoku_base_line()
     df['Senkou_span_a'] = ichimoku.ichimoku_a()
     df['Senkou_span_b'] = ichimoku.ichimoku_b()
 
-    recent = df.iloc[-1]
+    recent = df.dropna().iloc[-1]
 
     score = 0
     explanations = []
 
-    # RSI Scoring
     if 50 < recent['RSI'] < 70:
         score += 2
         explanations.append("✅ RSI is strong and bullish.")
@@ -430,7 +436,6 @@ def analyze_price_action(df):
     elif recent['RSI'] < 50:
         explanations.append("📉 RSI is bearish or neutral.")
 
-    # Ichimoku signals
     if recent['Close'] > recent['Senkou_span_a'] and recent['Close'] > recent['Senkou_span_b']:
         score += 2
         explanations.append("✅ Price is above the cloud (bullish).")
@@ -445,7 +450,6 @@ def analyze_price_action(df):
     else:
         explanations.append("📉 No bullish crossover on Ichimoku.")
 
-    # Volume analysis
     if recent['Volume'] > df['Volume'].rolling(20).mean().iloc[-1]:
         score += 1
         explanations.append("✅ Volume is higher than average (strong interest).")
@@ -453,5 +457,6 @@ def analyze_price_action(df):
         explanations.append("📉 Volume is below average.")
 
     return score, explanations
+
 
 
