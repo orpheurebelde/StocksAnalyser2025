@@ -146,7 +146,7 @@ with st.expander("📈 Monthly Performance Analysis", expanded=True):
             return pd.DataFrame()
 
         # Resample to monthly frequency (closing prices)
-        monthly_data = data['Close'].resample('MS').ffill()
+        monthly_data = data['Close'].resample('M').ffill()
         
         # Calculate percentage change to get returns
         monthly_returns = monthly_data.pct_change().dropna()
