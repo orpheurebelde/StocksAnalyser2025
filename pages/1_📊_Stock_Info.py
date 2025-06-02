@@ -107,10 +107,10 @@ if selected_display != "Select a stock...":
                         st.write(line)
 
                 # Determine overall buy/hold/sell signal
-                if score >= 8:
+                if score >= 7:
                     signal = "BUY"
                     color = "green"
-                elif score >= 5:
+                elif score >= 4:
                     signal = "HOLD"
                     color = "orange"
                 else:
