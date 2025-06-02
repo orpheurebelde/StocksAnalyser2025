@@ -64,7 +64,6 @@ if selected_display != "Select a stock...":
                 )
 
             with st.expander("📊 Price Action Score (RSI, Volume, Ichimoku)", expanded=True):
-                ticker = st.session_state.get(ticker)
                 data = fetch_price_data(ticker)
                 score, insights = analyze_price_action(data)
 
