@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
 from io import BytesIO
-from ta.trend import IchimokuIndicator, macd
+from ta.trend import IchimokuIndicator, MACD
 from ta.momentum import RSIIndicator
 
 # Constants
