@@ -13,7 +13,6 @@ import numpy as np
 from io import BytesIO
 from ta.trend import IchimokuIndicator
 from ta.momentum import RSIIndicator
-from datetime import datetime
 
 # Constants
 CACHE_DIR = "cache"
@@ -405,61 +404,86 @@ def fetch_price_data(ticker):
     df.dropna(inplace=True)
     return df
 
+import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import IchimokuIndicator
+
 def analyze_price_action(df):
+    # Ensure required columns exist
     required_cols = ['Close', 'High', 'Low', 'Volume']
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}")
 
+    # Convert any multi-column to single series
     close = df['Close']
-    if isinstance(close, pd.DataFrame):
-        close = close.iloc[:, 0]
-
-    df['RSI'] = RSIIndicator(close).rsi()
-
     high = df['High']
     low = df['Low']
+    volume = df['Volume']
 
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
     if isinstance(high, pd.DataFrame):
         high = high.iloc[:, 0]
     if isinstance(low, pd.DataFrame):
         low = low.iloc[:, 0]
+    if isinstance(volume, pd.DataFrame):
+        volume = volume.iloc[:, 0]
 
-    ichimoku = IchimokuIndicator(high, low, window1=9, window2=26, window3=52)
-    
+    # Compute RSI
+    df['RSI'] = RSIIndicator(close=close).rsi()
+
+    # Compute Ichimoku indicators
+    ichimoku = IchimokuIndicator(high=high, low=low, window1=9, window2=26, window3=52)
     df['Tenkan_sen'] = ichimoku.ichimoku_conversion_line()
     df['Kijun_sen'] = ichimoku.ichimoku_base_line()
     df['Senkou_span_a'] = ichimoku.ichimoku_a()
     df['Senkou_span_b'] = ichimoku.ichimoku_b()
 
-    recent = df.dropna().iloc[-1]
+    # Drop any rows with NaN values (important for indicators)
+    df = df.dropna()
+    if df.empty:
+        raise ValueError("Not enough data to compute indicators (after dropping NaNs).")
 
+    recent = df.iloc[-1]  # most recent non-NaN row
+
+    # Initialize scoring
     score = 0
     explanations = []
 
-    if 50 < recent['RSI'] < 70:
+    # RSI analysis
+    rsi = recent['RSI']
+    if 50 < rsi < 70:
         score += 2
         explanations.append("✅ RSI is strong and bullish.")
-    elif recent['RSI'] >= 70:
+    elif rsi >= 70:
         explanations.append("⚠️ RSI indicates overbought conditions.")
-    elif recent['RSI'] < 50:
+    elif rsi < 50:
         explanations.append("📉 RSI is bearish or neutral.")
 
-    if recent['Close'] > recent['Senkou_span_a'] and recent['Close'] > recent['Senkou_span_b']:
+    # Ichimoku cloud price position
+    price = recent['Close']
+    span_a = recent['Senkou_span_a']
+    span_b = recent['Senkou_span_b']
+
+    if price > span_a and price > span_b:
         score += 2
         explanations.append("✅ Price is above the cloud (bullish).")
-    elif recent['Close'] < recent['Senkou_span_a'] and recent['Close'] < recent['Senkou_span_b']:
+    elif price < span_a and price < span_b:
         explanations.append("📉 Price is below the cloud (bearish).")
     else:
         explanations.append("⚠️ Price is within the cloud (neutral).")
 
+    # Tenkan-sen vs Kijun-sen (bullish crossover)
     if recent['Tenkan_sen'] > recent['Kijun_sen']:
         score += 1
         explanations.append("✅ Bullish crossover of Tenkan-sen over Kijun-sen.")
     else:
         explanations.append("📉 No bullish crossover on Ichimoku.")
 
-    if recent['Volume'] > df['Volume'].rolling(20).mean().iloc[-1]:
+    # Volume strength
+    avg_volume = volume.rolling(window=20).mean().iloc[-1]
+    if recent['Volume'] > avg_volume:
         score += 1
         explanations.append("✅ Volume is higher than average (strong interest).")
     else:
