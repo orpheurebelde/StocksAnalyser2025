@@ -409,6 +409,10 @@ from ta.momentum import RSIIndicator
 from ta.trend import IchimokuIndicator
 
 def analyze_price_action(df):
+    import pandas as pd
+    from ta.momentum import RSIIndicator
+    from ta.trend import IchimokuIndicator
+
     # Ensure required columns exist
     required_cols = ['Close', 'High', 'Low', 'Volume']
     for col in required_cols:
@@ -445,14 +449,25 @@ def analyze_price_action(df):
     if df.empty:
         raise ValueError("Not enough data to compute indicators (after dropping NaNs).")
 
-    recent = df.iloc[-1]  # most recent non-NaN row
+    recent = df.iloc[-1]
 
-    # Initialize scoring
+    # Explicit float casting
+    price = float(recent['Close'])
+    rsi = float(recent['RSI'])
+    tenkan = float(recent['Tenkan_sen'])
+    kijun = float(recent['Kijun_sen'])
+    span_a = float(recent['Senkou_span_a'])
+    span_b = float(recent['Senkou_span_b'])
+    recent_volume = float(recent['Volume'])
+
+    # Average volume calculation
+    avg_volume = float(volume.rolling(window=20).mean().iloc[-1])
+
+    # Initialize score and explanations
     score = 0
     explanations = []
 
     # RSI analysis
-    rsi = float(recent['RSI'])
     if 50 < rsi < 70:
         score += 2
         explanations.append("✅ RSI is strong and bullish.")
@@ -462,10 +477,6 @@ def analyze_price_action(df):
         explanations.append("📉 RSI is bearish or neutral.")
 
     # Ichimoku cloud price position
-    span_a = float(recent['Senkou_span_a'])
-    span_b = float(recent['Senkou_span_b'])
-    price = float(recent['Close'])
-
     if price > span_a and price > span_b:
         score += 2
         explanations.append("✅ Price is above the cloud (bullish).")
@@ -474,16 +485,15 @@ def analyze_price_action(df):
     else:
         explanations.append("⚠️ Price is within the cloud (neutral).")
 
-    # Tenkan-sen vs Kijun-sen (bullish crossover)
-    if recent['Tenkan_sen'] > recent['Kijun_sen']:
+    # Tenkan-sen vs Kijun-sen
+    if tenkan > kijun:
         score += 1
         explanations.append("✅ Bullish crossover of Tenkan-sen over Kijun-sen.")
     else:
         explanations.append("📉 No bullish crossover on Ichimoku.")
 
-    # Volume strength
-    avg_volume = volume.rolling(window=20).mean().iloc[-1]
-    if recent['Volume'] > avg_volume:
+    # Volume check
+    if recent_volume > avg_volume:
         score += 1
         explanations.append("✅ Volume is higher than average (strong interest).")
     else:
