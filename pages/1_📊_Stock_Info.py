@@ -63,7 +63,7 @@ if selected_display != "Select a stock...":
                     unsafe_allow_html=True
                 )
 
-            with st.expander("📊 Price Action Score (RSI, Volume, Ichimoku)", expanded=True):
+            with st.expander("📊 Price Action Score (RSI, Volume, Ichimoku, MACD)", expanded=True):
                 st.markdown(
                     """
                     <style>
@@ -78,9 +78,65 @@ if selected_display != "Select a stock...":
                 data = fetch_price_data(ticker)
                 score, insights = analyze_price_action(data)
 
-                st.markdown(f"### 📈 Price Action Score: **{score}/8**")
-                for line in insights:
-                    st.write(line)
+                max_score = 8  # adjust if your scoring max changes
+
+                st.markdown(f"### 📈 Price Action Score: **{score}/{max_score}**")
+
+                # Split explanations into two columns
+                half = (len(insights) + 1) // 2
+                col1_items = insights[:half]
+                col2_items = insights[half:]
+
+                col1, divider, col2 = st.columns([5, 0.05, 5])
+
+                with col1:
+                    for line in col1_items:
+                        st.write(line)
+
+                with divider:
+                    st.markdown(
+                        """
+                        <div style="border-left:1px solid gray; height: 100%; margin: 0 10px;"></div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                with col2:
+                    for line in col2_items:
+                        st.write(line)
+
+                # Determine overall buy/hold/sell signal
+                if score >= 6:
+                    signal = "BUY"
+                    color = "green"
+                elif score >= 4:
+                    signal = "HOLD"
+                    color = "orange"
+                else:
+                    signal = "SELL"
+                    color = "red"
+
+                # Display colored signal below explanations, centered
+                st.markdown(
+                    f"""
+                    <div style='
+                        margin-top: 20px;
+                        padding: 10px;
+                        text-align: center;
+                        font-weight: bold;
+                        font-size: 24px;
+                        color: white;
+                        background-color: {color};
+                        border-radius: 8px;
+                        width: 120px;
+                        margin-left: auto;
+                        margin-right: auto;
+                    '>
+                        {signal}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
             with st.expander("🏢 Company Profile", expanded=True):
                 st.write(f"**Sector:** {info.get('sector', 'N/A')}")
