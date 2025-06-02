@@ -452,7 +452,7 @@ def analyze_price_action(df):
     explanations = []
 
     # RSI analysis
-    rsi = recent['RSI']
+    rsi = float(recent['RSI'])
     if 50 < rsi < 70:
         score += 2
         explanations.append("✅ RSI is strong and bullish.")
