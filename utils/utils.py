@@ -399,9 +399,13 @@ def download_aaii_sentiment():
     else:
         print("Sentiment file is up-to-date.")
 
-def fetch_price_data(ticker):
-    df = yf.download(ticker, period='6m', interval='1d', progress=False)
-    df.dropna(inplace=True)
+def fetch_price_data(ticker: str) -> pd.DataFrame:
+    if not ticker or not isinstance(ticker, str):
+        raise ValueError("Invalid ticker")
+
+    df = yf.download(ticker, period="6mo", interval="1d", progress=False)
+    if df.empty:
+        raise ValueError(f"No data found for ticker '{ticker}'")
     return df
 
 def analyze_price_action(df):
