@@ -116,27 +116,14 @@ if selected_display != "Select a stock...":
                     signal = "SELL"
                     color = "red"
 
-                # Display colored signal below explanations, centered
-                st.markdown(
-                    f"""
-                    <div style='
-                        margin-top: 20px;
-                        padding: 10px;
-                        text-align: center;
-                        font-weight: bold;
-                        font-size: 24px;
-                        color: white;
-                        background-color: {color};
-                        border-radius: 8px;
-                        width: 120px;
-                        margin-left: auto;
-                        margin-right: auto;
-                    '>
-                        {signal}
+                # Display styled valuation quality score box
+                st.markdown(f"""
+                    <div style='padding: 1rem; border: 2px solid {color}; border-radius: 1rem; background-color: #1e1e1e; margin-top: 1rem; margin-bottom: 1rem;'>
+                        <h4 style='margin: 0 0 0.5rem 0; color: #FFFFFF;'>🔎 Valuation Quality Score</h4>
+                        <span style='font-size: 48px; font-weight: bold; color: {color};'>{signal}</span>
+                        <div style='font-size: 18px; color: #AAAAAA;'>({score}/{max_score} points)</div>
                     </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                """, unsafe_allow_html=True)
 
             with st.expander("🏢 Company Profile", expanded=True):
                 st.write(f"**Sector:** {info.get('sector', 'N/A')}")
