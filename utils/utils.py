@@ -417,7 +417,16 @@ def analyze_price_action(df):
 
     df['RSI'] = RSIIndicator(close).rsi()
 
-    ichimoku = IchimokuIndicator(df['High'], df['Low'], window1=9, window2=26, window3=52)
+    high = df['High']
+    low = df['Low']
+
+    if isinstance(high, pd.DataFrame):
+        high = high.iloc[:, 0]
+    if isinstance(low, pd.DataFrame):
+        low = low.iloc[:, 0]
+
+    ichimoku = IchimokuIndicator(high, low, window1=9, window2=26, window3=52)
+    
     df['Tenkan_sen'] = ichimoku.ichimoku_conversion_line()
     df['Kijun_sen'] = ichimoku.ichimoku_base_line()
     df['Senkou_span_a'] = ichimoku.ichimoku_a()
