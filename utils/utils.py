@@ -11,6 +11,9 @@ import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
 from io import BytesIO
+from ta.trend import IchimokuIndicator
+from ta.momentum import RSIIndicator
+from datetime import datetime
 
 # Constants
 CACHE_DIR = "cache"
@@ -397,5 +400,55 @@ def download_aaii_sentiment():
     else:
         print("Sentiment file is up-to-date.")
 
+def fetch_price_data(ticker):
+    df = yf.download(ticker, period='6mo', interval='1d', progress=False)
+    df.dropna(inplace=True)
+    return df
+
+def analyze_price_action(df):
+    df['RSI'] = RSIIndicator(df['Close']).rsi()
+    ichimoku = IchimokuIndicator(df['High'], df['Low'], window1=9, window2=26, window3=52)
+    df['Tenkan_sen'] = ichimoku.ichimoku_conversion_line()
+    df['Kijun_sen'] = ichimoku.ichimoku_base_line()
+    df['Senkou_span_a'] = ichimoku.ichimoku_a()
+    df['Senkou_span_b'] = ichimoku.ichimoku_b()
+
+    recent = df.iloc[-1]
+
+    score = 0
+    explanations = []
+
+    # RSI Scoring
+    if 50 < recent['RSI'] < 70:
+        score += 2
+        explanations.append("✅ RSI is strong and bullish.")
+    elif recent['RSI'] >= 70:
+        explanations.append("⚠️ RSI indicates overbought conditions.")
+    elif recent['RSI'] < 50:
+        explanations.append("📉 RSI is bearish or neutral.")
+
+    # Ichimoku signals
+    if recent['Close'] > recent['Senkou_span_a'] and recent['Close'] > recent['Senkou_span_b']:
+        score += 2
+        explanations.append("✅ Price is above the cloud (bullish).")
+    elif recent['Close'] < recent['Senkou_span_a'] and recent['Close'] < recent['Senkou_span_b']:
+        explanations.append("📉 Price is below the cloud (bearish).")
+    else:
+        explanations.append("⚠️ Price is within the cloud (neutral).")
+
+    if recent['Tenkan_sen'] > recent['Kijun_sen']:
+        score += 1
+        explanations.append("✅ Bullish crossover of Tenkan-sen over Kijun-sen.")
+    else:
+        explanations.append("📉 No bullish crossover on Ichimoku.")
+
+    # Volume analysis
+    if recent['Volume'] > df['Volume'].rolling(20).mean().iloc[-1]:
+        score += 1
+        explanations.append("✅ Volume is higher than average (strong interest).")
+    else:
+        explanations.append("📉 Volume is below average.")
+
+    return score, explanations
 
 

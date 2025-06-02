@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score
+from utils.utils import get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
 import re
 import time
 
@@ -62,6 +62,15 @@ if selected_display != "Select a stock...":
                     f'<iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol={ticker}&interval=W&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=Dark&style=2&timezone=Etc%2FGMT%2B3&hideideas=1" width="100%" height="400" frameborder="0" allowtransparency="true" scrolling="no"></iframe>',
                     unsafe_allow_html=True
                 )
+
+            with st.expander("📊 Price Action Score (RSI, Volume, Ichimoku)", expanded=True):
+                ticker = st.session_state.get("selected_ticker", "AAPL")
+                data = fetch_price_data(ticker)
+                score, insights = analyze_price_action(data)
+
+                st.markdown(f"### 📈 Price Action Score: **{score}/6**")
+                for line in insights:
+                    st.write(line)
 
             with st.expander("🏢 Company Profile", expanded=True):
                 st.write(f"**Sector:** {info.get('sector', 'N/A')}")
