@@ -409,10 +409,6 @@ def fetch_price_data(ticker: str) -> pd.DataFrame:
     return df
 
 def analyze_price_action(df):
-    import pandas as pd
-    from ta.momentum import RSIIndicator
-    from ta.trend import IchimokuIndicator
-
     # Ensure required columns exist
     required_cols = ['Close', 'High', 'Low', 'Volume']
     for col in required_cols:
