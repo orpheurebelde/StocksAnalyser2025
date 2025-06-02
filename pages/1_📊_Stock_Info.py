@@ -78,7 +78,7 @@ if selected_display != "Select a stock...":
                 data = fetch_price_data(ticker)
                 score, insights = analyze_price_action(data)
 
-                max_score = 8  # adjust if your scoring max changes
+                max_score = 9  # adjust if your scoring max changes
 
                 st.markdown(f"### 📈 Price Action Score: **{score}/{max_score}**")
 
@@ -106,10 +106,10 @@ if selected_display != "Select a stock...":
                         st.write(line)
 
                 # Determine overall buy/hold/sell signal
-                if score >= 6:
+                if score >= 8:
                     signal = "BUY"
                     color = "green"
-                elif score >= 4:
+                elif score >= 5:
                     signal = "HOLD"
                     color = "orange"
                 else:
