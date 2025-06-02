@@ -462,9 +462,9 @@ def analyze_price_action(df):
         explanations.append("📉 RSI is bearish or neutral.")
 
     # Ichimoku cloud price position
-    price = recent['Close']
-    span_a = recent['Senkou_span_a']
-    span_b = recent['Senkou_span_b']
+    span_a = float(recent['Senkou_span_a'])
+    span_b = float(recent['Senkou_span_b'])
+    price = float(recent['Close'])
 
     if price > span_a and price > span_b:
         score += 2
