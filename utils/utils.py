@@ -413,19 +413,22 @@ import pandas as pd
 from ta.momentum import RSIIndicator
 from ta.trend import IchimokuIndicator, MACD
 
+from ta.volatility import BollingerBands
+
 def analyze_price_action(df):
-    # Ensure required columns exist
+    # Required columns
     required_cols = ['Close', 'High', 'Low', 'Volume']
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}")
 
-    # Convert any multi-column to single series
+    # Extract series
     close = df['Close']
     high = df['High']
     low = df['Low']
     volume = df['Volume']
 
+    # Handle multi-columns if needed
     if isinstance(close, pd.DataFrame):
         close = close.iloc[:, 0]
     if isinstance(high, pd.DataFrame):
@@ -435,29 +438,28 @@ def analyze_price_action(df):
     if isinstance(volume, pd.DataFrame):
         volume = volume.iloc[:, 0]
 
-    # Compute RSI
+    # Calculate indicators
     df['RSI'] = RSIIndicator(close=close).rsi()
 
-    # Compute Ichimoku indicators
     ichimoku = IchimokuIndicator(high=high, low=low, window1=9, window2=26, window3=52)
     df['Tenkan_sen'] = ichimoku.ichimoku_conversion_line()
     df['Kijun_sen'] = ichimoku.ichimoku_base_line()
     df['Senkou_span_a'] = ichimoku.ichimoku_a()
     df['Senkou_span_b'] = ichimoku.ichimoku_b()
 
-    # Compute MACD
-    macd_indicator = MACD(close=close)
-    df['MACD'] = macd_indicator.macd()
-    df['MACD_signal'] = macd_indicator.macd_signal()
+    # **Add Bollinger Bands calculation here BEFORE dropna**
+    bb_indicator = BollingerBands(close=close, window=20, window_dev=2)
+    df['bb_high'] = bb_indicator.bollinger_hband()
+    df['bb_low'] = bb_indicator.bollinger_lband()
 
-    # Drop any rows with NaN values (important for indicators)
+    # Drop rows with NaNs after all indicators are added
     df = df.dropna()
     if df.empty:
         raise ValueError("Not enough data to compute indicators (after dropping NaNs).")
 
     recent = df.iloc[-1]
 
-    # Explicit float casting for recent values
+    # Extract values from recent row
     price = float(recent['Close'])
     rsi = float(recent['RSI'])
     tenkan = float(recent['Tenkan_sen'])
@@ -465,26 +467,23 @@ def analyze_price_action(df):
     span_a = float(recent['Senkou_span_a'])
     span_b = float(recent['Senkou_span_b'])
     recent_volume = float(recent['Volume'])
-    macd = float(recent['MACD'])
-    macd_signal = float(recent['MACD_signal'])
+    bb_high = float(recent['bb_high'])
+    bb_low = float(recent['bb_low'])
 
-    # Average volume calculation
-    avg_volume = float(volume.rolling(window=20).mean().iloc[-1])
-
-    # Initialize score and explanations
+    # Continue with your scoring logic including Bollinger Bands:
     score = 0
     explanations = []
 
-    # RSI analysis
+    # RSI analysis (example)
     if 50 < rsi < 70:
         score += 2
         explanations.append("✅ RSI is strong and bullish.")
     elif rsi >= 70:
         explanations.append("⚠️ RSI indicates overbought conditions.")
-    elif rsi < 50:
+    else:
         explanations.append("📉 RSI is bearish or neutral.")
 
-    # Ichimoku cloud price position
+    # Ichimoku price position
     if price > span_a and price > span_b:
         score += 2
         explanations.append("✅ Price is above the cloud (bullish).")
@@ -493,7 +492,7 @@ def analyze_price_action(df):
     else:
         explanations.append("⚠️ Price is within the cloud (neutral).")
 
-    # Tenkan-sen vs Kijun-sen crossover
+    # Tenkan-sen vs Kijun-sen
     if tenkan > kijun:
         score += 1
         explanations.append("✅ Bullish crossover of Tenkan-sen over Kijun-sen.")
@@ -501,36 +500,14 @@ def analyze_price_action(df):
         explanations.append("📉 No bullish crossover on Ichimoku.")
 
     # Volume check
+    avg_volume = volume.rolling(window=20).mean().iloc[-1]
     if recent_volume > avg_volume:
         score += 1
         explanations.append("✅ Volume is higher than average (strong interest).")
     else:
         explanations.append("📉 Volume is below average.")
 
-    # MACD bullish crossover check (MACD line crossing above signal line)
-    # We compare the last two values to detect crossover
-    prev_macd = df['MACD'].iloc[-2]
-    prev_signal = df['MACD_signal'].iloc[-2]
-
-    if prev_macd < prev_signal and macd > macd_signal:
-        score += 2  # MACD bullish crossover is a strong bullish signal
-        explanations.append("✅ Bullish MACD crossover detected.")
-    elif macd < macd_signal:
-        explanations.append("📉 MACD indicates bearish momentum.")
-    else:
-        explanations.append("⚠️ MACD is neutral.")
-        
-    # Compute Bollinger Bands
-    bb_indicator = BollingerBands(close=close, window=20, window_dev=2)
-    df['bb_high'] = bb_indicator.bollinger_hband()
-    df['bb_low'] = bb_indicator.bollinger_lband()
-
-    # Latest price and bands
-    price = recent['Close']
-    bb_high = recent['bb_high']
-    bb_low = recent['bb_low']
-
-    # Bollinger Bands score logic
+    # Bollinger Bands check
     if price > bb_high:
         score -= 1
         explanations.append("⚠️ Price is above upper Bollinger Band (potentially overbought).")
