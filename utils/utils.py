@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
 from io import BytesIO
-from ta.trend import IchimokuIndicator
+from ta.trend import IchimokuIndicator, macd
 from ta.momentum import RSIIndicator
 
 # Constants
@@ -408,6 +408,10 @@ def fetch_price_data(ticker: str) -> pd.DataFrame:
         raise ValueError(f"No data found for ticker '{ticker}'")
     return df
 
+import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import IchimokuIndicator, MACD
+
 def analyze_price_action(df):
     # Ensure required columns exist
     required_cols = ['Close', 'High', 'Low', 'Volume']
@@ -440,6 +444,11 @@ def analyze_price_action(df):
     df['Senkou_span_a'] = ichimoku.ichimoku_a()
     df['Senkou_span_b'] = ichimoku.ichimoku_b()
 
+    # Compute MACD
+    macd_indicator = MACD(close=close)
+    df['MACD'] = macd_indicator.macd()
+    df['MACD_signal'] = macd_indicator.macd_signal()
+
     # Drop any rows with NaN values (important for indicators)
     df = df.dropna()
     if df.empty:
@@ -447,7 +456,7 @@ def analyze_price_action(df):
 
     recent = df.iloc[-1]
 
-    # Explicit float casting
+    # Explicit float casting for recent values
     price = float(recent['Close'])
     rsi = float(recent['RSI'])
     tenkan = float(recent['Tenkan_sen'])
@@ -455,6 +464,8 @@ def analyze_price_action(df):
     span_a = float(recent['Senkou_span_a'])
     span_b = float(recent['Senkou_span_b'])
     recent_volume = float(recent['Volume'])
+    macd = float(recent['MACD'])
+    macd_signal = float(recent['MACD_signal'])
 
     # Average volume calculation
     avg_volume = float(volume.rolling(window=20).mean().iloc[-1])
@@ -481,7 +492,7 @@ def analyze_price_action(df):
     else:
         explanations.append("⚠️ Price is within the cloud (neutral).")
 
-    # Tenkan-sen vs Kijun-sen
+    # Tenkan-sen vs Kijun-sen crossover
     if tenkan > kijun:
         score += 1
         explanations.append("✅ Bullish crossover of Tenkan-sen over Kijun-sen.")
@@ -494,6 +505,19 @@ def analyze_price_action(df):
         explanations.append("✅ Volume is higher than average (strong interest).")
     else:
         explanations.append("📉 Volume is below average.")
+
+    # MACD bullish crossover check (MACD line crossing above signal line)
+    # We compare the last two values to detect crossover
+    prev_macd = df['MACD'].iloc[-2]
+    prev_signal = df['MACD_signal'].iloc[-2]
+
+    if prev_macd < prev_signal and macd > macd_signal:
+        score += 2  # MACD bullish crossover is a strong bullish signal
+        explanations.append("✅ Bullish MACD crossover detected.")
+    elif macd < macd_signal:
+        explanations.append("📉 MACD indicates bearish momentum.")
+    else:
+        explanations.append("⚠️ MACD is neutral.")
 
     return score, explanations
 

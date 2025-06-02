@@ -78,7 +78,7 @@ if selected_display != "Select a stock...":
                 data = fetch_price_data(ticker)
                 score, insights = analyze_price_action(data)
 
-                st.markdown(f"### 📈 Price Action Score: **{score}/6**")
+                st.markdown(f"### 📈 Price Action Score: **{score}/8**")
                 for line in insights:
                     st.write(line)
 
