@@ -406,7 +406,10 @@ def fetch_price_data(ticker):
     return df
 
 def analyze_price_action(df):
-    df['RSI'] = RSIIndicator(df['Close']).rsi()
+    close = df['Close']
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]  # Just in case it’s a DataFrame
+    df['RSI'] = RSIIndicator(close).rsi()
     ichimoku = IchimokuIndicator(df['High'], df['Low'], window1=9, window2=26, window3=52)
     df['Tenkan_sen'] = ichimoku.ichimoku_conversion_line()
     df['Kijun_sen'] = ichimoku.ichimoku_base_line()
