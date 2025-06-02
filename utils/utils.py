@@ -447,10 +447,14 @@ def analyze_price_action(df):
     df['Senkou_span_a'] = ichimoku.ichimoku_a()
     df['Senkou_span_b'] = ichimoku.ichimoku_b()
 
-    # **Add Bollinger Bands calculation here BEFORE dropna**
     bb_indicator = BollingerBands(close=close, window=20, window_dev=2)
     df['bb_high'] = bb_indicator.bollinger_hband()
     df['bb_low'] = bb_indicator.bollinger_lband()
+
+    # MACD calculation
+    macd_indicator = MACD(close=close)
+    df['macd'] = macd_indicator.macd()
+    df['macd_signal'] = macd_indicator.macd_signal()
 
     # Drop rows with NaNs after all indicators are added
     df = df.dropna()
@@ -458,6 +462,7 @@ def analyze_price_action(df):
         raise ValueError("Not enough data to compute indicators (after dropping NaNs).")
 
     recent = df.iloc[-1]
+    prev = df.iloc[-2]
 
     # Extract values from recent row
     price = float(recent['Close'])
@@ -469,12 +474,15 @@ def analyze_price_action(df):
     recent_volume = float(recent['Volume'])
     bb_high = float(recent['bb_high'])
     bb_low = float(recent['bb_low'])
+    recent_macd = float(recent['macd'])
+    recent_signal = float(recent['macd_signal'])
+    prev_macd = float(prev['macd'])
+    prev_signal = float(prev['macd_signal'])
 
-    # Continue with your scoring logic including Bollinger Bands:
     score = 0
     explanations = []
 
-    # RSI analysis (example)
+    # RSI analysis
     if 50 < rsi < 70:
         score += 2
         explanations.append("✅ RSI is strong and bullish.")
@@ -516,6 +524,16 @@ def analyze_price_action(df):
         explanations.append("✅ Price is below lower Bollinger Band (potentially oversold).")
     else:
         explanations.append("ℹ️ Price is within Bollinger Bands (neutral).")
+
+    # MACD scoring
+    if (prev_macd < prev_signal) and (recent_macd > recent_signal):
+        score += 2
+        explanations.append("✅ MACD bullish crossover.")
+    elif (prev_macd > prev_signal) and (recent_macd < recent_signal):
+        score -= 2
+        explanations.append("⚠️ MACD bearish crossover.")
+    else:
+        explanations.append("⚠️ MACD is neutral.")
 
     return score, explanations
 
