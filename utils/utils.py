@@ -13,6 +13,7 @@ import numpy as np
 from io import BytesIO
 from ta.trend import IchimokuIndicator, MACD
 from ta.momentum import RSIIndicator
+from ta.volatility import BollingerBands
 
 # Constants
 CACHE_DIR = "cache"
@@ -518,6 +519,26 @@ def analyze_price_action(df):
         explanations.append("📉 MACD indicates bearish momentum.")
     else:
         explanations.append("⚠️ MACD is neutral.")
+        
+    # Compute Bollinger Bands
+    bb_indicator = BollingerBands(close=close, window=20, window_dev=2)
+    df['bb_high'] = bb_indicator.bollinger_hband()
+    df['bb_low'] = bb_indicator.bollinger_lband()
+
+    # Latest price and bands
+    price = recent['Close']
+    bb_high = recent['bb_high']
+    bb_low = recent['bb_low']
+
+    # Bollinger Bands score logic
+    if price > bb_high:
+        score -= 1
+        explanations.append("⚠️ Price is above upper Bollinger Band (potentially overbought).")
+    elif price < bb_low:
+        score += 1
+        explanations.append("✅ Price is below lower Bollinger Band (potentially oversold).")
+    else:
+        explanations.append("ℹ️ Price is within Bollinger Bands (neutral).")
 
     return score, explanations
 
