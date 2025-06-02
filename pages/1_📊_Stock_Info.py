@@ -27,7 +27,7 @@ if not st.session_state["authenticated"]:
     st.error("Unauthorized. Please go to the home page and log in.")
     st.stop()
 
-st.title("📁 Welcome to Your Finance App")
+st.title("📁 Análise de Ações | S&P 500 e NASDAQ")
 
 # Load stock list
 @st.cache_data
