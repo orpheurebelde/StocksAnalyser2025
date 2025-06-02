@@ -37,6 +37,7 @@ def load_stock_list():
     return df
 
 stock_df = load_stock_list()
+stock_df = stock_df.sort_values(by="Display")  # Sort alphabetically by Display column
 options = ["Select a stock..."] + stock_df["Display"].tolist()
 selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, index=0)
 
