@@ -397,5 +397,117 @@ def download_aaii_sentiment():
     else:
         print("Sentiment file is up-to-date.")
 
+    @st.cache_data
+    def show_indicators(ticker, title):
+        data = yf.Ticker(ticker).history(period="10y")
+        if data.empty:
+            st.error(f"Could not fetch data for {ticker}")
+            return
+
+        close = data["Close"]
+        price = close.iloc[-1]
+        high_52w = close[-252:].max()
+        low_52w = close[-252:].min()
+
+        # First trading day of the year
+        try:
+            start_of_year = pd.Timestamp.now(tz=close.index.tz).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_price = close.loc[close.index >= start_of_year].iloc[0] if not close.loc[close.index >= start_of_year].empty else close.iloc[0]
+        except Exception as e:
+            st.error(f"Error selecting start price: {e}")
+            start_price = close.iloc[0]
+
+        # YTD Return
+        ytd = ((price / start_price) - 1) * 100
+
+        # Indicators
+        rsi = compute_rsi(close)
+        macd, signal = compute_macd(close)
+        fib_level_3y = compute_fibonacci_level(close[-252*3:])
+        fib_level_5y = compute_fibonacci_level(close[-252*5:])
+        fib_level_10y = compute_fibonacci_level(close)
+
+        # MACD Classification
+        macd_signal = "Bullish" if macd.iloc[-1] > signal.iloc[-1] else "Bearish"
+        macd_color = "green" if macd_signal == "Bullish" else "red"
+
+        # RSI Classification
+        if rsi < 30:
+            rsi_signal, rsi_color = "Bullish", "green"
+        elif rsi > 70:
+            rsi_signal, rsi_color = "Bearish", "red"
+        else:
+            rsi_signal, rsi_color = "Neutral", "orange"
+        rsi = round(rsi, 2) if isinstance(rsi, (int, float)) else "N/A"
+
+        # YTD Classification
+        if ytd > 0:
+            ytd_signal, ytd_color = "Bull Market", "green"
+        elif -20 < ytd <= 0:
+            ytd_signal, ytd_color = "Correction", "orange"
+        elif -30 < ytd <= -20:
+            ytd_signal, ytd_color = "Bear Market", "red"
+        else:
+            ytd_signal, ytd_color = "Crash", "darkred"
+
+        # Price vs 52-week range
+        price_position = (price - low_52w) / (high_52w - low_52w)
+        if price_position > 0.85:
+            price_category, price_color = "Near 52-Week High", "green"
+        elif price_position < 0.15:
+            price_category, price_color = "Near 52-Week Low", "red"
+        else:
+            price_category, price_color = "Mid Range", "orange"
+
+        # Trend from Moving Averages
+        sma_50 = close[-50:].mean()
+        sma_200 = close[-200:].mean()
+        if price > sma_50 and price > sma_200:
+            trend, trend_color = "Uptrend", "green"
+        elif price < sma_50 and price < sma_200:
+            trend, trend_color = "Downtrend", "red"
+        else:
+            trend, trend_color = "Sideways", "orange"
+
+        # Fibonacci context (3Y)
+        fib_comment_3y = "Above 3Y Fib Level (Breakout)" if price > fib_level_3y else "Below 3Y Fib Level (Support)"
+
+        st.subheader(title)
+        st.markdown(f"""
+        <div style='font-size:16px; line-height:1.6;'>
+
+        <div><strong>Ticker</strong>: {ticker}</div>
+        <div><strong>Current Price</strong>: ${price:,.2f} 
+            <span style='color:{price_color}; font-size:18px;'>({price_category})</span>
+        </div>
+        <div><strong>52 Week High</strong>: ${high_52w:,.2f}</div>
+        <div><strong>52 Week Low</strong>: ${low_52w:,.2f}</div>
+        <div><strong>Trend</strong>: 
+            <span style='color:{trend_color}; font-size:18px;'>{trend}</span>
+        </div>
+        <div><strong>RSI</strong>: {rsi} 
+            (<span style='color:{rsi_color}; font-size:18px;'> {rsi_signal}</span>)
+        </div>
+        <div><strong>MACD Signal</strong>: {signal.iloc[-1]:.2f} 
+            (<span style='color:{macd_color}; font-size:18px;'> {macd_signal}</span>)
+        </div>
+        <hr style='border: 1px solid #444;' />
+        <div><strong>YTD %</strong>: {ytd:.2f}% 
+            (<span style='color:{ytd_color}; font-size:18px;'> {ytd_signal}</span>)
+        </div>
+        <div><strong>1D %</strong>: {close.pct_change().iloc[-1]*100:.2f}%</div>
+        <div><strong>5D %</strong>: {close.pct_change(5).iloc[-1]*100:.2f}%</div>
+        <div><strong>1M %</strong>: {close.pct_change(21).iloc[-1]*100:.2f}%</div>
+        <div><strong>6M %</strong>: {close.pct_change(126).iloc[-1]*100:.2f}%</div>
+        <div><strong>1Y %</strong>: {close.pct_change(252).iloc[-1]*100:.2f}%</div>
+        <div><strong>5Y %</strong>: {close.pct_change(1260).iloc[-1]*100:.2f}%</div>
+        <hr style='border: 1px solid #444;' />
+        <div><strong>Fibonacci Level (3Y Range)</strong>: {fib_level_3y:.2f}% - {fib_comment_3y}</div>
+        <div><strong>Fibonacci Level (5Y Range)</strong>: {fib_level_5y:.2f}%</div>
+        <div><strong>Fibonacci Level (10Y Range)</strong>: {fib_level_10y:.2f}%</div>
+
+        </div>
+        """, unsafe_allow_html=True)
+
 
 
