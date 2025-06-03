@@ -120,7 +120,7 @@ if selected_display != "Select a stock...":
                 # Display styled valuation quality score box
                 st.markdown(f"""
                     <div style='padding: 1rem; border: 2px solid {color}; border-radius: 1rem; background-color: #1e1e1e; margin-top: 1rem; margin-bottom: 1rem;'>
-                        <h4 style='margin: 0 0 0.5rem 0; color: #FFFFFF;'>🔎 Valuation Quality Score</h4>
+                        <h4 style='margin: 0 0 0.5rem 0; color: #FFFFFF;'>🔎 Price Action Quality Score</h4>
                         <span style='font-size: 48px; font-weight: bold; color: {color};'>{signal}</span>
                         <div style='font-size: 18px; color: #AAAAAA;'>({score}/{max_score} points)</div>
                     </div>
