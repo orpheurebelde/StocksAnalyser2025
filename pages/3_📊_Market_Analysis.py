@@ -340,19 +340,16 @@ def display_yearly_performance(ticker, title):
         st.error(f"Could not fetch data for {ticker}")
         return
 
-    # --- ADDED: Data Length Check ---
     if len(data['Close']) < 2:
         st.warning(f"Not enough daily data ({len(data['Close'])} points) to calculate yearly performance for {ticker}. Skipping yearly display.")
         return
 
-    # Ensure index is datetime and sorted
     data = data.sort_index(ascending=True)
 
     if not isinstance(data.index, pd.DatetimeIndex):
         st.error("Data index is not a datetime index.")
         return
 
-    # --- Calculate yearly returns ---
     try:
         yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
 
@@ -371,52 +368,43 @@ def display_yearly_performance(ticker, title):
         yearly_returns = pd.DataFrame(columns=['Yearly Return'])
 
     current_year = datetime.now().year
-    current_performance = None # Initialize current_performance
+    current_performance = None
 
     # --- Handle timezone for YTD calculation and get current_performance ---
     try:
-        # Step 1: Ensure data.index is timezone-aware and in UTC
         processed_index = data.index
         
-        # --- DEBUGGING STATEMENTS START ---
         st.write("--- DEBUGGING YTD CALCULATION ---")
-        st.write(f"DEBUG: Type of processed_index: {type(processed_index)}") # NEW DEBUG LINE
+        st.write(f"DEBUG: Type of processed_index: {type(processed_index)}")
         st.write(f"DEBUG: Initial data.index.tz: {processed_index.tz}")
-        st.write(f"DEBUG: Initial data.index first 5 elements: {processed_index[:5]}") # MODIFIED LINE
+        st.write(f"DEBUG: Initial data.index first 5 elements: {processed_index[:5]}")
         st.write(f"DEBUG: Length of data.index: {len(processed_index)}")
-        # --- DEBUGGING STATEMENTS END ---
 
         if processed_index.tz is None:
             processed_index = processed_index.tz_localize('America/New_York', ambiguous='infer')
-            # --- DEBUGGING STATEMENTS START ---
             st.write(f"DEBUG: After tz_localize, processed_index.tz: {processed_index.tz}")
-            st.write(f"DEBUG: After tz_localize, processed_index head: {processed_index[:5]}") # MODIFIED LINE
-            # --- DEBUGGING STATEMENTS END ---
+            st.write(f"DEBUG: After tz_localize, processed_index head: {processed_index[:5]}")
         
         processed_index = processed_index.tz_convert('UTC')
-        # --- DEBUGGING STATEMENTS START ---
         st.write(f"DEBUG: After tz_convert, processed_index.tz: {processed_index.tz}")
-        st.write(f"DEBUG: After tz_convert, processed_index head: {processed_index[:5]}") # MODIFIED LINE
-        # --- DEBUGGING STATEMENTS END ---
+        st.write(f"DEBUG: After tz_convert, processed_index head: {processed_index[:5]}")
 
         start_of_current_year_utc = pd.Timestamp(current_year, 1, 1, tz='UTC')
-        # --- DEBUGGING STATEMENTS START ---
         st.write(f"DEBUG: start_of_current_year_utc: {start_of_current_year_utc}")
-        # --- DEBUGGING STATEMENTS END ---
 
-        # Create the boolean mask for filtering
-        boolean_mask = processed_index >= start_of_current_year_utc
+        # --- THE CRITICAL FIX IS HERE ---
+        # Explicitly create a Pandas Series from the boolean comparison,
+        # ensuring it has the same index as the original DataFrame.
+        boolean_mask = pd.Series(processed_index >= start_of_current_year_utc, index=data.index)
         
-        # --- DEBUGGING STATEMENTS START ---
-        st.write(f"DEBUG: Type of boolean_mask: {type(boolean_mask)}")
-        st.write(f"DEBUG: Is boolean_mask empty: {boolean_mask.empty}")
+        st.write(f"DEBUG: Type of boolean_mask: {type(boolean_mask)}") # Should now be <class 'pandas.core.series.Series'>
+        st.write(f"DEBUG: Is boolean_mask empty: {boolean_mask.empty}") # This will now work
         st.write(f"DEBUG: Length of boolean_mask: {len(boolean_mask)}")
         st.write(f"DEBUG: Sum of True in boolean_mask (should be >0 if current year data): {boolean_mask.sum()}")
-        st.write(f"DEBUG: boolean_mask head: {boolean_mask.head()}")
-        st.write(f"DEBUG: boolean_mask tail: {boolean_mask.tail()}")
-        # --- DEBUGGING STATEMENTS END ---
+        st.write(f"DEBUG: boolean_mask head: {boolean_mask.head()}") # This will now work
+        st.write(f"DEBUG: boolean_mask tail: {boolean_mask.tail()}") # This will now work
 
-        # This is the line where the error is reported
+        # This line will now correctly receive a Pandas Series for filtering
         current_year_data_close = data.loc[boolean_mask, 'Close']
 
         if not current_year_data_close.empty:
