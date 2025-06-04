@@ -375,11 +375,15 @@ def display_yearly_performance(ticker, title):
 
     # --- Handle timezone of Close index for YTD calculation ---
     try:
-        if data.index.tz is None:
-            # Localize to US Eastern time (matching NYSE)
+        if not isinstance(data.index, pd.DatetimeIndex):
+            st.error("Data index is not a valid DatetimeIndex.")
+            return
+
+        if data.index.tz is None or data.index.tz is pd.NaT:
+            # Localize naive datetime index to US Eastern time (matching NYSE)
             data.index = data.index.tz_localize('America/New_York', ambiguous='infer')
         else:
-            # Convert to UTC for consistency
+            # Convert timezone-aware index to UTC for consistency
             data.index = data.index.tz_convert('UTC')
 
         # Select data since Jan 1 of current year
