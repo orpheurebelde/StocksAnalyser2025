@@ -331,7 +331,7 @@ def display_monthly_performance(ticker, title):
         st.write("No data available for the current month.")
 
 # 9.--- MODIFIED `display_yearly_performance` function ---
-@st.cache_data(ttl=14400) # Cache for 1 hour
+@st.cache_data(ttl=3600) # Cache for 1 hour
 def display_yearly_performance(ticker, title):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
 
@@ -340,15 +340,13 @@ def display_yearly_performance(ticker, title):
         st.error(f"Could not fetch data for {ticker}")
         return
 
-    # --- ADD THIS CRITICAL CHECK ---
-    # Need at least two data points for any percentage change calculation or YTD comparison
+    # --- ADDED: Data Length Check ---
     if len(data['Close']) < 2:
         st.warning(f"Not enough daily data ({len(data['Close'])} points) to calculate yearly performance for {ticker}. Skipping yearly display.")
-        # Return early as no meaningful yearly performance can be calculated
         return
 
     # Ensure index is datetime and sorted
-    data = data.sort_index(ascending=True) # Ensure it's sorted for iloc later
+    data = data.sort_index(ascending=True)
 
     if not isinstance(data.index, pd.DatetimeIndex):
         st.error("Data index is not a datetime index.")
@@ -377,17 +375,48 @@ def display_yearly_performance(ticker, title):
 
     # --- Handle timezone for YTD calculation and get current_performance ---
     try:
+        # Step 1: Ensure data.index is timezone-aware and in UTC
         processed_index = data.index
+        
+        # --- DEBUGGING STATEMENTS START ---
+        st.write("--- DEBUGGING YTD CALCULATION ---")
+        st.write(f"DEBUG: Initial data.index.tz: {processed_index.tz}")
+        st.write(f"DEBUG: Initial data.index head: {processed_index.head()}")
+        st.write(f"DEBUG: Length of data.index: {len(processed_index)}")
+        # --- DEBUGGING STATEMENTS END ---
+
         if processed_index.tz is None:
             processed_index = processed_index.tz_localize('America/New_York', ambiguous='infer')
+            # --- DEBUGGING STATEMENTS START ---
+            st.write(f"DEBUG: After tz_localize, processed_index.tz: {processed_index.tz}")
+            st.write(f"DEBUG: After tz_localize, processed_index head: {processed_index.head()}")
+            # --- DEBUGGING STATEMENTS END ---
         
         processed_index = processed_index.tz_convert('UTC')
+        # --- DEBUGGING STATEMENTS START ---
+        st.write(f"DEBUG: After tz_convert, processed_index.tz: {processed_index.tz}")
+        st.write(f"DEBUG: After tz_convert, processed_index head: {processed_index.head()}")
+        # --- DEBUGGING STATEMENTS END ---
 
         start_of_current_year_utc = pd.Timestamp(current_year, 1, 1, tz='UTC')
+        # --- DEBUGGING STATEMENTS START ---
+        st.write(f"DEBUG: start_of_current_year_utc: {start_of_current_year_utc}")
+        # --- DEBUGGING STATEMENTS END ---
 
-        # The comparison `processed_index >= start_of_current_year_utc` will now always
-        # result in a boolean Series with length >= 2, avoiding the ambiguity error.
-        current_year_data_close = data.loc[processed_index >= start_of_current_year_utc, 'Close']
+        # Create the boolean mask for filtering
+        boolean_mask = processed_index >= start_of_current_year_utc
+        
+        # --- DEBUGGING STATEMENTS START ---
+        st.write(f"DEBUG: Type of boolean_mask: {type(boolean_mask)}")
+        st.write(f"DEBUG: Is boolean_mask empty: {boolean_mask.empty}")
+        st.write(f"DEBUG: Length of boolean_mask: {len(boolean_mask)}")
+        st.write(f"DEBUG: Sum of True in boolean_mask (should be >0 if current year data): {boolean_mask.sum()}")
+        st.write(f"DEBUG: boolean_mask head: {boolean_mask.head()}")
+        st.write(f"DEBUG: boolean_mask tail: {boolean_mask.tail()}")
+        # --- DEBUGGING STATEMENTS END ---
+
+        # This is the line where the error is reported
+        current_year_data_close = data.loc[boolean_mask, 'Close']
 
         if not current_year_data_close.empty:
             first_price = current_year_data_close.iloc[0]
