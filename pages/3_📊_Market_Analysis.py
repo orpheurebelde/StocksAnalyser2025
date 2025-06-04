@@ -120,10 +120,8 @@ def show_indicators(ticker, title):
     </div>
     <hr style='border: 1px solid #444;' />
     <div>
-    <span style='color:{ytd_color};'>
-        <strong>YTD %</strong>: {ytd:.2f}%
-        (<span style='font-size:18px;'> {ytd_signal}</span>)
-    </span>
+    <span style='color:{ytd_color};'><strong>YTD %</strong></span>: {ytd:.2f}%
+    (<span style='font-size:18px;'> {ytd_signal}</span>)
     </div>
     <div><strong>1D %</strong>: <span style="color: {get_color(p1d)};">{p1d:.2f}%</div>
     <div><strong>5D %</strong>: <span style="color: {get_color(p5d)};">{p5d:.2f}%</div>
