@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- 1. Set page configuration ---
 st.set_page_config(
-    page_title="📊 Market Analysis",
+    page_title="Market Analysis",
     page_icon=":bar_chart:",
     layout="wide",
     initial_sidebar_state="expanded"
