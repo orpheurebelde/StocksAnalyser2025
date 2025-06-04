@@ -380,10 +380,6 @@ def display_yearly_performance(ticker, title):
 
     # --- Handle timezone of Close index for YTD calculation ---
     try:
-        # Debug prints (remove or comment out in production)
-        st.write("Data index type:", type(data.index))
-        st.write("Data index tz info:", data.index.tz)
-
         # Localize or convert timezone as needed
         if data.index.tz is None or (hasattr(data.index.tz, 'zone') and data.index.tz.zone is None):
             data.index = data.index.tz_localize('America/New_York', ambiguous='infer')
