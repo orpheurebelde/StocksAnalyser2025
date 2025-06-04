@@ -392,24 +392,39 @@ def display_yearly_performance(ticker, title):
         start_of_current_year_utc = pd.Timestamp(current_year, 1, 1, tz='UTC')
         st.write(f"DEBUG: start_of_current_year_utc: {start_of_current_year_utc}")
 
-        # --- THE CRITICAL FIX IS HERE ---
-        # Explicitly create a Pandas Series from the boolean comparison,
-        # ensuring it has the same index as the original DataFrame.
         boolean_mask = pd.Series(processed_index >= start_of_current_year_utc, index=data.index)
         
-        st.write(f"DEBUG: Type of boolean_mask: {type(boolean_mask)}") # Should now be <class 'pandas.core.series.Series'>
-        st.write(f"DEBUG: Is boolean_mask empty: {boolean_mask.empty}") # This will now work
+        st.write(f"DEBUG: Type of boolean_mask: {type(boolean_mask)}")
+        st.write(f"DEBUG: Is boolean_mask empty: {boolean_mask.empty}")
         st.write(f"DEBUG: Length of boolean_mask: {len(boolean_mask)}")
         st.write(f"DEBUG: Sum of True in boolean_mask (should be >0 if current year data): {boolean_mask.sum()}")
-        st.write(f"DEBUG: boolean_mask head: {boolean_mask.head()}") # This will now work
-        st.write(f"DEBUG: boolean_mask tail: {boolean_mask.tail()}") # This will now work
+        st.write(f"DEBUG: boolean_mask head: {boolean_mask.head()}")
+        st.write(f"DEBUG: boolean_mask tail: {boolean_mask.tail()}")
 
-        # This line will now correctly receive a Pandas Series for filtering
         current_year_data_close = data.loc[boolean_mask, 'Close']
+
+        # --- NEW DEBUGGING STATEMENTS START HERE ---
+        st.write(f"DEBUG: Type of current_year_data_close: {type(current_year_data_close)}")
+        st.write(f"DEBUG: Is current_year_data_close empty: {current_year_data_close.empty}")
+        st.write(f"DEBUG: Length of current_year_data_close: {len(current_year_data_close)}")
+        if not current_year_data_close.empty: # Only try to print head/tail if not empty
+            st.write(f"DEBUG: current_year_data_close head: {current_year_data_close.head()}")
+            st.write(f"DEBUG: current_year_data_close tail: {current_year_data_close.tail()}")
+        # --- NEW DEBUGGING STATEMENTS END HERE ---
+
 
         if not current_year_data_close.empty:
             first_price = current_year_data_close.iloc[0]
             last_price = current_year_data_close.iloc[-1]
+
+            # --- NEW DEBUGGING STATEMENTS FOR PRICES ---
+            st.write(f"DEBUG: Type of first_price: {type(first_price)}")
+            st.write(f"DEBUG: first_price value: {first_price}")
+            st.write(f"DEBUG: Type of last_price: {type(last_price)}")
+            st.write(f"DEBUG: last_price value: {last_price}")
+            # --- END NEW DEBUGGING STATEMENTS ---
+
+            # The error is almost certainly in this 'if' condition
             if pd.notna(first_price) and first_price != 0:
                 current_performance = (last_price / first_price) - 1
             else:
