@@ -331,7 +331,7 @@ def display_monthly_performance(ticker, title):
         st.write("No data available for the current month.")
 
 # 9.--- MODIFIED `display_yearly_performance` function ---
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=3600) # Cache for 1 hour
 def display_yearly_performance(ticker, title):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
 
@@ -365,22 +365,26 @@ def display_yearly_performance(ticker, title):
         yearly_returns = pd.DataFrame(columns=['Yearly Return'])
 
     current_year = datetime.now().year
-    start_of_current_year = pd.Timestamp(current_year, 1, 1)
+    current_performance = None # Initialize current_performance
 
-    # --- Handle timezone of Close index for YTD calculation ---
+    # --- Handle timezone for YTD calculation and get current_performance ---
     try:
-        # Check if data.index has timezone info (should be None or tzinfo object)
-        if data.index.tz is None:
-            data.index = data.index.tz_localize('America/New_York', ambiguous='infer')
-        else:
-            data.index = data.index.tz_convert('UTC')
+        # Step 1: Ensure data.index is timezone-aware and in UTC
+        processed_index = data.index
+        if processed_index.tz is None:
+            # Localize to a common timezone for US markets (e.g., 'America/New_York' for S&P 500)
+            processed_index = processed_index.tz_localize('America/New_York', ambiguous='infer')
+        
+        # Convert to UTC for consistency with start_of_current_year
+        processed_index = processed_index.tz_convert('UTC')
 
-        # Set start_of_current_year with tz to match data.index timezone
-        if data.index.tz is not None:
-            start_of_current_year = start_of_current_year.tz_localize(data.index.tz)
+        # Step 2: Create start_of_current_year as UTC
+        start_of_current_year_utc = pd.Timestamp(current_year, 1, 1, tz='UTC')
 
-        # Select data since Jan 1 of current year
-        current_year_data_close = data.loc[data.index >= start_of_current_year, 'Close']
+        # Step 3: Filter data using the now consistently UTC index and timestamp
+        # The comparison `processed_index >= start_of_current_year_utc` will yield a boolean Series
+        # which is correctly used by .loc for filtering.
+        current_year_data_close = data.loc[processed_index >= start_of_current_year_utc, 'Close']
 
         if not current_year_data_close.empty:
             first_price = current_year_data_close.iloc[0]
