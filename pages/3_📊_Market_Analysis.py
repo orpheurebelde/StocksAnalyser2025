@@ -339,11 +339,11 @@ def display_yearly_performance(ticker, title):
     )
 
     data = yf.download(ticker, period="10y", interval="1d", progress=False)
-    if data.empty or len(data['Close']) < 2:
+    if data.empty or 'Close' not in data.columns:
         st.error(f"Not enough data to calculate yearly performance for {ticker}.")
         return
 
-    # Ensure datetime index is localized
+    # Ensure timezone
     if data.index.tz is None:
         data.index = data.index.tz_localize('America/New_York')
     else:
@@ -351,48 +351,47 @@ def display_yearly_performance(ticker, title):
 
     data = data.sort_index()
 
-    # --- Calculate yearly returns ---
+    # Calculate yearly returns
     try:
         yearly_returns = data['Close'].resample('Y').last().pct_change().dropna()
         yearly_returns.index = yearly_returns.index.year
     except Exception as e:
-        st.warning(f"Failed to calculate yearly returns: {e}")
-        yearly_returns = pd.Series(dtype=float)
+        st.error(f"Failed to calculate yearly returns: {e}")
+        return
 
     current_year = datetime.now().year
-    current_performance = None
+    last_year = current_year - 1
 
-    # --- Calculate YTD Performance ---
+    # Calculate YTD performance
+    current_performance = None
     try:
-        start_of_year = pd.Timestamp(f"{current_year}-01-01", tz='America/New_York')
-        current_year_data = data.loc[data.index >= start_of_year, 'Close']
-        if not current_year_data.empty:
-            first_price = current_year_data.iloc[0]
-            last_price = current_year_data.iloc[-1]
-            if pd.notna(first_price) and first_price != 0:
-                current_performance = (last_price / first_price) - 1
+        ytd_data = data.loc[data.index >= pd.Timestamp(f"{current_year}-01-01", tz='America/New_York'), 'Close']
+        if not ytd_data.empty:
+            start_price = ytd_data.iloc[0]
+            end_price = ytd_data.iloc[-1]
+            if pd.notna(start_price) and start_price != 0:
+                current_performance = float((end_price / start_price) - 1)
     except Exception as e:
         st.error(f"Error calculating YTD performance: {e}")
-        current_performance = None
 
-    # Fallback to yearly return if YTD not calculated
+    # Fallback to yearly return if needed
     if current_performance is None and current_year in yearly_returns.index:
-        current_performance = yearly_returns.loc[current_year]
+        current_performance = float(yearly_returns.loc[current_year])
 
-    last_year = current_year - 1
-    last_year_performance = yearly_returns.get(last_year)
+    # Last year performance
+    last_year_perf = float(yearly_returns.get(last_year, float('nan')))
 
-    # Historical max/min (excluding current year)
+    # Historical stats (exclude current year)
     completed_years = yearly_returns[yearly_returns.index < current_year]
-    historical_max = completed_years.max() if not completed_years.empty else 0
-    historical_min = completed_years.min() if not completed_years.empty else 0
+    historical_max = float(completed_years.max()) if not completed_years.empty else None
+    historical_min = float(completed_years.min()) if not completed_years.empty else None
 
-    # Categorize performance
+    # Classify category
     if current_performance is None:
         category = 'No Data'
-    elif current_performance > historical_max:
+    elif historical_max is not None and current_performance > historical_max:
         category = 'Highest'
-    elif current_performance < historical_min:
+    elif historical_min is not None and current_performance < historical_min:
         category = 'Lowest'
     else:
         category = 'Neutral'
@@ -400,10 +399,10 @@ def display_yearly_performance(ticker, title):
     # --- Display Section ---
     st.subheader(f"{title} - Yearly Performance")
 
-    if last_year_performance is not None:
-        color = 'green' if last_year_performance > 0 else 'red' if last_year_performance < 0 else 'orange'
+    if pd.notna(last_year_perf):
+        color = 'green' if last_year_perf > 0 else 'red' if last_year_perf < 0 else 'orange'
         st.markdown(
-            f"<span style='color:{color}; font-size:18px;'><strong>Last Year Performance ({last_year})</strong>: {last_year_performance * 100:.2f}%</span>",
+            f"<span style='color:{color}; font-size:18px;'><strong>Last Year Performance ({last_year})</strong>: {last_year_perf * 100:.2f}%</span>",
             unsafe_allow_html=True
         )
     else:
@@ -416,8 +415,9 @@ def display_yearly_performance(ticker, title):
             f"<span style='color:{color}; font-size:18px;'><strong>Current Year Performance ({current_year})</strong>: {current_performance * 100:.2f}%</span>",
             unsafe_allow_html=True
         )
-        st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
-        st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
+        if historical_max is not None and historical_min is not None:
+            st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
+            st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
         st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current year.")
