@@ -330,7 +330,7 @@ def display_monthly_performance(ticker, title):
     else:
         st.write("No data available for the current month.")
 
-# --- 9. `display_yearly_performance` function (Now with `@st.cache_data`) ---
+# 9.--- MODIFIED `display_yearly_performance` function ---
 @st.cache_data(ttl=3600) # Cache for 1 hour
 def display_yearly_performance(ticker, title):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
@@ -344,31 +344,36 @@ def display_yearly_performance(ticker, title):
     # Resample to yearly frequency and calculate yearly returns
     yearly_data = data['Close'].resample('Y').ffill()
     yearly_returns = yearly_data.pct_change().dropna()
-    yearly_returns.index = yearly_returns.index.year
-
-    if isinstance(yearly_returns, pd.Series):
-        yearly_returns = yearly_returns.to_frame()
-        yearly_returns.columns = ['Yearly Return']
-    else:
-        yearly_returns.columns = ['Yearly Return']
+    yearly_returns.index = yearly_returns.index.year # Set index to just the year (integer)
 
     current_year = datetime.now().year
     
-    # Get current year's performance
+    # --- Get Current Year Performance (YTD) ---
     current_performance = None
     if current_year in yearly_returns.index:
         current_performance = yearly_returns.loc[current_year, 'Yearly Return']
-    # If the current year's return is not fully available yet, calculate YTD explicitly
+    # If the current year's return is not fully available yet from resample (e.g., if today is early Jan),
+    # calculate YTD explicitly from start of year to current date.
     elif not data.empty:
-        start_of_current_year = pd.Timestamp(current_year, 1, 1)
-        current_year_data = data['Close'][data['Close'].index >= start_of_current_year]
-        if not current_year_data.empty and current_year_data.iloc[0] != 0:
-            current_performance = (current_year_data.iloc[-1] / current_year_data.iloc[0]) - 1
+        # Get start of current year
+        start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC') # Ensure timezone is consistent
+        # Filter data for current year and get the first and last close price
+        current_year_data_close = data['Close'][data['Close'].index.tz_convert('UTC') >= start_of_current_year]
+        if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
+            current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
+
+    # --- Get Last Year Performance ---
+    last_year = current_year - 1
+    last_year_performance = None
+    if last_year in yearly_returns.index:
+        last_year_performance = yearly_returns.loc[last_year, 'Yearly Return']
+
 
     historical_max = yearly_returns['Yearly Return'].max()
     historical_min = yearly_returns['Yearly Return'].min()
 
     # Categorize current performance
+    category = 'No Data'
     if current_performance is not None:
         if current_performance > historical_max:
             category = 'Highest'
@@ -376,19 +381,34 @@ def display_yearly_performance(ticker, title):
             category = 'Lowest'
         else:
             category = 'Neutral'
-    else:
-        category = 'No Data'
 
     st.subheader(f"{title} - Yearly Performance")
 
-    if current_performance is not None:
-        color = 'orange'
-        if current_performance > 0:
-            color = 'green'
-        elif current_performance < 0:
-            color = 'red'
+    # --- Display Last Year Performance ---
+    if last_year_performance is not None:
+        color_last_year = 'orange'
+        if last_year_performance > 0:
+            color_last_year = 'green'
+        elif last_year_performance < 0:
+            color_last_year = 'red'
+        st.markdown(
+            f"<span style='color:{color_last_year}; font-size:18px;'><strong>Last Year Performance ({last_year})</strong>: {last_year_performance * 100:.2f}%</span>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.write(f"No data available for last year ({last_year}).")
 
-        st.markdown(f"<span style='color:{color}; font-size:18px;'><strong>Current Year Performance</strong>: {current_performance * 100:.2f}%</span>", unsafe_allow_html=True)
+    # --- Display Current Year Performance ---
+    if current_performance is not None:
+        color_current_year = 'orange'
+        if current_performance > 0:
+            color_current_year = 'green'
+        elif current_performance < 0:
+            color_current_year = 'red'
+        st.markdown(
+            f"<span style='color:{color_current_year}; font-size:18px;'><strong>Current Year Performance ({current_year})</strong>: {current_performance * 100:.2f}%</span>",
+            unsafe_allow_html=True
+        )
         st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
         st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
         
