@@ -341,25 +341,28 @@ def display_yearly_performance(ticker, title):
         st.error(f"Could not fetch data for {ticker}")
         return
 
-    # 1. Calculate yearly_returns as a Series initially
+    # 1. Calculate yearly_data_series
     yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
     
-    # 2. Immediately convert to a DataFrame and name the column
-    # This is the crucial step to resolve the KeyError
-    yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
-    
-    # 3. Now set the index to just the year (integer)
-    yearly_returns.index = yearly_returns.index.year
+    # 2. ADD THIS CHECK: Ensure yearly_data_series is not empty before converting to DataFrame
+    if yearly_data_series.empty:
+        st.warning(f"Not enough historical data to calculate yearly returns for {ticker}. Displaying limited yearly performance.")
+        # Initialize yearly_returns as an empty DataFrame to avoid errors further down
+        yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[]) # Set index to empty list to avoid future .loc errors
+    else:
+        # 3. Convert to a DataFrame and name the column
+        yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
+        # 4. Set the index to just the year (integer)
+        yearly_returns.index = yearly_returns.index.year
 
     current_year = datetime.now().year
     
     # --- Get Current Year Performance (YTD) ---
     current_performance = None
     if current_year in yearly_returns.index:
-        # Now yearly_returns is definitely a DataFrame, so this .loc works
         current_performance = yearly_returns.loc[current_year, 'Yearly Return']
-    else: # If the current year is not in the resampled index (e.g., very start of the year with no daily data yet)
-        # This part handles the YTD from Jan 1st to current date directly from daily data.
+    else:
+        # Fallback for current year's YTD calculation directly from daily data
         start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
         current_year_data_close = data['Close'][data['Close'].index.tz_convert('UTC') >= start_of_current_year]
         if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
@@ -368,7 +371,6 @@ def display_yearly_performance(ticker, title):
     # --- Get Last Year Performance ---
     last_year = current_year - 1
     last_year_performance = None
-    # Check if last_year is in the DataFrame index before accessing
     if last_year in yearly_returns.index:
         last_year_performance = yearly_returns.loc[last_year, 'Yearly Return']
 
@@ -382,9 +384,6 @@ def display_yearly_performance(ticker, title):
     if not completed_yearly_returns.empty:
         historical_max = completed_yearly_returns['Yearly Return'].max()
         historical_min = completed_yearly_returns['Yearly Return'].min()
-    # else: If you want to use NaN or another indicator for no historical data
-    #      historical_max = np.nan
-    #      historical_min = np.nan
 
     # Categorize current performance
     category = 'No Data'
