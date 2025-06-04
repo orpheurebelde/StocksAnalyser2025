@@ -331,12 +331,7 @@ def display_monthly_performance(ticker, title):
         st.write("No data available for the current month.")
 
 # 9.--- MODIFIED `display_yearly_performance` function ---
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-from datetime import datetime
-
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=3600)
 def display_yearly_performance(ticker, title):
     st.markdown(
         f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
@@ -348,34 +343,29 @@ def display_yearly_performance(ticker, title):
         st.error(f"Not enough data to calculate yearly performance for {ticker}.")
         return
 
-    data = data.sort_index()
-    if not isinstance(data.index, pd.DatetimeIndex):
-        st.error("Data index is not datetime.")
-        return
+    # Ensure datetime index is localized
+    if data.index.tz is None:
+        data.index = data.index.tz_localize('America/New_York')
+    else:
+        data.index = data.index.tz_convert('America/New_York')
 
-    # Calculate yearly returns
+    data = data.sort_index()
+
+    # --- Calculate yearly returns ---
     try:
-        yearly_data = data['Close'].resample('Y').ffill().pct_change().dropna()
-        yearly_returns = yearly_data.to_frame(name='Yearly Return')
+        yearly_returns = data['Close'].resample('Y').last().pct_change().dropna()
         yearly_returns.index = yearly_returns.index.year
     except Exception as e:
         st.warning(f"Failed to calculate yearly returns: {e}")
-        yearly_returns = pd.DataFrame(columns=['Yearly Return'])
+        yearly_returns = pd.Series(dtype=float)
 
     current_year = datetime.now().year
     current_performance = None
 
-    # Calculate Year-to-Date (YTD) performance
+    # --- Calculate YTD Performance ---
     try:
-        index = data.index
-        if index.tz is None:
-            index = index.tz_localize('America/New_York', ambiguous='infer')
-        index = index.tz_convert('UTC')
-        data.index = index  # Set back into data
-
-        start_of_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
+        start_of_year = pd.Timestamp(f"{current_year}-01-01", tz='America/New_York')
         current_year_data = data.loc[data.index >= start_of_year, 'Close']
-
         if not current_year_data.empty:
             first_price = current_year_data.iloc[0]
             last_price = current_year_data.iloc[-1]
@@ -385,20 +375,19 @@ def display_yearly_performance(ticker, title):
         st.error(f"Error calculating YTD performance: {e}")
         current_performance = None
 
-    # Fallback to yearly returns if YTD unavailable
+    # Fallback to yearly return if YTD not calculated
     if current_performance is None and current_year in yearly_returns.index:
-        current_performance = yearly_returns.loc[current_year, 'Yearly Return']
+        current_performance = yearly_returns.loc[current_year]
 
-    # Last year performance
     last_year = current_year - 1
-    last_year_performance = yearly_returns.loc[last_year, 'Yearly Return'] if last_year in yearly_returns.index else None
+    last_year_performance = yearly_returns.get(last_year)
 
-    # Historical performance
+    # Historical max/min (excluding current year)
     completed_years = yearly_returns[yearly_returns.index < current_year]
-    historical_max = completed_years['Yearly Return'].max() if not completed_years.empty else 0
-    historical_min = completed_years['Yearly Return'].min() if not completed_years.empty else 0
+    historical_max = completed_years.max() if not completed_years.empty else 0
+    historical_min = completed_years.min() if not completed_years.empty else 0
 
-    # Categorize current performance
+    # Categorize performance
     if current_performance is None:
         category = 'No Data'
     elif current_performance > historical_max:
@@ -408,7 +397,7 @@ def display_yearly_performance(ticker, title):
     else:
         category = 'Neutral'
 
-    # Display results
+    # --- Display Section ---
     st.subheader(f"{title} - Yearly Performance")
 
     if last_year_performance is not None:
