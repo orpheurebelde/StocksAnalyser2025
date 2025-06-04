@@ -340,8 +340,16 @@ def display_yearly_performance(ticker, title):
         st.error(f"Could not fetch data for {ticker}")
         return
 
+    # --- ADD THIS CRITICAL CHECK ---
+    # Need at least two data points for any percentage change calculation or YTD comparison
+    if len(data['Close']) < 2:
+        st.warning(f"Not enough daily data ({len(data['Close'])} points) to calculate yearly performance for {ticker}. Skipping yearly display.")
+        # Return early as no meaningful yearly performance can be calculated
+        return
+
     # Ensure index is datetime and sorted
-    data = data.sort_index()
+    data = data.sort_index(ascending=True) # Ensure it's sorted for iloc later
+
     if not isinstance(data.index, pd.DatetimeIndex):
         st.error("Data index is not a datetime index.")
         return
@@ -369,21 +377,16 @@ def display_yearly_performance(ticker, title):
 
     # --- Handle timezone for YTD calculation and get current_performance ---
     try:
-        # Step 1: Ensure data.index is timezone-aware and in UTC
         processed_index = data.index
         if processed_index.tz is None:
-            # Localize to a common timezone for US markets (e.g., 'America/New_York' for S&P 500)
             processed_index = processed_index.tz_localize('America/New_York', ambiguous='infer')
         
-        # Convert to UTC for consistency with start_of_current_year
         processed_index = processed_index.tz_convert('UTC')
 
-        # Step 2: Create start_of_current_year as UTC
         start_of_current_year_utc = pd.Timestamp(current_year, 1, 1, tz='UTC')
 
-        # Step 3: Filter data using the now consistently UTC index and timestamp
-        # The comparison `processed_index >= start_of_current_year_utc` will yield a boolean Series
-        # which is correctly used by .loc for filtering.
+        # The comparison `processed_index >= start_of_current_year_utc` will now always
+        # result in a boolean Series with length >= 2, avoiding the ambiguity error.
         current_year_data_close = data.loc[processed_index >= start_of_current_year_utc, 'Close']
 
         if not current_year_data_close.empty:
