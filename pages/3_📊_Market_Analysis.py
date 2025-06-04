@@ -215,16 +215,20 @@ def show_indicators(ticker, title):
 
 
 # --- 6. `fetch_monthly_returns` function (corrected `yf.download` caching) ---
-@st.cache_data(ttl=3600) # Cache for 1 hour
+# --- MODIFIED `fetch_monthly_returns` function ---
+# Now returns both the full monthly_returns DataFrame AND the daily close prices
+@st.cache_data(ttl=3600) # Cache for 1 hour; adjust as needed
 def fetch_monthly_returns(ticker):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Monthly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
     
-    data = yf.download(ticker, period="10y", interval="1d", progress=False) # Data fetching here
+    # Fetch daily data for a sufficiently long period
+    data = yf.download(ticker, period="10y", interval="1d", progress=False) 
     
     if data.empty:
         st.error(f"Could not fetch data for {ticker}")
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.Series() # Return empty DataFrame and Series
 
+    # Resample to monthly frequency (end-of-month prices) for historical monthly returns
     monthly_data = data['Close'].resample('M').ffill()
     monthly_returns = monthly_data.pct_change().dropna()
 
@@ -236,81 +240,93 @@ def fetch_monthly_returns(ticker):
     df['Year'] = df.index.year
     df['Month'] = df.index.month
 
-    return df
+    # Return the DataFrame of historical monthly returns AND the daily close prices
+    return df, data['Close']
 
-# --- 7. `analyze_monthly_performance` (no caching needed here, it processes cached data) ---
-def analyze_monthly_performance(monthly_returns):
-    current_year = datetime.now().year
-    current_month = datetime.now().month # This will be the month you are running the app in
 
-    # Adjusting to get the last *complete* month's performance if running mid-month,
-    # or the current month's performance if you expect it to update intraday.
-    # For a refresh button, it makes sense to get the latest available.
-    
-    # Get the last entry that is not in the current future
-    filtered_data = monthly_returns[monthly_returns.index <= pd.Timestamp.now().to_period('M').start_time]
+# --- MODIFIED `analyze_monthly_performance` function ---
+# It now takes only the monthly_returns_df
+def analyze_monthly_performance(monthly_returns_df):
+    if monthly_returns_df.empty:
+        return None, None, None, None, 'No Data' # current_perf, last_perf, hist_max, hist_min, category_current
 
-    current_month_data = filtered_data[
-        (filtered_data['Year'] == current_year) & 
-        (filtered_data['Month'] == current_month)
-    ]
+    # The last entry in monthly_returns_df represents the performance
+    # from the last day of the previous month to the latest available day of the current month.
+    current_month_perf = monthly_returns_df.iloc[-1]['Monthly Return']
 
-    if current_month_data.empty:
-        # If current month data is empty, try to get the last available full month
-        if not filtered_data.empty:
-            last_month_data = filtered_data.iloc[-1]
-            current_performance = last_month_data['Monthly Return']
-            # Optionally update category to reflect it's for the last complete month
-            # category = 'Last Month'
+    # The second-to-last entry represents the last complete month's performance.
+    # Ensure there are at least two months of data before trying to access iloc[-2]
+    last_month_perf = None
+    if len(monthly_returns_df) >= 2:
+        last_month_perf = monthly_returns_df.iloc[-2]['Monthly Return']
+
+    # Historical max/min (consider all fetched monthly data, including current partial)
+    historical_max = monthly_returns_df['Monthly Return'].max()
+    historical_min = monthly_returns_df['Monthly Return'].min()
+
+    # Determine category for current month's performance
+    category_current = 'No Data'
+    if current_month_perf is not None:
+        if current_month_perf > historical_max:
+            category_current = 'Highest (Current Month)'
+        elif current_month_perf < historical_min:
+            category_current = 'Lowest (Current Month)'
         else:
-            current_performance = None
-            
-    else:
-        current_performance = current_month_data['Monthly Return'].values[0]
+            category_current = 'Neutral (Current Month)'
 
-    historical_max = monthly_returns['Monthly Return'].max()
-    historical_min = monthly_returns['Monthly Return'].min()
+    # Return current month's performance, last month's performance, historical max/min, and current category
+    return current_month_perf, last_month_perf, historical_max, historical_min, category_current
 
-    if current_performance is not None:
-        if current_performance > historical_max:
-            category = 'Highest'
-        elif current_performance < historical_min:
-            category = 'Lowest'
-        else:
-            category = 'Neutral'
-    else:
-        category = 'No Data'
 
-    return current_performance, historical_max, historical_min, category
-
-# --- 8. `display_monthly_performance` (no caching needed here) ---
+# --- MODIFIED `display_monthly_performance` function ---
 def display_monthly_performance(ticker, title):
-    monthly_returns = fetch_monthly_returns(ticker) # Calls the cached function
-    if monthly_returns.empty or 'Monthly Return' not in monthly_returns.columns:
-        st.error(f"Could not fetch monthly data for {ticker}")
+    # Fetch only monthly_returns_df, we don't need daily_close_prices here anymore
+    # Use _ to discard the second return value (daily_close_prices) if it's not used here
+    monthly_returns_df, _ = fetch_monthly_returns(ticker)
+    
+    if monthly_returns_df.empty or 'Monthly Return' not in monthly_returns_df.columns:
+        st.error(f"Could not fetch data for {ticker}")
         return
 
-    current_performance, historical_max, historical_min, category = analyze_monthly_performance(monthly_returns)
+    # Call the modified analyze_monthly_performance
+    current_performance, last_month_performance, historical_max, historical_min, category_current = analyze_monthly_performance(monthly_returns_df)
 
     st.subheader(f"{title} - Monthly Performance")
-    if current_performance is not None:
-        colorM = 'orange' # Default
-        if current_performance > 0:
-            colorM = 'green'
-        elif current_performance < 0:
-            colorM = 'red'
 
-        st.markdown(f"<span style='color:{colorM}; font-size:18px;'><strong>Current Month Performance</strong>: {current_performance * 100:.2f}%</span>", unsafe_allow_html=True)
+    # Display Last Month Performance
+    if last_month_performance is not None:
+        color_last_month = 'orange'
+        if last_month_performance > 0:
+            color_last_month = 'green'
+        elif last_month_performance < 0:
+            color_last_month = 'red'
+        st.markdown(
+            f"<span style='color:{color_last_month}; font-size:18px;'><strong>Last Month Performance</strong>: {last_month_performance * 100:.2f}%</span>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.write("No data available for the last complete month.")
+
+    # Display Current Month Performance
+    if current_performance is not None:
+        color_current_month = 'orange'
+        if current_performance > 0:
+            color_current_month = 'green'
+        elif current_performance < 0:
+            color_current_month = 'red'
+        st.markdown(
+            f"<span style='color:{color_current_month}; font-size:18px;'><strong>Current Month Performance</strong>: {current_performance * 100:.2f}%</span>",
+            unsafe_allow_html=True
+        )
         st.write(f"**Historical Max Monthly Return**: {historical_max * 100:.2f}%")
         st.write(f"**Historical Min Monthly Return**: {historical_min * 100:.2f}%")
         
-        # Display category with color
         cat_color = 'orange'
-        if category == 'Highest':
+        if 'Highest' in category_current:
             cat_color = 'green'
-        elif category == 'Lowest':
+        elif 'Lowest' in category_current:
             cat_color = 'red'
-        st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
+        st.markdown(f"<span style='color:{cat_color};'>**Category**: {category_current}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current month.")
 
