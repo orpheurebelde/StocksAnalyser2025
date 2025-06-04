@@ -196,7 +196,9 @@ def show_indicators(ticker, title):
     <div><strong>Fibonacci Level (3Y Range)</strong>: {fib_level_3y:.2f}% - {fib_comment_3y}</div>
     <div><strong>Fibonacci Level (5Y Range)</strong>: {fib_level_5y:.2f}%</div>
     <div><strong>Fibonacci Level (10Y Range)</strong>: {fib_level_10y:.2f}%</div>
-    <hr style='border: 1px solid #444;' />
+    <div>
+    <div style='height: 20px;'></div>
+    </div>
     </div>
     """, unsafe_allow_html=True)
 
