@@ -6,6 +6,34 @@ from datetime import datetime
 
 st.title("📈 Market Analysis | Buy Signals")
 
+#add refresh button for indicators aligned with the top right of the page
+st.markdown("""
+<style>
+    .stButton button {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #4CAF50; /* Green */
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;  
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+    .stButton button:hover {
+        background-color: #45a049; /* Darker green on hover */
+    }
+</style>
+""", unsafe_allow_html=True)
+# Add a refresh button and clear the cache when clicked 
+if st.button("Refresh Indicators"):
+    st.rerun()  # This will refresh the page and re-run the script
+
 # Define tickers
 tickers = {
     "S&P 500": "^GSPC",
