@@ -331,11 +331,6 @@ def display_monthly_performance(ticker, title):
         st.write("No data available for the current month.")
 
 # 9.--- MODIFIED `display_yearly_performance` function ---
-import streamlit as st
-import pandas as pd
-import yfinance as yf
-from datetime import datetime
-
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def display_yearly_performance(ticker, title):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
@@ -354,47 +349,53 @@ def display_yearly_performance(ticker, title):
 
     # --- Calculate yearly returns ---
     try:
-        yearly_data = data['Close'].resample('Y').ffill().pct_change().dropna()
+        yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
 
-        if isinstance(yearly_data, pd.Series):
-            yearly_returns = yearly_data.to_frame(name='Yearly Return')
-        elif isinstance(yearly_data, pd.DataFrame):
-            yearly_returns = yearly_data.rename(columns={yearly_data.columns[0]: 'Yearly Return'})
+        if isinstance(yearly_data_series, pd.DataFrame):
+            yearly_returns = yearly_data_series.copy()
+            yearly_returns.columns = ['Yearly Return']
+            yearly_returns.index = yearly_returns.index.year
+        elif isinstance(yearly_data_series, pd.Series) and not yearly_data_series.empty:
+            yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
+            yearly_returns.index = yearly_returns.index.year
         else:
-            yearly_returns = pd.DataFrame(columns=['Yearly Return'])
-
-        yearly_returns.index = yearly_returns.index.year
-
+            st.warning(f"Not enough complete historical data to calculate yearly returns for {ticker}. Displaying limited yearly performance.")
+            yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[])
     except Exception as e:
         st.warning(f"Could not calculate yearly returns: {e}")
+        yearly_data_series = pd.Series()
         yearly_returns = pd.DataFrame(columns=['Yearly Return'])
 
-    if yearly_returns.empty:
+    if yearly_data_series.empty:
         st.warning(f"Not enough historical data to calculate yearly returns for {ticker}.")
-        return
+        yearly_returns = pd.DataFrame(columns=['Yearly Return'])
 
     current_year = datetime.now().year
-    start_of_current_year = pd.Timestamp(f'{current_year}-01-01')
+    start_of_current_year = pd.Timestamp(current_year, 1, 1)
 
     # --- Handle timezone of Close index for YTD calculation ---
     try:
-        close_series = data['Close']
-        close_index = close_series.index
+        close_index = data.index
 
         # Localize if naive
         if close_index.tz is None:
-            close_series.index = close_index.tz_localize('America/New_York', ambiguous='infer')
+            close_index = close_index.tz_localize('America/New_York', ambiguous='infer')
 
         # Convert to UTC
-        close_series.index = close_series.index.tz_convert('UTC')
+        close_index_utc = close_index.tz_convert('UTC')
+        data.index = close_index_utc  # Update the full DataFrame index
 
-        # Convert comparison timestamp to UTC
+        # Select only this year's data
         start_of_current_year = start_of_current_year.tz_localize('UTC')
+        current_year_data_close = data['Close'][data.index >= start_of_current_year]
 
-        current_year_data_close = close_series[close_series.index >= start_of_current_year]
-
-        if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
-            current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
+        if not current_year_data_close.empty:
+            first_price = current_year_data_close.iloc[0]
+            last_price = current_year_data_close.iloc[-1]
+            if pd.notna(first_price) and first_price != 0:
+                current_performance = (last_price / first_price) - 1
+            else:
+                current_performance = None
         else:
             current_performance = None
 
