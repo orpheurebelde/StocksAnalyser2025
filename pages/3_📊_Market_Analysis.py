@@ -375,18 +375,15 @@ def display_yearly_performance(ticker, title):
 
     # --- Handle timezone of Close index for YTD calculation ---
     try:
-        close_index = data.index
+        if data.index.tz is None:
+            # Localize to US Eastern time (matching NYSE)
+            data.index = data.index.tz_localize('America/New_York', ambiguous='infer')
+        else:
+            # Convert to UTC for consistency
+            data.index = data.index.tz_convert('UTC')
 
-        # Localize if naive
-        if close_index.tz is None:
-            close_index = close_index.tz_localize('America/New_York', ambiguous='infer')
-
-        # Convert to UTC
-        close_index_utc = close_index.tz_convert('UTC')
-        data.index = close_index_utc  # Update the full DataFrame index
-
-        # Select only this year's data
-        start_of_current_year = start_of_current_year.tz_localize('UTC')
+        # Select data since Jan 1 of current year
+        start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
         current_year_data_close = data['Close'][data.index >= start_of_current_year]
 
         if not current_year_data_close.empty:
