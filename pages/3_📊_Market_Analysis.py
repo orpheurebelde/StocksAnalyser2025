@@ -333,7 +333,10 @@ def display_monthly_performance(ticker, title):
 # 9.--- MODIFIED `display_yearly_performance` function ---
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def display_yearly_performance(ticker, title):
-    st.markdown(f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
+    st.markdown(
+        f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
+        unsafe_allow_html=True
+    )
 
     # --- Fetch historical data for the past 10 years ---
     data = yf.download(ticker, period="10y", interval="1d", progress=False)
@@ -344,8 +347,11 @@ def display_yearly_performance(ticker, title):
     # Ensure index is datetime and sorted
     data = data.sort_index()
     if not isinstance(data.index, pd.DatetimeIndex):
-        st.error("Data index is not a datetime index.")
-        return
+        try:
+            data.index = pd.to_datetime(data.index)
+        except Exception as e:
+            st.error(f"Could not convert index to datetime: {e}")
+            return
 
     # --- Calculate yearly returns ---
     try:
@@ -363,7 +369,7 @@ def display_yearly_performance(ticker, title):
             yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[])
     except Exception as e:
         st.warning(f"Could not calculate yearly returns: {e}")
-        yearly_data_series = pd.Series()
+        yearly_data_series = pd.Series(dtype=float)
         yearly_returns = pd.DataFrame(columns=['Yearly Return'])
 
     if yearly_data_series.empty:
@@ -371,23 +377,25 @@ def display_yearly_performance(ticker, title):
         yearly_returns = pd.DataFrame(columns=['Yearly Return'])
 
     current_year = datetime.now().year
-    start_of_current_year = pd.Timestamp(current_year, 1, 1)
 
     # --- Handle timezone of Close index for YTD calculation ---
     try:
-        if not isinstance(data.index, pd.DatetimeIndex):
-            st.error("Data index is not a valid DatetimeIndex.")
-            return
+        # Debug prints (remove or comment out in production)
+        st.write("Data index type:", type(data.index))
+        st.write("Data index tz info:", data.index.tz)
 
-        if data.index.tz is None or data.index.tz is pd.NaT:
-            # Localize naive datetime index to US Eastern time (matching NYSE)
+        # Localize or convert timezone as needed
+        if data.index.tz is None or (hasattr(data.index.tz, 'zone') and data.index.tz.zone is None):
             data.index = data.index.tz_localize('America/New_York', ambiguous='infer')
         else:
-            # Convert timezone-aware index to UTC for consistency
             data.index = data.index.tz_convert('UTC')
 
-        # Select data since Jan 1 of current year
-        start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
+        # Make sure start_of_current_year has the same timezone as data.index
+        start_of_current_year = pd.Timestamp(current_year, 1, 1)
+        if data.index.tz is not None:
+            start_of_current_year = start_of_current_year.tz_localize(data.index.tz)
+
+        # Select Close prices from the start of the current year onwards
         current_year_data_close = data['Close'][data.index >= start_of_current_year]
 
         if not current_year_data_close.empty:
