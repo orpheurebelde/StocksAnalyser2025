@@ -87,6 +87,18 @@ def show_indicators(ticker, title):
     # Fibonacci context (3Y)
     fib_comment_3y = "Above 3Y Fib Level (Breakout)" if price > fib_level_3y else "Below 3Y Fib Level (Support)"
 
+    # Define a helper function to get the color
+    def get_color(value):
+        return "green" if value >= 0 else "red"
+
+    # Calculate percentages once to make the code cleaner
+    p1d = close.pct_change().iloc[-1] * 100
+    p5d = close.pct_change(5).iloc[-1] * 100
+    p1m = close.pct_change(21).iloc[-1] * 100
+    p6m = close.pct_change(126).iloc[-1] * 100
+    p1y = close.pct_change(252).iloc[-1] * 100
+    p5y = close.pct_change(1260).iloc[-1] * 100
+
     st.subheader(title)
     st.markdown(f"""
     <div style='font-size:16px; line-height:1.6;'>
@@ -110,12 +122,12 @@ def show_indicators(ticker, title):
     <div><strong>YTD %</strong>: {ytd:.2f}% 
         (<span style='color:{ytd_color}; font-size:18px;'> {ytd_signal}</span>)
     </div>
-    <div><strong>1D %</strong>: {close.pct_change().iloc[-1]*100:.2f}%</div>
-    <div><strong>5D %</strong>: {close.pct_change(5).iloc[-1]*100:.2f}%</div>
-    <div><strong>1M %</strong>: {close.pct_change(21).iloc[-1]*100:.2f}%</div>
-    <div><strong>6M %</strong>: {close.pct_change(126).iloc[-1]*100:.2f}%</div>
-    <div><strong>1Y %</strong>: {close.pct_change(252).iloc[-1]*100:.2f}%</div>
-    <div><strong>5Y %</strong>: {close.pct_change(1260).iloc[-1]*100:.2f}%</div>
+    <div><strong>1D %</strong>: <span style="color: {get_color(p1d)};">{p1d:.2f}%</div>
+    <div><strong>5D %</strong>: <span style="color: {get_color(p5d)};">{p5d:.2f}%</div>
+    <div><strong>1M %</strong>: <span style="color: {get_color(p1m)};">{p1m:.2f}%</div>
+    <div><strong>6M %</strong>: <span style="color: {get_color(p6m)};">{p6m:.2f}%</div>
+    <div><strong>1Y %</strong>: <span style="color: {get_color(p1y)};">{p1y:.2f}%</div>
+    <div><strong>5Y %</strong>: <span style="color: {get_color(p5y)};">{p5y:.2f}%</div>
     <hr style='border: 1px solid #444;' />
     <div><strong>Fibonacci Level (3Y Range)</strong>: {fib_level_3y:.2f}% - {fib_comment_3y}</div>
     <div><strong>Fibonacci Level (5Y Range)</strong>: {fib_level_5y:.2f}%</div>
