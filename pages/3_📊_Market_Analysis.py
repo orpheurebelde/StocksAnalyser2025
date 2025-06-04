@@ -331,11 +331,6 @@ def display_monthly_performance(ticker, title):
         st.write("No data available for the current month.")
 
 # 9.--- MODIFIED `display_yearly_performance` function ---
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-from datetime import datetime
-
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def display_yearly_performance(ticker, title):
     st.markdown(
@@ -349,21 +344,16 @@ def display_yearly_performance(ticker, title):
         st.error(f"Could not fetch data for {ticker}")
         return
 
-    # Ensure index is datetime and sorted
+    # Ensure index is datetime and sort
     data = data.sort_index()
     if not isinstance(data.index, pd.DatetimeIndex):
         st.error("Data index is not a datetime index.")
         return
 
-    # Extract single column series if needed
-    close_prices = data['Close']
-    if isinstance(close_prices, pd.DataFrame):
-        close_prices = close_prices.iloc[:, 0]
-
     # --- Calculate yearly returns ---
     try:
-        yearly_data_series = close_prices.resample('Y').ffill().pct_change().dropna()
-
+        yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
+        # Ensure it's a Series before converting to DataFrame
         if isinstance(yearly_data_series, pd.DataFrame):
             yearly_returns = yearly_data_series.copy()
             yearly_returns.columns = ['Yearly Return']
@@ -376,27 +366,33 @@ def display_yearly_performance(ticker, title):
             yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[])
     except Exception as e:
         st.warning(f"Could not calculate yearly returns: {e}")
+        yearly_data_series = pd.Series()
+
+    if yearly_data_series.empty:
+        st.warning(f"Not enough historical data to calculate yearly returns for {ticker}.")
         yearly_returns = pd.DataFrame(columns=['Yearly Return'])
+    else:
+        yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
+        yearly_returns.index = yearly_returns.index.year
 
     current_year = datetime.now().year
     start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
 
     # --- Handle timezone of Close index for YTD calculation ---
     try:
-        close_index = data['Close'].index
+        # Localize or convert the entire DataFrame index
+        if data.index.tz is None:
+            data.index = data.index.tz_localize('America/New_York', ambiguous='infer')
 
-        if close_index.tz is None:
-            close_index = close_index.tz_localize('America/New_York', ambiguous='infer')
+        data.index = data.index.tz_convert('UTC')  # Ensure UTC for comparison
 
-        close_index_utc = close_index.tz_convert('UTC')
-        data['Close'].index = close_index_utc
-
-        current_year_data_close = data['Close'][data['Close'].index >= start_of_current_year]
+        current_year_data_close = data['Close'][data.index >= start_of_current_year]
 
         if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
             current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
         else:
             current_performance = None
+
     except Exception as e:
         st.error(f"Error handling timezone or calculating YTD: {e}")
         current_performance = None
