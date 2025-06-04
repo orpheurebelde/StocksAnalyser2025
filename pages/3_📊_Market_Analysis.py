@@ -28,9 +28,10 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-# Add a refresh button and clear the cache when clicked 
+# Add a refresh button and clear the cache when clicked
 if st.button("Refresh Indicators"):
-    st.rerun()  # This will refresh the page and re-run the script
+    st.cache_data.clear()  # Clear the cache to refresh indicators
+    st.success("Indicators refreshed successfully!")
 
 st.title("📈 Market Analysis | Buy Signals")
 
