@@ -36,8 +36,7 @@ if st.button("Refresh Indicators"):
     st.success("Indicators refreshed successfully! Rerunning...")
     st.rerun()
 
-# Set page title and icon
-st.set_page_config(page_title="📈 Market Analysis | Buy Signals", page_icon="📈", layout="wide")
+st.title("📈 Market Analysis | Buy Signals")
 
 # Define tickers
 tickers = {
