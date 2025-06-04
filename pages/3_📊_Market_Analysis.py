@@ -331,125 +331,74 @@ def display_monthly_performance(ticker, title):
         st.write("No data available for the current month.")
 
 # 9.--- MODIFIED `display_yearly_performance` function ---
-@st.cache_data(ttl=3600) # Cache for 1 hour
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+from datetime import datetime
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def display_yearly_performance(ticker, title):
-    st.markdown(f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
+    st.markdown(
+        f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
+        unsafe_allow_html=True
+    )
 
     data = yf.download(ticker, period="10y", interval="1d", progress=False)
-    if data.empty:
-        st.error(f"Could not fetch data for {ticker}")
+    if data.empty or len(data['Close']) < 2:
+        st.error(f"Not enough data to calculate yearly performance for {ticker}.")
         return
 
-    if len(data['Close']) < 2:
-        st.warning(f"Not enough daily data ({len(data['Close'])} points) to calculate yearly performance for {ticker}. Skipping yearly display.")
-        return
-
-    data = data.sort_index(ascending=True)
-
+    data = data.sort_index()
     if not isinstance(data.index, pd.DatetimeIndex):
-        st.error("Data index is not a datetime index.")
+        st.error("Data index is not datetime.")
         return
 
+    # Calculate yearly returns
     try:
-        yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
-
-        if isinstance(yearly_data_series, pd.DataFrame):
-            yearly_returns = yearly_data_series.copy()
-            yearly_returns.columns = ['Yearly Return']
-            yearly_returns.index = yearly_returns.index.year
-        elif isinstance(yearly_data_series, pd.Series) and not yearly_data_series.empty:
-            yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
-            yearly_returns.index = yearly_returns.index.year
-        else:
-            st.warning(f"Not enough complete historical data to calculate yearly returns for {ticker}. Displaying limited yearly performance.")
-            yearly_returns = pd.DataFrame(columns=['Yearly Return'])
+        yearly_data = data['Close'].resample('Y').ffill().pct_change().dropna()
+        yearly_returns = yearly_data.to_frame(name='Yearly Return')
+        yearly_returns.index = yearly_returns.index.year
     except Exception as e:
-        st.warning(f"Could not calculate yearly returns: {e}")
+        st.warning(f"Failed to calculate yearly returns: {e}")
         yearly_returns = pd.DataFrame(columns=['Yearly Return'])
 
     current_year = datetime.now().year
     current_performance = None
 
-    # --- Handle timezone for YTD calculation and get current_performance ---
+    # Calculate Year-to-Date (YTD) performance
     try:
-        processed_index = data.index
-        
-        st.write("--- DEBUGGING YTD CALCULATION ---")
-        st.write(f"DEBUG: Type of processed_index: {type(processed_index)}")
-        st.write(f"DEBUG: Initial data.index.tz: {processed_index.tz}")
-        st.write(f"DEBUG: Initial data.index first 5 elements: {processed_index[:5]}")
-        st.write(f"DEBUG: Length of data.index: {len(processed_index)}")
+        index = data.index
+        if index.tz is None:
+            index = index.tz_localize('America/New_York', ambiguous='infer')
+        index = index.tz_convert('UTC')
+        data.index = index  # Set back into data
 
-        if processed_index.tz is None:
-            processed_index = processed_index.tz_localize('America/New_York', ambiguous='infer')
-            st.write(f"DEBUG: After tz_localize, processed_index.tz: {processed_index.tz}")
-            st.write(f"DEBUG: After tz_localize, processed_index head: {processed_index[:5]}")
-        
-        processed_index = processed_index.tz_convert('UTC')
-        st.write(f"DEBUG: After tz_convert, processed_index.tz: {processed_index.tz}")
-        st.write(f"DEBUG: After tz_convert, processed_index head: {processed_index[:5]}")
+        start_of_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
+        current_year_data = data.loc[data.index >= start_of_year, 'Close']
 
-        start_of_current_year_utc = pd.Timestamp(current_year, 1, 1, tz='UTC')
-        st.write(f"DEBUG: start_of_current_year_utc: {start_of_current_year_utc}")
-
-        boolean_mask = pd.Series(processed_index >= start_of_current_year_utc, index=data.index)
-        
-        st.write(f"DEBUG: Type of boolean_mask: {type(boolean_mask)}")
-        st.write(f"DEBUG: Is boolean_mask empty: {boolean_mask.empty}")
-        st.write(f"DEBUG: Length of boolean_mask: {len(boolean_mask)}")
-        st.write(f"DEBUG: Sum of True in boolean_mask (should be >0 if current year data): {boolean_mask.sum()}")
-        st.write(f"DEBUG: boolean_mask head: {boolean_mask.head()}")
-        st.write(f"DEBUG: boolean_mask tail: {boolean_mask.tail()}")
-
-        current_year_data_close = data.loc[boolean_mask, 'Close']
-
-        # --- NEW DEBUGGING STATEMENTS START HERE ---
-        st.write(f"DEBUG: Type of current_year_data_close: {type(current_year_data_close)}")
-        st.write(f"DEBUG: Is current_year_data_close empty: {current_year_data_close.empty}")
-        st.write(f"DEBUG: Length of current_year_data_close: {len(current_year_data_close)}")
-        if not current_year_data_close.empty: # Only try to print head/tail if not empty
-            st.write(f"DEBUG: current_year_data_close head: {current_year_data_close.head()}")
-            st.write(f"DEBUG: current_year_data_close tail: {current_year_data_close.tail()}")
-        # --- NEW DEBUGGING STATEMENTS END HERE ---
-
-
-        if not current_year_data_close.empty:
-            first_price = current_year_data_close.iloc[0]
-            last_price = current_year_data_close.iloc[-1]
-
-            # --- NEW DEBUGGING STATEMENTS FOR PRICES ---
-            st.write(f"DEBUG: Type of first_price: {type(first_price)}")
-            st.write(f"DEBUG: first_price value: {first_price}")
-            st.write(f"DEBUG: Type of last_price: {type(last_price)}")
-            st.write(f"DEBUG: last_price value: {last_price}")
-            # --- END NEW DEBUGGING STATEMENTS ---
-
-            # The error is almost certainly in this 'if' condition
+        if not current_year_data.empty:
+            first_price = current_year_data.iloc[0]
+            last_price = current_year_data.iloc[-1]
             if pd.notna(first_price) and first_price != 0:
                 current_performance = (last_price / first_price) - 1
-            else:
-                current_performance = None
-        else:
-            current_performance = None
-
     except Exception as e:
-        st.error(f"Error handling timezone or calculating YTD: {e}")
+        st.error(f"Error calculating YTD performance: {e}")
         current_performance = None
 
-    # --- Fallback: use yearly returns for current year ---
+    # Fallback to yearly returns if YTD unavailable
     if current_performance is None and current_year in yearly_returns.index:
         current_performance = yearly_returns.loc[current_year, 'Yearly Return']
 
-    # --- Last Year Performance ---
+    # Last year performance
     last_year = current_year - 1
     last_year_performance = yearly_returns.loc[last_year, 'Yearly Return'] if last_year in yearly_returns.index else None
 
-    # --- Historical Max/Min ---
-    completed_yearly_returns = yearly_returns[yearly_returns.index < current_year]
-    historical_max = completed_yearly_returns['Yearly Return'].max() if not completed_yearly_returns.empty else 0
-    historical_min = completed_yearly_returns['Yearly Return'].min() if not completed_yearly_returns.empty else 0
+    # Historical performance
+    completed_years = yearly_returns[yearly_returns.index < current_year]
+    historical_max = completed_years['Yearly Return'].max() if not completed_years.empty else 0
+    historical_min = completed_years['Yearly Return'].min() if not completed_years.empty else 0
 
-    # --- Categorize Current Performance ---
+    # Categorize current performance
     if current_performance is None:
         category = 'No Data'
     elif current_performance > historical_max:
@@ -459,10 +408,9 @@ def display_yearly_performance(ticker, title):
     else:
         category = 'Neutral'
 
-    # --- Display Section ---
+    # Display results
     st.subheader(f"{title} - Yearly Performance")
 
-    # Last Year
     if last_year_performance is not None:
         color = 'green' if last_year_performance > 0 else 'red' if last_year_performance < 0 else 'orange'
         st.markdown(
@@ -470,19 +418,17 @@ def display_yearly_performance(ticker, title):
             unsafe_allow_html=True
         )
     else:
-        st.write(f"No data available for last year ({last_year}).")
+        st.write(f"No data for last year ({last_year}).")
 
-    # Current Year
     if current_performance is not None:
         color = 'green' if current_performance > 0 else 'red' if current_performance < 0 else 'orange'
         cat_color = 'green' if category == 'Highest' else 'red' if category == 'Lowest' else 'orange'
-
         st.markdown(
             f"<span style='color:{color}; font-size:18px;'><strong>Current Year Performance ({current_year})</strong>: {current_performance * 100:.2f}%</span>",
             unsafe_allow_html=True
         )
-        st.write(f"**Historical Max Yearly Return (Complete Years)**: {historical_max * 100:.2f}%")
-        st.write(f"**Historical Min Yearly Return (Complete Years)**: {historical_min * 100:.2f}%")
+        st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
+        st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
         st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current year.")
