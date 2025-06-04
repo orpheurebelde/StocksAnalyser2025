@@ -350,6 +350,17 @@ def display_yearly_performance(ticker, title):
     # --- Calculate yearly returns ---
     try:
         yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
+        # Ensure it's a Series before converting to DataFrame
+        if isinstance(yearly_data_series, pd.DataFrame):
+            yearly_returns = yearly_data_series.copy()
+            yearly_returns.columns = ['Yearly Return']
+            yearly_returns.index = yearly_returns.index.year
+        elif isinstance(yearly_data_series, pd.Series) and not yearly_data_series.empty:
+            yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
+            yearly_returns.index = yearly_returns.index.year
+        else:
+            st.warning(f"Not enough complete historical data to calculate yearly returns for {ticker}. Displaying limited yearly performance.")
+            yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[])
     except Exception as e:
         st.warning(f"Could not calculate yearly returns: {e}")
         yearly_data_series = pd.Series()
