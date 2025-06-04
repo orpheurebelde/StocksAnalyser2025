@@ -351,10 +351,11 @@ def display_yearly_performance(ticker, title):
 
     data = data.sort_index()
 
-    # Calculate yearly returns
+    #Calculate yearly returns
+    # Resample to yearly frequency (end-of-year prices) for historical yearly returns
     try:
         yearly_returns = data['Close'].resample('Y').last().pct_change().dropna()
-        yearly_returns.index = yearly_returns.index.year
+        yearly_returns.index = yearly_returns.index.year.astype(int)  # ensure int index
     except Exception as e:
         st.error(f"Failed to calculate yearly returns: {e}")
         return
@@ -373,6 +374,7 @@ def display_yearly_performance(ticker, title):
             end_price = float(end_price)
             if start_price != 0:
                 current_performance = (end_price / start_price) - 1
+                current_performance = float(current_performance)
         except Exception as e:
             st.error(f"Error calculating YTD performance values: {e}")
 
@@ -381,7 +383,11 @@ def display_yearly_performance(ticker, title):
         current_performance = float(yearly_returns.loc[current_year])
 
     # Last year performance
-    last_year_perf = float(yearly_returns.get(last_year, float('nan')))
+    if last_year in yearly_returns.index:
+        last_year_perf = float(yearly_returns.loc[last_year])
+    else:
+        last_year_perf = float('nan')
+        st.warning(f"No data for last year ({last_year}).")
 
     # Historical stats (exclude current year)
     completed_years = yearly_returns[yearly_returns.index < current_year]
