@@ -4,8 +4,6 @@ import pandas as pd
 from utils.utils import compute_fibonacci_level, compute_rsi, compute_macd
 from datetime import datetime    
 
-st.title("📈 Market Analysis | Buy Signals")
-
 #add refresh button for indicators aligned with the top right of the page
 st.markdown("""
 <style>
@@ -33,6 +31,8 @@ st.markdown("""
 # Add a refresh button and clear the cache when clicked 
 if st.button("Refresh Indicators"):
     st.rerun()  # This will refresh the page and re-run the script
+
+st.title("📈 Market Analysis | Buy Signals")
 
 # Define tickers
 tickers = {
