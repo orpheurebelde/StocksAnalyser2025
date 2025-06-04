@@ -244,7 +244,7 @@ def fetch_monthly_returns(ticker):
     return df, data['Close']
 
 
-# --- MODIFIED `analyze_monthly_performance` function ---
+# 7.--- MODIFIED `analyze_monthly_performance` function ---
 # It now takes only the monthly_returns_df
 def analyze_monthly_performance(monthly_returns_df):
     if monthly_returns_df.empty:
@@ -278,7 +278,7 @@ def analyze_monthly_performance(monthly_returns_df):
     return current_month_perf, last_month_perf, historical_max, historical_min, category_current
 
 
-# --- MODIFIED `display_monthly_performance` function ---
+# 8.--- MODIFIED `display_monthly_performance` function ---
 def display_monthly_performance(ticker, title):
     # Fetch only monthly_returns_df, we don't need daily_close_prices here anymore
     # Use _ to discard the second return value (daily_close_prices) if it's not used here
@@ -344,11 +344,12 @@ def display_yearly_performance(ticker, title):
     # 1. Calculate yearly_data_series
     yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
     
-    # 2. ADD THIS CHECK: Ensure yearly_data_series is not empty before converting to DataFrame
-    if yearly_data_series.empty:
-        st.warning(f"Not enough historical data to calculate yearly returns for {ticker}. Displaying limited yearly performance.")
-        # Initialize yearly_returns as an empty DataFrame to avoid errors further down
-        yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[]) # Set index to empty list to avoid future .loc errors
+    # 2. ADD THIS MORE ROBUST CHECK:
+    # Check if it's a pandas Series AND if it's not empty.
+    # If not, initialize yearly_returns as an empty DataFrame.
+    if not isinstance(yearly_data_series, pd.Series) or yearly_data_series.empty:
+        st.warning(f"Not enough complete historical data to calculate yearly returns for {ticker}. Displaying limited yearly performance.")
+        yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[])
     else:
         # 3. Convert to a DataFrame and name the column
         yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
@@ -359,14 +360,16 @@ def display_yearly_performance(ticker, title):
     
     # --- Get Current Year Performance (YTD) ---
     current_performance = None
-    if current_year in yearly_returns.index:
-        current_performance = yearly_returns.loc[current_year, 'Yearly Return']
-    else:
-        # Fallback for current year's YTD calculation directly from daily data
-        start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
-        current_year_data_close = data['Close'][data['Close'].index.tz_convert('UTC') >= start_of_current_year]
-        if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
-            current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
+    # Prioritize the YTD calculation directly from daily data for the current year
+    start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
+    current_year_data_close = data['Close'][data['Close'].index.tz_convert('UTC') >= start_of_current_year]
+    
+    if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
+        current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
+    # Fallback to yearly_returns if direct YTD calculation fails (e.g., no data for current year)
+    elif current_year in yearly_returns.index:
+         current_performance = yearly_returns.loc[current_year, 'Yearly Return']
+
 
     # --- Get Last Year Performance ---
     last_year = current_year - 1
@@ -376,11 +379,10 @@ def display_yearly_performance(ticker, title):
 
 
     # --- Historical Max/Min for completed years ---
-    # Filter yearly_returns to only include *completed* years for historical extremes
     completed_yearly_returns = yearly_returns[yearly_returns.index < current_year]
 
-    historical_max = 0 # Default if no completed years
-    historical_min = 0 # Default if no completed years
+    historical_max = 0 
+    historical_min = 0 
     if not completed_yearly_returns.empty:
         historical_max = completed_yearly_returns['Yearly Return'].max()
         historical_min = completed_yearly_returns['Yearly Return'].min()
