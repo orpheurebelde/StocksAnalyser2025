@@ -341,33 +341,52 @@ def display_yearly_performance(ticker, title):
         st.error(f"Could not fetch data for {ticker}")
         return
 
-    # 1. Calculate yearly_data_series
+    # 1. Calculate yearly_data_series and handle potential emptiness
     yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
     
-    # 2. ADD THIS MORE ROBUST CHECK:
-    # Check if it's a pandas Series AND if it's not empty.
-    # If not, initialize yearly_returns as an empty DataFrame.
     if not isinstance(yearly_data_series, pd.Series) or yearly_data_series.empty:
         st.warning(f"Not enough complete historical data to calculate yearly returns for {ticker}. Displaying limited yearly performance.")
         yearly_returns = pd.DataFrame(columns=['Yearly Return'], index=[])
     else:
-        # 3. Convert to a DataFrame and name the column
         yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
-        # 4. Set the index to just the year (integer)
         yearly_returns.index = yearly_returns.index.year
 
     current_year = datetime.now().year
     
     # --- Get Current Year Performance (YTD) ---
+    start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC') # Start of year in UTC
+
+    # Get the index of the daily close prices
+    daily_close_index = data['Close'].index
+
+    # --- FIX START: Timezone handling for daily_close_index ---
+    if daily_close_index.tz is None: # If the index is timezone-naive
+        # Localize to the expected original timezone of the data (e.g., America/New_York for S&P 500)
+        # 'ambiguous='infer'' tries to automatically handle daylight saving transitions.
+        # You could also use 'UTC' directly if you're certain yfinance is giving naive UTC-equivalent times.
+        try:
+            daily_close_index = daily_close_index.tz_localize('America/New_York', ambiguous='infer')
+        except Exception as e:
+            st.error(f"Error localizing daily data timezone for {ticker}: {e}. Skipping current year performance calculation.")
+            current_performance = None # Set performance to None if localization fails
+            # Skip the rest of the current_performance calculation block
+            # For simplicity, we'll continue with the rest of the function for other values.
+            # If you want to return early, add 'return' here.
+            pass # Continue to the next check below
+
+    # Now convert the index to UTC for consistent comparison with start_of_current_year
+    # If the previous step failed or daily_close_index is still not timezone-aware, skip this.
+    daily_close_index_utc = None
+    if daily_close_index.tz is not None:
+        daily_close_index_utc = daily_close_index.tz_convert('UTC')
+    # --- FIX END ---
+
     current_performance = None
-    # Prioritize the YTD calculation directly from daily data for the current year
-    start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
-    current_year_data_close = data['Close'][data['Close'].index.tz_convert('UTC') >= start_of_current_year]
-    
-    if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
-        current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
-    # Fallback to yearly_returns if direct YTD calculation fails (e.g., no data for current year)
-    elif current_year in yearly_returns.index:
+    if daily_close_index_utc is not None and not data['Close'].empty:
+        current_year_data_close = data['Close'][daily_close_index_utc >= start_of_current_year]
+        if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
+            current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
+    elif current_year in yearly_returns.index: # Fallback to yearly_returns if direct YTD calculation fails
          current_performance = yearly_returns.loc[current_year, 'Yearly Return']
 
 
@@ -436,7 +455,6 @@ def display_yearly_performance(ticker, title):
         st.markdown(f"<span style='color:{cat_color_y};'>**Category**: {category}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current year.")
-
 
 # --- 10. Displaying the indicators and performance sections ---
 st.write("---") # Separator for better layout
