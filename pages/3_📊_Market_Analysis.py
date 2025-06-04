@@ -341,23 +341,26 @@ def display_yearly_performance(ticker, title):
         st.error(f"Could not fetch data for {ticker}")
         return
 
-    # Resample to yearly frequency and calculate yearly returns
-    yearly_data = data['Close'].resample('Y').ffill()
-    yearly_returns = yearly_data.pct_change().dropna()
-    yearly_returns.index = yearly_returns.index.year # Set index to just the year (integer)
+    # 1. Calculate yearly_returns as a Series initially
+    yearly_data_series = data['Close'].resample('Y').ffill().pct_change().dropna()
+    
+    # 2. Immediately convert to a DataFrame and name the column
+    # This is the crucial step to resolve the KeyError
+    yearly_returns = yearly_data_series.to_frame(name='Yearly Return')
+    
+    # 3. Now set the index to just the year (integer)
+    yearly_returns.index = yearly_returns.index.year
 
     current_year = datetime.now().year
     
     # --- Get Current Year Performance (YTD) ---
     current_performance = None
     if current_year in yearly_returns.index:
+        # Now yearly_returns is definitely a DataFrame, so this .loc works
         current_performance = yearly_returns.loc[current_year, 'Yearly Return']
-    # If the current year's return is not fully available yet from resample (e.g., if today is early Jan),
-    # calculate YTD explicitly from start of year to current date.
-    elif not data.empty:
-        # Get start of current year
-        start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC') # Ensure timezone is consistent
-        # Filter data for current year and get the first and last close price
+    else: # If the current year is not in the resampled index (e.g., very start of the year with no daily data yet)
+        # This part handles the YTD from Jan 1st to current date directly from daily data.
+        start_of_current_year = pd.Timestamp(current_year, 1, 1, tz='UTC')
         current_year_data_close = data['Close'][data['Close'].index.tz_convert('UTC') >= start_of_current_year]
         if not current_year_data_close.empty and current_year_data_close.iloc[0] != 0:
             current_performance = (current_year_data_close.iloc[-1] / current_year_data_close.iloc[0]) - 1
@@ -365,12 +368,23 @@ def display_yearly_performance(ticker, title):
     # --- Get Last Year Performance ---
     last_year = current_year - 1
     last_year_performance = None
+    # Check if last_year is in the DataFrame index before accessing
     if last_year in yearly_returns.index:
         last_year_performance = yearly_returns.loc[last_year, 'Yearly Return']
 
 
-    historical_max = yearly_returns['Yearly Return'].max()
-    historical_min = yearly_returns['Yearly Return'].min()
+    # --- Historical Max/Min for completed years ---
+    # Filter yearly_returns to only include *completed* years for historical extremes
+    completed_yearly_returns = yearly_returns[yearly_returns.index < current_year]
+
+    historical_max = 0 # Default if no completed years
+    historical_min = 0 # Default if no completed years
+    if not completed_yearly_returns.empty:
+        historical_max = completed_yearly_returns['Yearly Return'].max()
+        historical_min = completed_yearly_returns['Yearly Return'].min()
+    # else: If you want to use NaN or another indicator for no historical data
+    #      historical_max = np.nan
+    #      historical_min = np.nan
 
     # Categorize current performance
     category = 'No Data'
@@ -409,8 +423,8 @@ def display_yearly_performance(ticker, title):
             f"<span style='color:{color_current_year}; font-size:18px;'><strong>Current Year Performance ({current_year})</strong>: {current_performance * 100:.2f}%</span>",
             unsafe_allow_html=True
         )
-        st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
-        st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
+        st.write(f"**Historical Max Yearly Return (Complete Years)**: {historical_max * 100:.2f}%")
+        st.write(f"**Historical Min Yearly Return (Complete Years)**: {historical_min * 100:.2f}%")
         
         # Display category with color
         cat_color_y = 'orange'
