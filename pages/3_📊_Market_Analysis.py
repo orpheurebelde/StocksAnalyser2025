@@ -85,11 +85,22 @@ def show_indicators(ticker, title):
 
     # First trading day of the year (improved handling for timezone and empty data)
     try:
-        current_year_start = pd.Timestamp(datetime.now().year, 1, 1, tz='UTC') # Use UTC for consistency
-        # Find the first price at or after the start of the current year
-        start_price_series = close.loc[close.index.tz_localize('UTC') >= current_year_start]
+        # 1. Define the start of the year in UTC
+        current_year_start = pd.Timestamp(datetime.now().year, 1, 1, tz='UTC')
+
+        # 2. Convert the 'close' index to UTC.
+        #    If close.index is already tz-aware (which it is, causing your error),
+        #    use .tz_convert() to change its timezone.
+        #    If it happened to be naive (unlikely for yfinance.history), you'd use tz_localize first.
+        #    Since it's already tz-aware, tz_convert is the correct method.
+        close_index_utc = close.index.tz_convert('UTC')
+
+        # 3. Use the UTC-converted index for your comparison
+        start_price_series = close.loc[close_index_utc >= current_year_start]
+
         start_price = start_price_series.iloc[0] if not start_price_series.empty else close.iloc[0]
     except Exception as e:
+        # Catching the specific error type can be more precise, but general Exception works.
         st.error(f"Error determining YTD start price for {ticker}: {e}")
         start_price = close.iloc[0] # Fallback to first available price
 
