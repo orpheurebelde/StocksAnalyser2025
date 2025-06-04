@@ -380,8 +380,9 @@ def display_yearly_performance(ticker, title):
         
         # --- DEBUGGING STATEMENTS START ---
         st.write("--- DEBUGGING YTD CALCULATION ---")
+        st.write(f"DEBUG: Type of processed_index: {type(processed_index)}") # NEW DEBUG LINE
         st.write(f"DEBUG: Initial data.index.tz: {processed_index.tz}")
-        st.write(f"DEBUG: Initial data.index head: {processed_index.head()}")
+        st.write(f"DEBUG: Initial data.index first 5 elements: {processed_index[:5]}") # MODIFIED LINE
         st.write(f"DEBUG: Length of data.index: {len(processed_index)}")
         # --- DEBUGGING STATEMENTS END ---
 
@@ -389,13 +390,13 @@ def display_yearly_performance(ticker, title):
             processed_index = processed_index.tz_localize('America/New_York', ambiguous='infer')
             # --- DEBUGGING STATEMENTS START ---
             st.write(f"DEBUG: After tz_localize, processed_index.tz: {processed_index.tz}")
-            st.write(f"DEBUG: After tz_localize, processed_index head: {processed_index.head()}")
+            st.write(f"DEBUG: After tz_localize, processed_index head: {processed_index[:5]}") # MODIFIED LINE
             # --- DEBUGGING STATEMENTS END ---
         
         processed_index = processed_index.tz_convert('UTC')
         # --- DEBUGGING STATEMENTS START ---
         st.write(f"DEBUG: After tz_convert, processed_index.tz: {processed_index.tz}")
-        st.write(f"DEBUG: After tz_convert, processed_index head: {processed_index.head()}")
+        st.write(f"DEBUG: After tz_convert, processed_index head: {processed_index[:5]}") # MODIFIED LINE
         # --- DEBUGGING STATEMENTS END ---
 
         start_of_current_year_utc = pd.Timestamp(current_year, 1, 1, tz='UTC')
