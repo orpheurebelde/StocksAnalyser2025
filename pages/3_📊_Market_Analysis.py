@@ -2,7 +2,15 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 from utils.utils import compute_fibonacci_level, compute_rsi, compute_macd
-from datetime import datetime    
+from datetime import datetime
+
+# Set page configuration
+st.set_page_config(
+    page_title="📊 Market Analysis",
+    page_icon=":bar_chart:",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 #add refresh button for indicators aligned with the top right of the page
 st.markdown("""
