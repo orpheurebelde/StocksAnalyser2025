@@ -364,15 +364,17 @@ def display_yearly_performance(ticker, title):
 
     # Calculate YTD performance
     current_performance = None
-    try:
-        ytd_data = data.loc[data.index >= pd.Timestamp(f"{current_year}-01-01", tz='America/New_York'), 'Close']
-        if not ytd_data.empty:
-            start_price = ytd_data.iloc[0]
-            end_price = ytd_data.iloc[-1]
-            if pd.notna(start_price) and start_price != 0:
-                current_performance = float((end_price / start_price) - 1)
-    except Exception as e:
-        st.error(f"Error calculating YTD performance: {e}")
+    ytd_data = data.loc[data.index >= pd.Timestamp(f"{current_year}-01-01", tz='America/New_York'), 'Close']
+    if not ytd_data.empty:
+        start_price = ytd_data.iloc[0]
+        end_price = ytd_data.iloc[-1]
+        try:
+            start_price = float(start_price)
+            end_price = float(end_price)
+            if start_price != 0:
+                current_performance = (end_price / start_price) - 1
+        except Exception as e:
+            st.error(f"Error calculating YTD performance values: {e}")
 
     # Fallback to yearly return if needed
     if current_performance is None and current_year in yearly_returns.index:
