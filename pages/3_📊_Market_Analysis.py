@@ -68,7 +68,7 @@ tickers = {
     "Nasdaq 100": "^NDX"
     }
 # --- 5. `show_indicators` function (now with proper `</span>` tags and a timestamp) ---
-@st.cache_data(ttl=3600) # Cache for 1 hour; adjust as needed
+@st.cache_data(ttl=14400) # Cache for 1 hour; adjust as needed
 def show_indicators(ticker, title):
     # This message will only appear if the cache is cleared or expires
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Data last fetched/calculated for {title}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
@@ -217,7 +217,7 @@ def show_indicators(ticker, title):
 # --- 6. `fetch_monthly_returns` function (corrected `yf.download` caching) ---
 # --- MODIFIED `fetch_monthly_returns` function ---
 # Now returns both the full monthly_returns DataFrame AND the daily close prices
-@st.cache_data(ttl=3600) # Cache for 1 hour; adjust as needed
+@st.cache_data(ttl=14400) # Cache for 1 hour; adjust as needed
 def fetch_monthly_returns(ticker):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Monthly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
     
@@ -331,7 +331,7 @@ def display_monthly_performance(ticker, title):
         st.write("No data available for the current month.")
 
 # 9.--- MODIFIED `display_yearly_performance` function ---
-@st.cache_data(ttl=3600) # Cache for 1 hour
+@st.cache_data(ttl=14400) # Cache for 1 hour
 def display_yearly_performance(ticker, title):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Yearly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
 
