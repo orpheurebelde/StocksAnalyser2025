@@ -420,7 +420,7 @@ def display_yearly_performance(ticker, title):
         st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current year.")
-        
+
     # Return the data you want to reuse
     return {
         'yearly_returns': yearly_returns,
@@ -465,32 +465,33 @@ with col2_year:
         display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
 
 #Plot Yearly Returns in a single chart
-st.write("---")
-st.subheader("📊 Yearly Returns Comparison")
-
-sp500_yearly_returns = get_yearly_returns(tickers["S&P 500"])
-nasdaq_yearly_returns = get_yearly_returns(tickers["Nasdaq 100"])
-
-# Check both are valid Series
-if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_returns, pd.Series):
-    combined = pd.concat([
-        sp500_yearly_returns.rename("S&P 500"),
-        nasdaq_yearly_returns.rename("Nasdaq 100")
-    ], axis=1).dropna()
+def plot_yearly_returns(yearly_returns, title):
+    if yearly_returns is None or yearly_returns.empty:
+        st.error(f"No data available for {title} yearly returns.")
+        return
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=combined.index, y=combined['S&P 500'], name="S&P 500", marker_color="blue"))
-    fig.add_trace(go.Bar(x=combined.index, y=combined['Nasdaq 100'], name="Nasdaq 100", marker_color="orange"))
+    fig.add_trace(go.Bar(
+        x=yearly_returns.index,
+        y=yearly_returns.values * 100,  # Convert to percentage
+        marker_color='blue',
+        name='Yearly Returns'
+    ))
 
     fig.update_layout(
-        title="Yearly Returns Comparison",
+        title=f"{title} Yearly Returns",
         xaxis_title="Year",
         yaxis_title="Return (%)",
-        barmode="group",
         template="plotly_white"
     )
 
-    with st.expander("📈 Yearly Returns Chart"):
-        st.plotly_chart(fig, use_container_width=True)
-else:
-    st.warning("One of the return series is not valid.")
+    st.plotly_chart(fig, use_container_width=True)
+
+# Plot yearly returns for both indices
+st.write("---")  # Separator for better layout
+with st.expander("📊 Yearly Returns Comparison", expanded=True):
+    col1_plot, col2_plot = st.columns(2)
+    with col1_plot:
+        plot_yearly_returns(display_yearly_performance(tickers["S&P 500"], "S&P 500")['yearly_returns'], "S&P 500")
+    with col2_plot:
+        plot_yearly_returns(display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")['yearly_returns'], "Nasdaq 100")
