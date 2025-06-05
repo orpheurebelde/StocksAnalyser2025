@@ -496,6 +496,9 @@ st.subheader("📊 Yearly Returns Comparison")
 sp500_yearly_returns = get_yearly_returns("^GSPC")
 nasdaq_yearly_returns = get_yearly_returns("^NDX")
 
+st.write("Type of sp500_yearly_returns:", type(sp500_yearly_returns))
+st.write("Type of nasdaq_yearly_returns:", type(nasdaq_yearly_returns))
+
 if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
     combined = pd.DataFrame({
         'S&P 500': sp500_yearly_returns,
