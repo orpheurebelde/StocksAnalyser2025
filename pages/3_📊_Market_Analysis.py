@@ -436,17 +436,18 @@ def display_yearly_performance(ticker, title):
 
 # --- 10. Chart Returns
 @st.cache_data
-def get_yearly_returns(ticker: str) -> pd.Series:
+def get_yearly_returns(ticker: str) -> pd.Series | None:
     data = yf.download(ticker, period="max", interval="1d", progress=False)
     if data.empty:
         return None
-    data.dropna(inplace=True)
+
+    data = data.dropna()
     data.index = pd.to_datetime(data.index)
 
     year_open = data['Close'].resample('Y').first()
     year_close = data['Close'].resample('Y').last()
     yearly_returns = (year_close - year_open) / year_open
-    yearly_returns.index = yearly_returns.index.year  # Convert datetime index to int
+    yearly_returns.index = yearly_returns.index.year  # Convert datetime to int
 
     return yearly_returns
 
