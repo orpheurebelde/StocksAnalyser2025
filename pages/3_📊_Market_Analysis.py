@@ -437,24 +437,21 @@ def display_yearly_performance(ticker, title):
 # --- 10. Chart Returns
 @st.cache_data(ttl=14400)
 def get_yearly_returns(ticker):
-    data = yf.download(ticker, period="10y", interval="1d", progress=False)
-    if data.empty or 'Close' not in data.columns:
-        return None
-
-    if data.index.tz is None:
-        data.index = data.index.tz_localize('America/New_York')
-    else:
-        data.index = data.index.tz_convert('America/New_York')
-
-    data = data.sort_index()
-
     try:
+        data = yf.download(ticker, period="max", interval="1d", progress=False)
+        data.dropna(inplace=True)
+        data.index = pd.to_datetime(data.index)
+
+        # Calculate yearly returns as (last - first) / first for each year
         year_open = data['Close'].resample('Y').first()
         year_close = data['Close'].resample('Y').last()
         yearly_returns = (year_close - year_open) / year_open
-        yearly_returns.index = yearly_returns.index.year
-        return yearly_returns.dropna()
+        yearly_returns.index = yearly_returns.index.year  # Ensure index is just the year
+
+        return yearly_returns
+
     except Exception as e:
+        st.error(f"Failed to calculate yearly returns for {ticker}: {e}")
         return None
 
 # --- 11. Displaying the indicators and performance sections ---
@@ -496,12 +493,11 @@ with col2_year:
 st.write("---")
 st.subheader("📊 Yearly Returns Comparison")
 
-sp500_yearly_returns = get_yearly_returns(tickers["S&P 500"])
-nasdaq_yearly_returns = get_yearly_returns(tickers["Nasdaq 100"])
+sp500_yearly_returns = get_yearly_returns("^GSPC")
+nasdaq_yearly_returns = get_yearly_returns("^NDX")
 
-# Ensure both are Series and not None
+# Ensure both are valid Series
 if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_returns, pd.Series):
-    # Combine and align the data
     combined_yearly_returns = pd.concat([
         sp500_yearly_returns.rename("S&P 500"),
         nasdaq_yearly_returns.rename("Nasdaq 100")
