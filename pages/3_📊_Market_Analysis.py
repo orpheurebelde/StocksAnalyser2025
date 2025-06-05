@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 from utils.utils import compute_fibonacci_level, compute_rsi, compute_macd
 from datetime import datetime
+import plotly.graph_objects as go
 
 # --- 1. Set page configuration ---
 st.set_page_config(
@@ -457,8 +458,6 @@ with col1_mon:
 with col2_mon:
     with st.expander("📈 Nasdaq 100 Monthly Performance", expanded=True):
         display_monthly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
-
-st.write("---") # Another separator
 
 # Display yearly performance in columns
 col1_year, col2_year = st.columns(2)
