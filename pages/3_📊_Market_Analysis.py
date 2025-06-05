@@ -475,27 +475,24 @@ yearly_returns = display_yearly_performance("^GSPC", "S&P 500")
 # Display yearly returns chart for S&P 500
 title = "S&P 500"
 
-with st.expander("📊 Yearly Returns Chart | SP500", expanded=False):
-# Call the function and get the results
-# ✅ Plot outside the function if data is available
-    if yearly_returns is not None and not yearly_returns.empty:
-        with st.expander(f"📈 {title} - Yearly Returns Chart", expanded=False):
-            import plotly.graph_objects as go
+if yearly_returns is not None and not yearly_returns.empty:
+    with st.expander(f"📈 {title} - Yearly Returns Chart", expanded=False):
+        import plotly.graph_objects as go
 
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=yearly_returns.index.astype(str),
-                y=yearly_returns.values * 100,
-                marker_color=['green' if r > 0 else 'red' for r in yearly_returns.values],
-                text=[f"{r*100:.2f}%" for r in yearly_returns.values],
-                textposition="outside"
-            ))
-            fig.update_layout(
-                title=f"{title} - Yearly Returns",
-                yaxis_title="Return (%)",
-                xaxis_title="Year",
-                showlegend=False,
-                height=400,
-                template="plotly_white"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=yearly_returns.index.astype(str),
+            y=yearly_returns.values * 100,
+            marker_color=['green' if r > 0 else 'red' for r in yearly_returns.values],
+            text=[f"{r*100:.2f}%" for r in yearly_returns.values],
+            textposition="outside"
+        ))
+        fig.update_layout(
+            title=f"{title} - Yearly Returns",
+            yaxis_title="Return (%)",
+            xaxis_title="Year",
+            showlegend=False,
+            height=400,
+            template="plotly_white"
+        )
+        st.plotly_chart(fig, use_container_width=True)
