@@ -439,26 +439,31 @@ def display_yearly_performance(ticker, title):
 def get_yearly_returns(ticker: str) -> pd.Series | None:
     try:
         data = yf.download(ticker, period="max", interval="1d", progress=False)
-        if data.empty or "Close" not in data.columns:
-            st.warning(f"⚠️ No close price data available for {ticker}.")
+        if data.empty:
+            st.warning(f"⚠️ No data available for {ticker}.")
             return None
 
-        data = data.dropna(subset=["Close"])
+        # Use 'Close' if available, otherwise use 'Adj Close'
+        if 'Close' in data.columns:
+            price_col = 'Close'
+        elif 'Adj Close' in data.columns:
+            price_col = 'Adj Close'
+        else:
+            st.warning(f"⚠️ No 'Close' or 'Adj Close' data available for {ticker}.")
+            return None
+
+        data = data.dropna(subset=[price_col])
+        if data.empty:
+            st.warning(f"⚠️ Data is empty after dropping NA for {ticker}.")
+            return None
+
         data.index = pd.to_datetime(data.index)
 
-        # Check again after dropna
-        if data.empty:
-            st.warning(f"⚠️ Data is empty after cleaning for {ticker}.")
-            return None
+        # Resample yearly
+        year_open = data[price_col].resample('Y').first()
+        year_close = data[price_col].resample('Y').last()
 
-        # Resample
-        year_open = data['Close'].resample('Y').first()
-        year_close = data['Close'].resample('Y').last()
-
-        # Calculate returns
         yearly_returns = (year_close - year_open) / year_open
-
-        # Ensure proper index (int year)
         yearly_returns.index = yearly_returns.index.year
         yearly_returns.name = ticker
 
