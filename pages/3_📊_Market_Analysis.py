@@ -454,20 +454,10 @@ with col2_mon:
     with st.expander("📈 Nasdaq 100 Monthly Performance", expanded=True):
         display_monthly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
 
-# Display yearly performance in columns
-col1_year, col2_year = st.columns(2)
-with col1_year:
-    with st.expander("📈 S&P 500 Yearly Performance", expanded=True):
-        display_yearly_performance(tickers["S&P 500"], "S&P 500")
-
-with col2_year:
-    with st.expander("📈 Nasdaq 100 Yearly Performance", expanded=True):
-        display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
-
-#Plot Yearly Returns in a single chart
+# --- 11. Plotting yearly returns ---
 def plot_yearly_returns(yearly_returns, title):
-    if yearly_returns is None or yearly_returns.empty:
-        st.error(f"No data available for {title} yearly returns.")
+    if yearly_returns.empty:
+        st.error(f"No yearly returns data available for {title}.")
         return
 
     fig = go.Figure()
@@ -482,19 +472,32 @@ def plot_yearly_returns(yearly_returns, title):
         title=f"{title} Yearly Returns",
         xaxis_title="Year",
         yaxis_title="Return (%)",
-        template="plotly_white"
+        template="plotly_white",
+        height=400
     )
 
     st.plotly_chart(fig, use_container_width=True)
+# Display yearly performance in columns
+col1_year, col2_year = st.columns(2)
+with col1_year:
+    with st.expander("📈 S&P 500 Yearly Performance", expanded=True):
+        sp500data = display_yearly_performance(tickers["S&P 500"], "S&P 500")
 
-# Plot yearly returns for both indices in 2 charts
-with st.expander("📊 Yearly Returns Comparison", expanded=True):
-    col1_plot, col2_plot = st.columns(2)
-    with col1_plot:
-        yearly_returns_sp500 = display_yearly_performance(tickers["S&P 500"], "S&P 500")
-        plot_yearly_returns(yearly_returns_sp500['yearly_returns'], "S&P 500")
+with col2_year:
+    with st.expander("📈 Nasdaq 100 Yearly Performance", expanded=True):
+        nasdaqdata = display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
 
-    with col2_plot:
-        yearly_returns_nasdaq = display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
-        plot_yearly_returns(yearly_returns_nasdaq['yearly_returns'], "Nasdaq 100")
+# Then, plot the yearly returns in a separate expander using the returned data
+with st.expander("📊 Yearly Returns Chart", expanded=True):
+    col1, col2 = st.columns(2)
+    with col1:
+        if sp500data and sp500data['yearly_returns'] is not None:
+            plot_yearly_returns(sp500data['yearly_returns'], "S&P 500")
+        else:
+            st.write("No S&P 500 data to plot.")
 
+    with col2:
+        if nasdaqdata and nasdaqdata['yearly_returns'] is not None:
+            plot_yearly_returns(nasdaqdata['yearly_returns'], "Nasdaq 100")
+        else:
+            st.write("No Nasdaq 100 data to plot.")
