@@ -434,9 +434,30 @@ def display_yearly_performance(ticker, title):
     else:
         st.write("No data available for the current year.")
 
-    return yearly_returns
+# --- 10. Chart Returns
+@st.cache_data(ttl=14400)
+def get_yearly_returns(ticker):
+    data = yf.download(ticker, period="10y", interval="1d", progress=False)
+    if data.empty or 'Close' not in data.columns:
+        return None
 
-# --- 10. Displaying the indicators and performance sections ---
+    if data.index.tz is None:
+        data.index = data.index.tz_localize('America/New_York')
+    else:
+        data.index = data.index.tz_convert('America/New_York')
+
+    data = data.sort_index()
+
+    try:
+        year_open = data['Close'].resample('Y').first()
+        year_close = data['Close'].resample('Y').last()
+        yearly_returns = (year_close - year_open) / year_open
+        yearly_returns.index = yearly_returns.index.year
+        return yearly_returns.dropna()
+    except Exception as e:
+        return None
+
+# --- 11. Displaying the indicators and performance sections ---
 st.write("---") # Separator for better layout
 
 # Display market indicators in columns
@@ -472,24 +493,25 @@ with col2_year:
         display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
 
 #Plot Yearly Returns in a single chart
-st.write("---") # Another separator
-st.subheader("📊 Yearly Returns Comparison"
-             )
-# Fetch yearly returns for both indices
-sp500_yearly_returns = display_yearly_performance(tickers["S&P 500"], "S&P 500")
-nasdaq_yearly_returns = display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
-# Ensure both returns are not None
+st.write("---")
+st.subheader("📊 Yearly Returns Comparison")
+
+sp500_yearly_returns = get_yearly_returns(tickers["S&P 500"])
+nasdaq_yearly_returns = get_yearly_returns(tickers["Nasdaq 100"])
+
 if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
-    # Create a combined DataFrame for plotting
     combined_yearly_returns = pd.DataFrame({
         'S&P 500': sp500_yearly_returns,
         'Nasdaq 100': nasdaq_yearly_returns
     }).dropna()
 
-    # Plotting the yearly returns using Plotly
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=combined_yearly_returns.index, y=combined_yearly_returns['S&P 500'], name='S&P 500', marker_color='blue'))
-    fig.add_trace(go.Bar(x=combined_yearly_returns.index, y=combined_yearly_returns['Nasdaq 100'], name='Nasdaq 100', marker_color='orange'))
+    fig.add_trace(go.Bar(x=combined_yearly_returns.index.astype(str),
+                         y=combined_yearly_returns['S&P 500'] * 100,
+                         name='S&P 500', marker_color='blue'))
+    fig.add_trace(go.Bar(x=combined_yearly_returns.index.astype(str),
+                         y=combined_yearly_returns['Nasdaq 100'] * 100,
+                         name='Nasdaq 100', marker_color='orange'))
 
     fig.update_layout(
         title="Yearly Returns Comparison (S&P 500 vs Nasdaq 100)",
