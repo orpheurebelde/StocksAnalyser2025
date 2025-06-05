@@ -394,11 +394,33 @@ def display_yearly_performance(ticker, title):
     else:
         category = 'Neutral'
 
-    # Display info (same as before) ...
-
     st.subheader(f"{title} - Yearly Performance")
     # [Display last year, current year, max/min, category as in your code]
+    # Last year performance
+    if pd.notna(last_year_perf):
+        color = 'green' if last_year_perf > 0 else 'red' if last_year_perf < 0 else 'orange'
+        st.markdown(
+            f"<span style='color:{color}; font-size:18px;'><strong>Last Year Performance ({last_year})</strong>: {last_year_perf * 100:.2f}%</span>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.write(f"No data for last year ({last_year}).")
 
+    # Current year performance
+    if current_performance is not None:
+        color = 'green' if current_performance > 0 else 'red' if current_performance < 0 else 'orange'
+        cat_color = 'green' if category == 'Highest' else 'red' if category == 'Lowest' else 'orange'
+        st.markdown(
+            f"<span style='color:{color}; font-size:18px;'><strong>Current Year Performance ({current_year})</strong>: {current_performance * 100:.2f}%</span>",
+            unsafe_allow_html=True
+        )
+        if historical_max is not None and historical_min is not None:
+            st.write(f"**Historical Max Yearly Return**: {historical_max * 100:.2f}%")
+            st.write(f"**Historical Min Yearly Return**: {historical_min * 100:.2f}%")
+        st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
+    else:
+        st.write("No data available for the current year.")
+        
     # Return the data you want to reuse
     return {
         'yearly_returns': yearly_returns,
