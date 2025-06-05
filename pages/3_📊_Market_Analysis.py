@@ -456,17 +456,24 @@ with col2_mon:
 
 # --- 11. Plotting yearly returns ---
 def plot_yearly_returns(yearly_returns, title):
-    if yearly_returns is None or yearly_returns.empty:
+    if yearly_returns.empty:
         st.error(f"No yearly returns data available for {title}.")
         return
 
-    # Ensure index is proper type
-    yearly_returns.index = yearly_returns.index.astype(str)  # Convert to str for X-axis
+    # If it's a DataFrame with one column, convert to Series
+    if isinstance(yearly_returns, pd.DataFrame):
+        if yearly_returns.shape[1] == 1:
+            yearly_returns = yearly_returns.iloc[:, 0]
+        else:
+            st.error("Expected a single-column DataFrame or a Series for yearly_returns.")
+            return
+
+    yearly_returns.index = yearly_returns.index.astype(str)  # ensure string for x-axis
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=yearly_returns.index,
-        y=yearly_returns.values * 100,
+        y=yearly_returns.values * 100,  # percent
         marker_color='blue',
         name='Yearly Returns'
     ))
