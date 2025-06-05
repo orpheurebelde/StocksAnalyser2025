@@ -362,7 +362,7 @@ def display_yearly_performance(ticker, title):
         yearly_returns.index = yearly_returns.index.year  # Make sure the index is integer year
     except Exception as e:
         st.error(f"Failed to calculate yearly returns: {e}")
-        return
+        return yearly_returns
 
     current_year = datetime.now().year
     last_year = current_year - 1
@@ -433,7 +433,6 @@ def display_yearly_performance(ticker, title):
         st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current year.")
-    return yearly_returns
 
 # --- 10. Chart Returns
 @st.cache_data(ttl=14400)
@@ -494,23 +493,18 @@ with col2_year:
 st.write("---")
 st.subheader("📊 Yearly Returns Comparison")
 
-sp500_yearly_returns = get_yearly_returns("^GSPC")
-nasdaq_yearly_returns = get_yearly_returns("^NDX")
+sp500_yearly_returns = display_yearly_performance("^GSPC", "S&P 500")
+nasdaq_yearly_returns = display_yearly_performance("^NDX", "Nasdaq 100")
 
-# Ensure both are valid Series
-if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_returns, pd.Series):
-    combined_yearly_returns = pd.concat([
-        sp500_yearly_returns.rename("S&P 500"),
-        nasdaq_yearly_returns.rename("Nasdaq 100")
-    ], axis=1).dropna()
+if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
+    combined_yearly_returns = pd.DataFrame({
+        'S&P 500': sp500_yearly_returns,
+        'Nasdaq 100': nasdaq_yearly_returns
+    }).dropna()
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=combined_yearly_returns.index.astype(str),
-                         y=combined_yearly_returns['S&P 500'] * 100,
-                         name='S&P 500', marker_color='blue'))
-    fig.add_trace(go.Bar(x=combined_yearly_returns.index.astype(str),
-                         y=combined_yearly_returns['Nasdaq 100'] * 100,
-                         name='Nasdaq 100', marker_color='orange'))
+    fig.add_trace(go.Bar(x=combined_yearly_returns.index, y=combined_yearly_returns['S&P 500'], name='S&P 500', marker_color='blue'))
+    fig.add_trace(go.Bar(x=combined_yearly_returns.index, y=combined_yearly_returns['Nasdaq 100'], name='Nasdaq 100', marker_color='orange'))
 
     fig.update_layout(
         title="Yearly Returns Comparison (S&P 500 vs Nasdaq 100)",
@@ -520,6 +514,7 @@ if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_retu
         template="plotly_white"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    with st.expander("📈 Yearly Returns Chart"):
+        st.plotly_chart(fig, use_container_width=True)
 else:
     st.warning("Unable to load yearly return data for one or both indices.")
