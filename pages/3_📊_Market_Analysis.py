@@ -499,11 +499,13 @@ st.subheader("📊 Yearly Returns Comparison")
 sp500_yearly_returns = get_yearly_returns(tickers["S&P 500"])
 nasdaq_yearly_returns = get_yearly_returns(tickers["Nasdaq 100"])
 
-if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
-    combined_yearly_returns = pd.DataFrame({
-        'S&P 500': sp500_yearly_returns,
-        'Nasdaq 100': nasdaq_yearly_returns
-    }).dropna()
+# Ensure both are Series and not None
+if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_returns, pd.Series):
+    # Combine and align the data
+    combined_yearly_returns = pd.concat([
+        sp500_yearly_returns.rename("S&P 500"),
+        nasdaq_yearly_returns.rename("Nasdaq 100")
+    ], axis=1).dropna()
 
     fig = go.Figure()
     fig.add_trace(go.Bar(x=combined_yearly_returns.index.astype(str),
@@ -522,3 +524,5 @@ if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
     )
 
     st.plotly_chart(fig, use_container_width=True)
+else:
+    st.warning("Unable to load yearly return data for one or both indices.")
