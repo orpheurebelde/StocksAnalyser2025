@@ -456,14 +456,17 @@ with col2_mon:
 
 # --- 11. Plotting yearly returns ---
 def plot_yearly_returns(yearly_returns, title):
-    if yearly_returns.empty:
+    if yearly_returns is None or yearly_returns.empty:
         st.error(f"No yearly returns data available for {title}.")
         return
+
+    # Ensure index is proper type
+    yearly_returns.index = yearly_returns.index.astype(str)  # Convert to str for X-axis
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=yearly_returns.index,
-        y=yearly_returns.values * 100,  # Convert to percentage
+        y=yearly_returns.values * 100,
         marker_color='blue',
         name='Yearly Returns'
     ))
@@ -477,6 +480,7 @@ def plot_yearly_returns(yearly_returns, title):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+    
 # Display yearly performance in columns
 col1_year, col2_year = st.columns(2)
 with col1_year:
