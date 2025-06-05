@@ -477,14 +477,15 @@ title = "S&P 500"
 
 if yearly_returns is not None and not yearly_returns.empty:
     with st.expander(f"📈 {title} - Yearly Returns Chart", expanded=False):
-        import plotly.graph_objects as go
+        # Clean NaN values from the data
+        valid_returns = yearly_returns.dropna()
 
         fig = go.Figure()
         fig.add_trace(go.Bar(
-            x=yearly_returns.index.astype(str),
-            y=yearly_returns.values * 100,
-            marker_color=['green' if r > 0 else 'red' for r in yearly_returns.values],
-            text=[f"{r*100:.2f}%" for r in yearly_returns.values],
+            x=valid_returns.index.astype(str),
+            y=valid_returns.values * 100,
+            marker_color=['green' if r > 0 else 'red' for r in valid_returns.values],
+            text=[f"{r*100:.2f}%" if pd.notna(r) else "N/A" for r in valid_returns.values],
             textposition="outside"
         ))
         fig.update_layout(
