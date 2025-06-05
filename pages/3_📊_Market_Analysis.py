@@ -435,21 +435,38 @@ def display_yearly_performance(ticker, title):
         st.write("No data available for the current year.")
 
 # --- 10. Chart Returns
-@st.cache_data
+@st.cache_data(ttl=3600)
 def get_yearly_returns(ticker: str) -> pd.Series | None:
-    data = yf.download(ticker, period="max", interval="1d", progress=False)
-    if data.empty:
+    try:
+        data = yf.download(ticker, period="max", interval="1d", progress=False)
+        if data.empty or "Close" not in data.columns:
+            st.warning(f"⚠️ No close price data available for {ticker}.")
+            return None
+
+        data = data.dropna(subset=["Close"])
+        data.index = pd.to_datetime(data.index)
+
+        # Check again after dropna
+        if data.empty:
+            st.warning(f"⚠️ Data is empty after cleaning for {ticker}.")
+            return None
+
+        # Resample
+        year_open = data['Close'].resample('Y').first()
+        year_close = data['Close'].resample('Y').last()
+
+        # Calculate returns
+        yearly_returns = (year_close - year_open) / year_open
+
+        # Ensure proper index (int year)
+        yearly_returns.index = yearly_returns.index.year
+        yearly_returns.name = ticker
+
+        return yearly_returns
+
+    except Exception as e:
+        st.error(f"❌ Failed to fetch yearly returns for {ticker}: {e}")
         return None
-
-    data = data.dropna()
-    data.index = pd.to_datetime(data.index)
-
-    year_open = data['Close'].resample('Y').first()
-    year_close = data['Close'].resample('Y').last()
-    yearly_returns = (year_close - year_open) / year_open
-    yearly_returns.index = yearly_returns.index.year  # Convert datetime to int
-
-    return yearly_returns
 
 # --- 11. Displaying the indicators and performance sections ---
 st.write("---") # Separator for better layout
@@ -490,8 +507,8 @@ with col2_year:
 st.write("---")
 st.subheader("📊 Yearly Returns Comparison")
 
-sp500_yearly_returns = get_yearly_returns("^GSPC")
-nasdaq_yearly_returns = get_yearly_returns("^NDX")
+sp500_yearly_returns = get_yearly_returns(tickers["S&P 500"])
+nasdaq_yearly_returns = get_yearly_returns(tickers["Nasdaq 100"])
 
 # Check both are valid Series
 if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_returns, pd.Series):
