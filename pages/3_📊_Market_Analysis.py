@@ -480,7 +480,7 @@ def plot_yearly_returns(yearly_returns, title):
     )
 
     st.plotly_chart(fig, use_container_width=True)
-    
+
 # Display yearly performance in columns
 col1_year, col2_year = st.columns(2)
 with col1_year:
@@ -495,13 +495,13 @@ with col2_year:
 with st.expander("📊 Yearly Returns Chart", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
-        if sp500data and sp500data['yearly_returns'] is not None:
-            plot_yearly_returns(sp500data['yearly_returns'], "S&P 500")
+        if sp500data is not None and not sp500data.empty:
+            plot_yearly_returns(sp500data.get("yearly_returns"), "S&P 500")
         else:
             st.write("No S&P 500 data to plot.")
 
     with col2:
-        if nasdaqdata and nasdaqdata['yearly_returns'] is not None:
-            plot_yearly_returns(nasdaqdata['yearly_returns'], "Nasdaq 100")
+        if nasdaqdata is not None and not nasdaqdata.empty:
+            plot_yearly_returns(nasdaqdata.get("yearly_returns"), "Nasdaq 100")
         else:
             st.write("No Nasdaq 100 data to plot.")
