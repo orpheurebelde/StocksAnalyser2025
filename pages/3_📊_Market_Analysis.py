@@ -356,7 +356,7 @@ def display_yearly_performance(ticker, title):
         year_open = data['Close'].resample('Y').first()
         year_close = data['Close'].resample('Y').last()
         yearly_returns = (year_close - year_open) / year_open
-        yearly_returns.index = yearly_returns.index.year
+        yearly_returns.index = yearly_returns.index.year.to_series().astype(int)
     except Exception as e:
         st.error(f"Failed to calculate yearly returns: {e}")
         return None
