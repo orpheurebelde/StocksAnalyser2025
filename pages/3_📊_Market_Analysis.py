@@ -503,7 +503,7 @@ with col2_year:
         nasdaqdata = display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
 
 # Then, plot the yearly returns in a separate expander using the returned data
-with st.expander("📊 Yearly Returns Chart", expanded=True):
+with st.expander("📊 Histórico de Retorno Anual", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
         if sp500data.get("yearly_returns") is not None and not sp500data.get("yearly_returns").empty:
