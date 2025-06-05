@@ -434,6 +434,8 @@ def display_yearly_performance(ticker, title):
     else:
         st.write("No data available for the current year.")
 
+    return yearly_returns
+
 # --- 10. Displaying the indicators and performance sections ---
 st.write("---") # Separator for better layout
 
@@ -469,26 +471,31 @@ with col2_year:
     with st.expander("📈 Nasdaq 100 Yearly Performance", expanded=True):
         display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
 
-with st.expander("📊 Yearly Returns Chart", expanded=False):
-    yearly_returns, _ = display_yearly_performance("^GSPC", "S&P 500")
-    fig = go.Figure()
+yearly_returns = display_yearly_performance("^GSPC", "S&P 500")
+# Display yearly returns chart for S&P 500
+title = "S&P 500"
 
-    fig.add_trace(go.Bar(
-        x=yearly_returns.index.astype(str),  # Ensure x-axis labels are strings
-        y=yearly_returns.values * 100,       # Convert to percentage
-        marker_color=['green' if val > 0 else 'red' for val in yearly_returns.values],
-        text=[f"{val*100:.2f}%" for val in yearly_returns.values],
-        textposition='outside',
-        name="Yearly Return"
-    ))
+with st.expander("📊 Yearly Returns Chart | SP500", expanded=False):
+# Call the function and get the results
+# ✅ Plot outside the function if data is available
+    if yearly_returns is not None and not yearly_returns.empty:
+        with st.expander(f"📈 {title} - Yearly Returns Chart", expanded=False):
+            import plotly.graph_objects as go
 
-    fig.update_layout(
-        title="Yearly Price Performance",
-        yaxis_title="Return (%)",
-        xaxis_title="Year",
-        showlegend=False,
-        height=400,
-        template='plotly_white'
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=yearly_returns.index.astype(str),
+                y=yearly_returns.values * 100,
+                marker_color=['green' if r > 0 else 'red' for r in yearly_returns.values],
+                text=[f"{r*100:.2f}%" for r in yearly_returns.values],
+                textposition="outside"
+            ))
+            fig.update_layout(
+                title=f"{title} - Yearly Returns",
+                yaxis_title="Return (%)",
+                xaxis_title="Year",
+                showlegend=False,
+                height=400,
+                template="plotly_white"
+            )
+            st.plotly_chart(fig, use_container_width=True)
