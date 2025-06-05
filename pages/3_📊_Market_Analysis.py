@@ -493,12 +493,13 @@ st.subheader("📊 Yearly Returns Comparison")
 sp500_yearly_returns = get_yearly_returns("^GSPC")
 nasdaq_yearly_returns = get_yearly_returns("^NDX")
 
+# Check both are valid Series
 if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_returns, pd.Series):
     combined = pd.concat([
         sp500_yearly_returns.rename("S&P 500"),
         nasdaq_yearly_returns.rename("Nasdaq 100")
     ], axis=1).dropna()
-    
+
     fig = go.Figure()
     fig.add_trace(go.Bar(x=combined.index, y=combined['S&P 500'], name="S&P 500", marker_color="blue"))
     fig.add_trace(go.Bar(x=combined.index, y=combined['Nasdaq 100'], name="Nasdaq 100", marker_color="orange"))
