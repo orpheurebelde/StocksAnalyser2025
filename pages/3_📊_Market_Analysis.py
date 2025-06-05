@@ -460,55 +460,34 @@ def plot_yearly_returns(yearly_returns, title):
         st.error(f"No yearly returns data available for {title}.")
         return
 
-    # Handle DataFrame with one column
-    if isinstance(yearly_returns, pd.DataFrame) and yearly_returns.shape[1] == 1:
-        yearly_returns = yearly_returns.iloc[:, 0]
+    # If DataFrame with one column, convert to Series
+    if isinstance(yearly_returns, pd.DataFrame):
+        if yearly_returns.shape[1] == 1:
+            yearly_returns = yearly_returns.iloc[:, 0]
+        else:
+            st.error("Expected a single-column DataFrame or a Series for yearly_returns.")
+            return
 
-    # Prepare data
+    # Convert index to string for display on x-axis
     yearly_returns.index = yearly_returns.index.astype(str)
-    values = yearly_returns.values * 100
-    colors = ['green' if val >= 0 else 'red' for val in values]
-    avg_return = values.mean()
 
-    # Create bar chart
+    # Assign colors: green if positive or zero, red if negative
+    colors = ['green' if val >= 0 else 'red' for val in yearly_returns.values]
+
     fig = go.Figure()
-
-    # Add bars with tooltips and labels
     fig.add_trace(go.Bar(
         x=yearly_returns.index,
-        y=values,
+        y=yearly_returns.values * 100,  # Convert to percentage
         marker_color=colors,
-        name='Yearly Returns',
-        text=[f"{val:.2f}%" for val in values],
-        textposition='outside',
-        hovertemplate="Year: %{x}<br>Return: %{y:.2f}%",
+        name='Yearly Returns'
     ))
-
-    # Add average line
-    fig.add_shape(
-        type='line',
-        x0=yearly_returns.index[0],
-        x1=yearly_returns.index[-1],
-        y0=avg_return,
-        y1=avg_return,
-        line=dict(color="blue", dash="dash"),
-    )
-    fig.add_annotation(
-        x=yearly_returns.index[-1],
-        y=avg_return,
-        text=f"Avg: {avg_return:.2f}%",
-        showarrow=False,
-        yshift=10,
-        font=dict(color="blue")
-    )
 
     fig.update_layout(
         title=f"{title} Yearly Returns",
         xaxis_title="Year",
         yaxis_title="Return (%)",
         template="plotly_white",
-        height=450,
-        margin=dict(t=50, b=40),
+        height=400
     )
 
     st.plotly_chart(fig, use_container_width=True)
