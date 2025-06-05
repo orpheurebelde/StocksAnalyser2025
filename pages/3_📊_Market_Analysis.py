@@ -468,3 +468,27 @@ with col1_year:
 with col2_year:
     with st.expander("📈 Nasdaq 100 Yearly Performance", expanded=True):
         display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
+
+with st.expander("📊 Yearly Returns Chart", expanded=False):
+    yearly_returns, _ = display_yearly_performance("^GSPC", "S&P 500")
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        x=yearly_returns.index.astype(str),  # Ensure x-axis labels are strings
+        y=yearly_returns.values * 100,       # Convert to percentage
+        marker_color=['green' if val > 0 else 'red' for val in yearly_returns.values],
+        text=[f"{val*100:.2f}%" for val in yearly_returns.values],
+        textposition='outside',
+        name="Yearly Return"
+    ))
+
+    fig.update_layout(
+        title="Yearly Price Performance",
+        yaxis_title="Return (%)",
+        xaxis_title="Year",
+        showlegend=False,
+        height=400,
+        template='plotly_white'
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
