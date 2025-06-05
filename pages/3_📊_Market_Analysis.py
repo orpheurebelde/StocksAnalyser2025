@@ -493,8 +493,8 @@ with col2_year:
 st.write("---")
 st.subheader("📊 Yearly Returns Comparison")
 
-sp500_yearly_returns = display_yearly_performance("^GSPC", "S&P 500")
-nasdaq_yearly_returns = display_yearly_performance("^NDX", "Nasdaq 100")
+sp500_yearly_returns = get_yearly_returns("^GSPC", "S&P 500")
+nasdaq_yearly_returns = get_yearly_returns("^NDX", "Nasdaq 100")
 
 if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
     combined_yearly_returns = pd.DataFrame({
