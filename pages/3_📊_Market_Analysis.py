@@ -495,13 +495,15 @@ with col2_year:
 with st.expander("📊 Yearly Returns Chart", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
-        if sp500data is not None and not sp500data.empty:
+        if sp500data.get("yearly_returns") is not None and not sp500data.get("yearly_returns").empty:
+            # Pass the yearly returns data to the plotting function
             plot_yearly_returns(sp500data.get("yearly_returns"), "S&P 500")
         else:
             st.write("No S&P 500 data to plot.")
 
     with col2:
-        if nasdaqdata is not None and not nasdaqdata.empty:
+        if nasdaqdata.get("yearly_returns") is not None and not nasdaqdata.get("yearly_returns").empty:
+            # Pass the yearly returns data to the plotting function
             plot_yearly_returns(nasdaqdata.get("yearly_returns"), "Nasdaq 100")
         else:
             st.write("No Nasdaq 100 data to plot.")
