@@ -487,11 +487,14 @@ def plot_yearly_returns(yearly_returns, title):
 
     st.plotly_chart(fig, use_container_width=True)
 
-# Plot yearly returns for both indices
-st.write("---")  # Separator for better layout
+# Plot yearly returns for both indices in 2 charts
 with st.expander("📊 Yearly Returns Comparison", expanded=True):
     col1_plot, col2_plot = st.columns(2)
     with col1_plot:
-        plot_yearly_returns(display_yearly_performance(tickers["S&P 500"], "S&P 500")['yearly_returns'], "S&P 500")
+        yearly_returns_sp500 = display_yearly_performance(tickers["S&P 500"], "S&P 500")
+        plot_yearly_returns(yearly_returns_sp500['yearly_returns'], "S&P 500")
+
     with col2_plot:
-        plot_yearly_returns(display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")['yearly_returns'], "Nasdaq 100")
+        yearly_returns_nasdaq = display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
+        plot_yearly_returns(yearly_returns_nasdaq['yearly_returns'], "Nasdaq 100")
+
