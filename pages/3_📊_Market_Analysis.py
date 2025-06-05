@@ -4,6 +4,7 @@ import pandas as pd
 from utils.utils import compute_fibonacci_level, compute_rsi, compute_macd
 from datetime import datetime
 import plotly.graph_objects as go
+import time
 
 # --- 1. Set page configuration ---
 st.set_page_config(
