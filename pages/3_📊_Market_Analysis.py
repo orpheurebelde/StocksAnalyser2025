@@ -13,6 +13,26 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Session management
+SESSION_TIMEOUT_SECONDS = 3600
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "last_activity" not in st.session_state:
+    st.session_state["last_activity"] = time.time()
+
+if st.session_state["authenticated"]:
+    now = time.time()
+    if now - st.session_state["last_activity"] > SESSION_TIMEOUT_SECONDS:
+        st.session_state["authenticated"] = False
+        st.warning("Session expired.")
+        st.experimental_rerun()
+    else:
+        st.session_state["last_activity"] = now
+
+if not st.session_state["authenticated"]:
+    st.error("Unauthorized. Please go to the home page and log in.")
+    st.stop()
+
 # --- 2. Custom CSS for the refresh button ---
 st.markdown("""
 <style>
