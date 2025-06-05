@@ -471,29 +471,32 @@ with col2_year:
     with st.expander("📈 Nasdaq 100 Yearly Performance", expanded=True):
         display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
 
-yearly_returns = display_yearly_performance("^GSPC", "S&P 500")
-# Display yearly returns chart for S&P 500
-title = "S&P 500"
+#Plot Yearly Returns in a single chart
+st.write("---") # Another separator
+st.subheader("📊 Yearly Returns Comparison"
+             )
+# Fetch yearly returns for both indices
+sp500_yearly_returns = display_yearly_performance(tickers["S&P 500"], "S&P 500")
+nasdaq_yearly_returns = display_yearly_performance(tickers["Nasdaq 100"], "Nasdaq 100")
+# Ensure both returns are not None
+if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
+    # Create a combined DataFrame for plotting
+    combined_yearly_returns = pd.DataFrame({
+        'S&P 500': sp500_yearly_returns,
+        'Nasdaq 100': nasdaq_yearly_returns
+    }).dropna()
 
-if yearly_returns is not None and not yearly_returns.empty:
-    with st.expander(f"📈 {title} - Yearly Returns Chart", expanded=False):
-        # Clean NaN values from the data
-        valid_returns = yearly_returns.dropna()
+    # Plotting the yearly returns using Plotly
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=combined_yearly_returns.index, y=combined_yearly_returns['S&P 500'], name='S&P 500', marker_color='blue'))
+    fig.add_trace(go.Bar(x=combined_yearly_returns.index, y=combined_yearly_returns['Nasdaq 100'], name='Nasdaq 100', marker_color='orange'))
 
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=valid_returns.index.astype(str),
-            y=valid_returns.values * 100,
-            marker_color=['green' if r > 0 else 'red' for r in valid_returns.values],
-            text=[f"{r*100:.2f}%" if pd.notna(r) else "N/A" for r in valid_returns.values],
-            textposition="outside"
-        ))
-        fig.update_layout(
-            title=f"{title} - Yearly Returns",
-            yaxis_title="Return (%)",
-            xaxis_title="Year",
-            showlegend=False,
-            height=400,
-            template="plotly_white"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    fig.update_layout(
+        title="Yearly Returns Comparison (S&P 500 vs Nasdaq 100)",
+        xaxis_title="Year",
+        yaxis_title="Yearly Return (%)",
+        barmode='group',
+        template="plotly_white"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
