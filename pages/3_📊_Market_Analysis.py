@@ -437,22 +437,18 @@ def display_yearly_performance(ticker, title):
 # --- 10. Chart Returns
 @st.cache_data
 def get_yearly_returns(ticker: str) -> pd.Series:
-    try:
-        data = yf.download(ticker, period="max", interval="1d", progress=False)
-        if data.empty:
-            return None
-        data.dropna(inplace=True)
-        data.index = pd.to_datetime(data.index)
-
-        year_open = data['Close'].resample('Y').first()
-        year_close = data['Close'].resample('Y').last()
-        yearly_returns = (year_close - year_open) / year_open
-        yearly_returns.index = yearly_returns.index.year
-
-        return yearly_returns
-    except Exception as e:
-        st.error(f"Error fetching data for {ticker}: {e}")
+    data = yf.download(ticker, period="max", interval="1d", progress=False)
+    if data.empty:
         return None
+    data.dropna(inplace=True)
+    data.index = pd.to_datetime(data.index)
+
+    year_open = data['Close'].resample('Y').first()
+    year_close = data['Close'].resample('Y').last()
+    yearly_returns = (year_close - year_open) / year_open
+    yearly_returns.index = yearly_returns.index.year  # Convert datetime index to int
+
+    return yearly_returns
 
 # --- 11. Displaying the indicators and performance sections ---
 st.write("---") # Separator for better layout
@@ -496,15 +492,12 @@ st.subheader("📊 Yearly Returns Comparison")
 sp500_yearly_returns = get_yearly_returns("^GSPC")
 nasdaq_yearly_returns = get_yearly_returns("^NDX")
 
-st.write("Type of sp500_yearly_returns:", type(sp500_yearly_returns))
-st.write("Type of nasdaq_yearly_returns:", type(nasdaq_yearly_returns))
-
-if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
-    combined = pd.DataFrame({
-        'S&P 500': sp500_yearly_returns,
-        'Nasdaq 100': nasdaq_yearly_returns
-    }).dropna()
-
+if isinstance(sp500_yearly_returns, pd.Series) and isinstance(nasdaq_yearly_returns, pd.Series):
+    combined = pd.concat([
+        sp500_yearly_returns.rename("S&P 500"),
+        nasdaq_yearly_returns.rename("Nasdaq 100")
+    ], axis=1).dropna()
+    
     fig = go.Figure()
     fig.add_trace(go.Bar(x=combined.index, y=combined['S&P 500'], name="S&P 500", marker_color="blue"))
     fig.add_trace(go.Bar(x=combined.index, y=combined['Nasdaq 100'], name="Nasdaq 100", marker_color="orange"))
@@ -520,4 +513,4 @@ if sp500_yearly_returns is not None and nasdaq_yearly_returns is not None:
     with st.expander("📈 Yearly Returns Chart"):
         st.plotly_chart(fig, use_container_width=True)
 else:
-    st.warning("Unable to load yearly return data.")
+    st.warning("One of the return series is not valid.")
