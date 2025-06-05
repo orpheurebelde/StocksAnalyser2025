@@ -433,6 +433,7 @@ def display_yearly_performance(ticker, title):
         st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current year.")
+    return yearly_returns
 
 # --- 10. Chart Returns
 @st.cache_data(ttl=14400)
