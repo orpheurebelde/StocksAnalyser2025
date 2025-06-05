@@ -483,9 +483,9 @@ def plot_yearly_returns(yearly_returns, title):
     ))
 
     fig.update_layout(
-        title=f"{title} Yearly Returns",
-        xaxis_title="Year",
-        yaxis_title="Return (%)",
+        title=f"{title} Performance Anual",
+        xaxis_title="Ano",
+        yaxis_title="Retorno (%)",
         template="plotly_white",
         height=400
     )
