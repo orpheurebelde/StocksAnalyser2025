@@ -420,7 +420,7 @@ def display_yearly_performance(ticker, title):
         st.markdown(f"<span style='color:{cat_color};'>**Category**: {category}</span>", unsafe_allow_html=True)
     else:
         st.write("No data available for the current year.")
-
+    st.write(yearly_returns)
     # Return the data you want to reuse
     return {
         'yearly_returns': yearly_returns,
