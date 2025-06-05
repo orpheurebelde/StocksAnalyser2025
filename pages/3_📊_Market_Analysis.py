@@ -353,9 +353,12 @@ def display_yearly_performance(ticker, title):
 
     #Calculate yearly returns
     # Resample to yearly frequency (end-of-year prices) for historical yearly returns
+    # ✅ Calculate yearly returns as (last - first) / first for each year
     try:
-        yearly_returns = data['Close'].resample('Y').last().pct_change().dropna()
-        yearly_returns.index = yearly_returns.index.map(lambda d: d.year - 1)
+        year_open = data['Close'].resample('Y').first()
+        year_close = data['Close'].resample('Y').last()
+        yearly_returns = (year_close - year_open) / year_open
+        yearly_returns.index = yearly_returns.index.year  # Make sure the index is integer year
     except Exception as e:
         st.error(f"Failed to calculate yearly returns: {e}")
         return
