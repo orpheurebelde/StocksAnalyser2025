@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 from utils.utils import compute_fibonacci_level, compute_rsi, compute_macd
 from datetime import datetime
 import plotly.graph_objects as go
