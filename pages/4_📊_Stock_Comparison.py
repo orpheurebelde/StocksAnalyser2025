@@ -42,7 +42,7 @@ st.markdown(
     """
     <style>
     .custom-font {
-        font-size: 16px;  /* Adjust this value to your preferred font size */
+        font-size: 24px;  /* Adjust this value to your preferred font size */
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         color: #333333;
     }
