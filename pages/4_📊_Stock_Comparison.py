@@ -38,6 +38,25 @@ def load_stock_list():
 stock_df = load_stock_list()
 options = ["Select a stock..."] + stock_df["Display"].tolist()
 
+# Custom font size control
+font_size = st.slider("Adjust font size for comparison", 10, 24, 14)
+
+# CSS style for font size
+st.markdown(
+    f"""<style>
+    .custom-font {{
+        font-size: {font_size}px !important;
+        font-weight: 500;
+    }}
+    .divider {{
+        border-top: 3px solid orange;
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+    }}
+    </style>""",
+    unsafe_allow_html=True
+)
+
 # Format helpers
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
 def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
@@ -45,11 +64,11 @@ def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, flo
 def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
 def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
 
-# Expander with 3 columns for stock comparison
 with st.expander("🔍 Compare Stocks", expanded=True):
-    col1, col2, col3 = st.columns(3)
+    label_col, col1, col2, col3 = st.columns([1, 3, 3, 3])
     selections = []
 
+    # Fetch selected stocks
     for i, col in enumerate([col1, col2, col3]):
         with col:
             selected = st.selectbox("Search", options, key=f"search_{i}")
@@ -84,16 +103,17 @@ metrics = {
 }
 
 # Display the metrics in aligned rows for each selected stock
-if any(selections):
-    st.markdown("### 📈 Financial Metrics Comparison")
-    for metric_name, formatter in metrics.items():
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.write(f"**{metric_name}**")
-            st.write(formatter(selections[0]) if selections[0] else "-")
-        with col2:
-            st.write(" ")
-            st.write(formatter(selections[1]) if selections[1] else "-")
-        with col3:
-            st.write(" ")
-            st.write(formatter(selections[2]) if selections[2] else "-")
+# Display comparison metrics
+for metric_name, value_func in metrics.items():
+    label_col.markdown(f"<div class='custom-font'><strong>{metric_name}</strong></div>", unsafe_allow_html=True)
+
+    for idx, col in enumerate([col1, col2, col3]):
+        with col:
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+            val = "—"
+            if selections[idx]:
+                try:
+                    val = value_func(selections[idx])
+                except:
+                    val = "N/A"
+            st.markdown(f"<div class='custom-font'>{val}</div>", unsafe_allow_html=True)
