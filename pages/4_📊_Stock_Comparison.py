@@ -38,22 +38,21 @@ def load_stock_list():
 stock_df = load_stock_list()
 options = ["Select a stock..."] + stock_df["Display"].tolist()
 
-# Custom font size control
-font_size = st.slider("Adjust font size for comparison", 10, 24, 14)
-
-# CSS style for font size
 st.markdown(
-    f"""<style>
-    .custom-font {{
-        font-size: {font_size}px !important;
-        font-weight: 500;
-    }}
-    .divider {{
-        border-top: 3px solid orange;
-        margin-top: 0.5rem;
-        margin-bottom: 0.5rem;
-    }}
-    </style>""",
+    """
+    <style>
+    .custom-font {
+        font-size: 16px;  /* Adjust this value to your preferred font size */
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #333333;
+    }
+    .divider {
+        border-left: 3px solid orange;
+        height: 24px;
+        margin: 6px 0;
+    }
+    </style>
+    """,
     unsafe_allow_html=True
 )
 
