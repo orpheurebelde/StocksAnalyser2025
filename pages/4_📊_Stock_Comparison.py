@@ -38,57 +38,51 @@ def load_stock_list():
 stock_df = load_stock_list()
 options = ["Select a stock..."] + stock_df["Display"].tolist()
 
-st.markdown(
-    """
-    <style>
-    /* Custom font style for metric labels */
-    .custom-font {
-        font-size: 24px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: white;
-        font-weight: bold;
-        text-align: right;
-    }
-
-    /* Orange rounded box style for values */
-    .rounded-box {
-        background-color: transparent;
-        border: 3px solid orange;
-        border-radius: 14px;
-        padding: 10px 14px;
-        color: white;
-        font-size: 20px;
-        min-height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 18px;
-    }
-
-    /* Optional: sticky expander header if needed */
-    div[data-testid="stExpander"] > div > div {
-        position: sticky;
-        top: 3.5rem;
-        background-color: #0e1117;
-        z-index: 999;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #444;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# Format helpers
+# Helper functions
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
 def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
 def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
 def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
 def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
 
-with st.expander("🔍 Compare Stocks", expanded=True):
-    # Select stocks first in 3 columns
+st.markdown("""
+<style>
+.custom-font {
+    font-size: 24px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+    font-weight: bold;
+    text-align: right;
+}
+.rounded-box {
+    background-color: transparent;
+    border: 3px solid orange;
+    border-radius: 14px;
+    padding: 10px 14px;
+    color: white;
+    font-size: 20px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+}
+.sticky-container {
+    position: sticky;
+    top: 3.5rem;
+    background-color: #0e1117;
+    z-index: 999;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #444;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Sticky Search Bar
+with st.container():
+    st.markdown("<div class='sticky-container'>", unsafe_allow_html=True)
+
     label_col, col1, col2, col3 = st.columns([2.5, 3, 3, 3])
     selections = []
 
@@ -102,7 +96,10 @@ with st.expander("🔍 Compare Stocks", expanded=True):
             else:
                 selections.append(None)
 
-    # Define the metrics to display
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Comparison Metrics
+with st.expander("🔍 Compare Stocks", expanded=True):
     metrics = {
         "Trailing PE": lambda info: format_ratio(info.get("trailingPE")),
         "Forward PE": lambda info: format_ratio(info.get("forwardPE")),
@@ -124,17 +121,14 @@ with st.expander("🔍 Compare Stocks", expanded=True):
         "Current Ratio": lambda info: format_ratio(info.get("currentRatio"))
     }
 
-    # Now render comparison rows, one row per metric, 4 columns (label + 3 stocks)
     for metric_name, value_func in metrics.items():
         label_col, c1, c2, c3 = st.columns([2.5, 3, 3, 3])
 
-        # Label with white font and bold and align text to the right
         label_col.markdown(
-            f"<div class='custom-font' style='font-weight:bold; text-align:right; color:white; font-size:16px;'>{metric_name}</div>",
+            f"<div class='custom-font'>{metric_name}</div>",
             unsafe_allow_html=True
         )
 
-        # Iterate through selected stocks columns
         for idx, col in enumerate([c1, c2, c3]):
             with col:
                 val = "—"
@@ -144,23 +138,8 @@ with st.expander("🔍 Compare Stocks", expanded=True):
                     except Exception:
                         val = "N/A"
 
-                # Display value inside a rounded orange box
                 st.markdown(
-                    f"""
-                    <div style='
-                        background-color: transparent;
-                        border: 3px solid orange;
-                        border-radius: 14px;
-                        padding: 10px 14px;
-                        color: white;
-                        font-size: 20px;
-                        min-height: 36px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        margin-bottom: 18px;
-                    '>{val}</div>
-                    """,
+                    f"<div class='rounded-box'>{val}</div>",
                     unsafe_allow_html=True
                 )
 
