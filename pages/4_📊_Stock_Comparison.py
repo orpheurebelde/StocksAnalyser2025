@@ -65,10 +65,10 @@ def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else
 
 with st.expander("🔍 Compare Stocks", expanded=True):
     # Select stocks first in 3 columns
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     selections = []
 
-    for i, col in enumerate([col1, col2, col3]):
+    for i, col in enumerate([col2, col3, col4]):
         with col:
             selected = st.selectbox("Search", options, key=f"search_{i}")
             if selected != "Select a stock...":
