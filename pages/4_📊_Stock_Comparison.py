@@ -124,13 +124,15 @@ for metric_name, value_func in metrics.items():
             st.markdown(
                 f"""
                 <div style='
-                    border-left: 4px solid orange;
-                    padding-left: 8px;
+                    background-color: orange;
+                    border-radius: 12px;
+                    padding: 6px 12px;
                     color: white;
                     font-size: 16px;
-                    min-height: 24px;
+                    min-height: 32px;
                     display: flex;
                     align-items: center;
+                    justify-content: center;
                 '>{val}</div>
                 """,
                 unsafe_allow_html=True
