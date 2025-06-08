@@ -80,7 +80,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Sticky Search Bar
-with st.container():
+with st.expander("🔍 Search Stocks for Comparison", expanded=True):
     st.markdown("<div class='sticky-container'>", unsafe_allow_html=True)
 
     label_col, col1, col2, col3 = st.columns([2.5, 3, 3, 3])
@@ -99,7 +99,7 @@ with st.container():
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Comparison Metrics
-with st.expander("🔍 Compare Stocks", expanded=True):
+with st.expander("🔍 Stocks Metrics and Valuations", expanded=True):
     metrics = {
         "Trailing PE": lambda info: format_ratio(info.get("trailingPE")),
         "Forward PE": lambda info: format_ratio(info.get("forwardPE")),
