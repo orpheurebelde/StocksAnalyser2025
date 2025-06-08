@@ -102,17 +102,37 @@ metrics = {
 
 # Now render comparison rows, one row per metric, 4 columns (label + 3 stocks)
 for metric_name, value_func in metrics.items():
-    label_col, c1, c2, c3 = st.columns([2, 3, 3, 3])  # label wider to fit text better
+    label_col, c1, c2, c3 = st.columns([2, 3, 3, 3])  # label column wider
 
-    label_col.markdown(f"<div class='custom-font'><strong>{metric_name}</strong></div>", unsafe_allow_html=True)
+    # Label with white font and bold
+    label_col.markdown(
+        f"<div class='custom-font' style='font-weight:bold; color:white;'>{metric_name}</div>",
+        unsafe_allow_html=True
+    )
 
+    # Iterate through selected stocks columns
     for idx, col in enumerate([c1, c2, c3]):
         with col:
-            st.markdown(f"<div class='custom-font'>{val}</div>", unsafe_allow_html=True)
             val = "—"
-            if selections[idx]:
+            if len(selections) > idx and selections[idx]:
                 try:
                     val = value_func(selections[idx])
-                except:
+                except Exception:
                     val = "N/A"
-            st.markdown(f"<div class='custom-font'>{val}</div>", unsafe_allow_html=True)
+
+            # Show val with orange left border as divider and white font color
+            st.markdown(
+                f"""
+                <div style='
+                    border-left: 4px solid orange;
+                    padding-left: 8px;
+                    color: white;
+                    font-size: 16px;
+                    min-height: 24px;
+                    display: flex;
+                    align-items: center;
+                '>{val}</div>
+                """,
+                unsafe_allow_html=True
+            )
+
