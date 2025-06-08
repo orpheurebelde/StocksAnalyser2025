@@ -108,7 +108,7 @@ for metric_name, value_func in metrics.items():
 
     for idx, col in enumerate([c1, c2, c3]):
         with col:
-            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='custom-font'>{val}</div>", unsafe_allow_html=True)
             val = "—"
             if selections[idx]:
                 try:
