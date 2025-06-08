@@ -104,9 +104,9 @@ with st.expander("🔍 Compare Stocks", expanded=True):
     for metric_name, value_func in metrics.items():
         label_col, c1, c2, c3 = st.columns([3, 3, 3, 3])  # label column wider
 
-        # Label with white font and bold
+        # Label with white font and bold and align text to the right
         label_col.markdown(
-            f"<div class='custom-font' style='font-weight:bold; color:white;'>{metric_name}</div>",
+            f"<div class='custom-font' style='font-weight:bold; text-align:right; color:white;'>{metric_name}</div>",
             unsafe_allow_html=True
         )
 
