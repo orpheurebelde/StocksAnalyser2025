@@ -52,8 +52,13 @@ with st.expander("🔍 Compare Stocks", expanded=True):
     selections = []
     for col in [col1, col2, col3]:
         with col:
-            selected = st.selectbox("Search", options)
-            if selected != "Select a stock...":
+            selected1 = st.selectbox("Search", options, key="search1")
+            selected2 = st.selectbox("Search", options, key="search2")
+            selected3 = st.selectbox("Search", options, key="search3")
+            for i in range(3):
+                selected = [selected1, selected2, selected3][i]
+            if selected and selected != "Select a stock...":
+                # Get ticker from selected stock
                 ticker = stock_df.loc[stock_df["Display"] == selected, "Ticker"].values[0]
                 info = get_stock_info(ticker)
                 selections.append(info)
