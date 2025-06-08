@@ -65,7 +65,7 @@ def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else
 
 with st.expander("🔍 Compare Stocks", expanded=True):
     # Select stocks first in 3 columns
-    label_col, col1, col2, col3 = st.columns([3, 3, 3, 3])
+    label_col, col1, col2, col3 = st.columns([2.5, 3, 3, 3])
     selections = []
 
     for i, col in enumerate([col1, col2, col3]):
@@ -102,7 +102,7 @@ with st.expander("🔍 Compare Stocks", expanded=True):
 
     # Now render comparison rows, one row per metric, 4 columns (label + 3 stocks)
     for metric_name, value_func in metrics.items():
-        label_col, c1, c2, c3 = st.columns([3, 3, 3, 3])  # label column wider
+        label_col, c1, c2, c3 = st.columns([2.5, 3, 3, 3])  # label column wider
 
         # Label with white font and bold and align text to the right
         label_col.markdown(
