@@ -41,20 +41,44 @@ options = ["Select a stock..."] + stock_df["Display"].tolist()
 st.markdown(
     """
     <style>
+    /* Custom font style for metric labels */
     .custom-font {
-        font-size: 24px;  /* Adjust this value to your preferred font size */
+        font-size: 24px;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: #333333;
+        color: white;
+        font-weight: bold;
+        text-align: right;
     }
-    .divider {
-        border-left: 3px solid orange;
-        height: 24px;
-        margin: 6px 0;
+
+    /* Orange rounded box style for values */
+    .rounded-box {
+        background-color: transparent;
+        border: 3px solid orange;
+        border-radius: 14px;
+        padding: 10px 14px;
+        color: white;
+        font-size: 20px;
+        min-height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 18px;
+    }
+
+    /* Optional: sticky expander header if needed */
+    div[data-testid="stExpander"] > div > div {
+        position: sticky;
+        top: 3.5rem;
+        background-color: #0e1117;
+        z-index: 999;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #444;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
+
 
 # Format helpers
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
@@ -98,15 +122,15 @@ with st.expander("🔍 Compare Stocks", expanded=True):
         "Total Cash": lambda info: format_currency(info.get("totalCash")),
         "Total Debt": lambda info: format_currency(info.get("totalDebt")),
         "Current Ratio": lambda info: format_ratio(info.get("currentRatio"))
-}
+    }
 
     # Now render comparison rows, one row per metric, 4 columns (label + 3 stocks)
     for metric_name, value_func in metrics.items():
-        label_col, c1, c2, c3 = st.columns([2.5, 3, 3, 3])  # label column wider
+        label_col, c1, c2, c3 = st.columns([2.5, 3, 3, 3])
 
         # Label with white font and bold and align text to the right
         label_col.markdown(
-            f"<div class='custom-font' style='font-weight:bold; text-align:right; color:white;'>{metric_name}</div>",
+            f"<div class='custom-font' style='font-weight:bold; text-align:right; color:white; font-size:16px;'>{metric_name}</div>",
             unsafe_allow_html=True
         )
 
@@ -120,24 +144,21 @@ with st.expander("🔍 Compare Stocks", expanded=True):
                     except Exception:
                         val = "N/A"
 
-                # Show val with orange left border as divider and white font color
+                # Display value inside a rounded orange box
                 st.markdown(
                     f"""
                     <div style='
                         background-color: transparent;
-                        border-left: 4px solid orange;
-                        border-right: 4px solid orange;
-                        border-top: 4px solid orange;
-                        border-bottom: 4px solid orange;
-                        border-radius: 12px;
-                        padding: 6px 12px;
+                        border: 3px solid orange;
+                        border-radius: 14px;
+                        padding: 10px 14px;
                         color: white;
-                        font-size: 24px;
-                        min-height: 32px;
+                        font-size: 20px;
+                        min-height: 36px;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        margin-bottom: 12px;
+                        margin-bottom: 18px;
                     '>{val}</div>
                     """,
                     unsafe_allow_html=True
