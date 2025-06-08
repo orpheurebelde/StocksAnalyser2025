@@ -48,17 +48,12 @@ def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else
 # Expander with 3 columns for stock comparison
 with st.expander("🔍 Compare Stocks", expanded=True):
     col1, col2, col3 = st.columns(3)
-
     selections = []
-    for col in [col1, col2, col3]:
+
+    for i, col in enumerate([col1, col2, col3]):
         with col:
-            selected1 = st.selectbox("Search", options, key="search1")
-            selected2 = st.selectbox("Search", options, key="search2")
-            selected3 = st.selectbox("Search", options, key="search3")
-            for i in range(3):
-                selected = [selected1, selected2, selected3][i]
-            if selected and selected != "Select a stock...":
-                # Get ticker from selected stock
+            selected = st.selectbox("Search", options, key=f"search_{i}")
+            if selected != "Select a stock...":
                 ticker = stock_df.loc[stock_df["Display"] == selected, "Ticker"].values[0]
                 info = get_stock_info(ticker)
                 selections.append(info)
