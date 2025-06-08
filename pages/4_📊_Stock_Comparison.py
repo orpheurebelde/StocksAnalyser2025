@@ -65,10 +65,10 @@ def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else 
 def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
 
 with st.expander("🔍 Compare Stocks", expanded=True):
-    label_col, col1, col2, col3 = st.columns([1, 3, 3, 3])
+    # Select stocks first in 3 columns
+    col1, col2, col3 = st.columns(3)
     selections = []
 
-    # Fetch selected stocks
     for i, col in enumerate([col1, col2, col3]):
         with col:
             selected = st.selectbox("Search", options, key=f"search_{i}")
@@ -83,7 +83,6 @@ with st.expander("🔍 Compare Stocks", expanded=True):
 metrics = {
     "Trailing PE": lambda info: format_ratio(info.get("trailingPE")),
     "Forward PE": lambda info: format_ratio(info.get("forwardPE")),
-    "PEG Ratio": lambda info: format_ratio(info.get("pegRatio")),
     "Price/Book": lambda info: format_ratio(info.get("priceToBook")),
     "Price/Sales": lambda info: format_ratio(info.get("priceToSalesTrailing12Months")),
     "Free Cash Flow": lambda info: format_currency(info.get("freeCashflow")),
@@ -102,12 +101,13 @@ metrics = {
     "Current Ratio": lambda info: format_ratio(info.get("currentRatio"))
 }
 
-# Display the metrics in aligned rows for each selected stock
-# Display comparison metrics
+# Now render comparison rows, one row per metric, 4 columns (label + 3 stocks)
 for metric_name, value_func in metrics.items():
+    label_col, c1, c2, c3 = st.columns([2, 3, 3, 3])  # label wider to fit text better
+
     label_col.markdown(f"<div class='custom-font'><strong>{metric_name}</strong></div>", unsafe_allow_html=True)
 
-    for idx, col in enumerate([col1, col2, col3]):
+    for idx, col in enumerate([c1, c2, c3]):
         with col:
             st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
             val = "—"
