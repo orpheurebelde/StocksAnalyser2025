@@ -133,6 +133,7 @@ for metric_name, value_func in metrics.items():
                     display: flex;
                     align-items: center;
                     justify-content: center;
+                    margin-bottom: 12px;
                 '>{val}</div>
                 """,
                 unsafe_allow_html=True
