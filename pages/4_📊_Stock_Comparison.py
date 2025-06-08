@@ -65,7 +65,7 @@ def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else
 
 with st.expander("🔍 Compare Stocks", expanded=True):
     # Select stocks first in 3 columns
-    label_col, col1, col2, col3 = st.columns(2, 3, 3, 3)
+    label_col, col1, col2, col3 = st.columns([2, 3, 3, 3])
     selections = []
 
     for i, col in enumerate([col1, col2, col3]):
