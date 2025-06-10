@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
 from utils.utils import get_stock_price_yf
 from datetime import datetime
@@ -11,10 +11,14 @@ st.title("📊 Portfolio Analysis & AI Suggestions")
 uploaded_file = st.file_uploader("📁 Upload Portfolio CSV", type=["csv"])
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=True)
+    # Read CSV while skipping bad lines
+    df = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=True, on_bad_lines='skip')
 
     # Clean up column names
     df.columns = [col.strip() for col in df.columns]
+
+    # Strip suffixes like '.DE' from tickers
+    df["Ticker"] = df["Ticker"].str.upper().str.split('.').str[0]
 
     # Assume your CSV has: Date, Ticker, Quantity, Price, Type (Buy/Sell)
     st.info("✅ CSV successfully loaded. Sample data:")
