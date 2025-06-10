@@ -21,7 +21,7 @@ if uploaded_file:
     st.write("Columns found in CSV:", list(df.columns))
 
     # Check required columns (with Symbol instead of Ticker)
-    required_cols = {"Date", "Symbol", "Quantity", "Price", "Type"}
+    required_cols = {"Date", "Symbol", "Quantity", "Purchase Price", "Transaction Type"}
     missing_cols = required_cols - set(df.columns)
     if missing_cols:
         st.error(f"Missing required columns in CSV: {missing_cols}")
