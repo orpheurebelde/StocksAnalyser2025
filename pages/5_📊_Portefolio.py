@@ -91,55 +91,49 @@ if uploaded_file:
                 if st.button("🤖 Run Mistral AI Portfolio Analysis"):
                     with st.spinner("Sending portfolio summary to Mistral AI..."):
                         user_prompt = f"""
-                            You are a financial advisor analyzing a portfolio. Use Modern Portfolio Theory and sound portfolio management principles.
+        You are a financial advisor analyzing a portfolio. Use Modern Portfolio Theory and sound portfolio management principles.
 
-                            Here is the aggregated portfolio summary:
+        Here is the aggregated portfolio summary:
 
-                            {summary.to_string(index=False)}
+        {summary.to_string(index=False)}
 
-                            And here is the annual performance breakdown:
+        And here is the annual performance breakdown:
 
-                            {annual.to_string(index=False)}
+        {annual.to_string(index=False)}
 
-                            Please perform the following:
-                            1. Identify overexposed sectors or individual stocks.
-                            2. Highlight diversification gaps.
-                            3. Suggest rebalancing strategies.
-                            4. Recommend ETF or stock alternatives to reduce risk and increase stability.
-                            5. Provide a short-term (1 year) and medium-term (3–5 years) forecast based on current asset mix.
-                            6. Mention any red flags like concentrated risk, declining sectors, or underperformers.
+        Please perform the following:
+        1. Identify overexposed sectors or individual stocks.
+        2. Highlight diversification gaps.
+        3. Suggest rebalancing strategies.
+        4. Recommend ETF or stock alternatives to reduce risk and increase stability.
+        5. Provide a short-term (1 year) and medium-term (3–5 years) forecast based on current asset mix.
+        6. Mention any red flags like concentrated risk, declining sectors, or underperformers.
 
-                            Be concise, professional, and use bullet points.
-                            """
+        Be concise, professional, and use bullet points.
+        """
 
-                        # Example placeholder – you would replace this with your real Mistral API call
-                        ai_response = """
-                            **AI Portfolio Analysis**
+                        import requests
 
-                            📊 **Diversification Observations**:
-                            - The portfolio is heavily weighted towards technology (over 60%).
-                            - Exposure to financials, healthcare, and energy is minimal or nonexistent.
+                        headers = {
+                            "Authorization": f"Bearer {MISTRAL_API_KEY}",
+                            "Content-Type": "application/json"
+                        }
 
-                            ⚠️ **Risks Identified**:
-                            - High concentration in volatile sectors increases drawdown risk during market downturns.
-                            - Limited geographic diversification; most assets are from XETRA-listed companies.
+                        payload = {
+                            "model": "mistral-small",  # or mistral-medium / mistral-large
+                            "messages": [
+                                {"role": "system", "content": "You are a helpful financial analyst AI."},
+                                {"role": "user", "content": user_prompt}
+                            ],
+                            "temperature": 0.7
+                        }
 
-                            🔄 **Rebalancing Suggestions**:
-                            - Reduce weight in tech stocks like [EXAMPLE_STOCK].
-                            - Increase allocation in defensive sectors: utilities, healthcare, consumer staples.
-                            - Add ETFs like `VEA` (Developed Markets), `VWO` (Emerging Markets), or `SPY` (S&P 500 exposure).
+                        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload)
 
-                            📈 **Forecast**:
-                            - If market trends persist, this portfolio may return ~6 to 9% annually but with high volatility.
-                            - A more balanced portfolio could yield 7% with lower risk.
-
-                            📌 **Next Steps**:
-                            - Set target allocations by sector.
-                            - Reassess every quarter.
-                            - Consider dividend-focused ETFs for stable income.
-
-                            Let me know if you'd like this tailored to a risk profile or long-term retirement plan.
-                            """
+                        if response.status_code == 200:
+                            ai_response = response.json()["choices"][0]["message"]["content"]
+                        else:
+                            ai_response = f"⚠️ API Error: {response.status_code} - {response.text}"
 
                         st.success("AI analysis complete.")
                         st.markdown(f"**AI Suggestion:**\n\n{ai_response}")
