@@ -102,6 +102,12 @@ def get_stock_info(ticker):
 
     return fetch_and_cache_stock_info(ticker)
 
+def get_stock_price_yf(ticker):
+    try:
+        return yf.Ticker(ticker).history(period="1d")["Close"].iloc[-1]
+    except Exception:
+        return None
+
 # Utility: Safe metric formatting
 def safe_metric(value, divisor=1, suffix="", percentage=False):
     try:
