@@ -96,6 +96,41 @@ if uploaded_file:
         st.subheader("📈 Annual Performance (Unrealized Gains)")
         st.dataframe(annual_summary, use_container_width=True)
 
+        # Calculate realized gains per transaction (as before)
+        if not buys.empty and not sells.empty:
+            avg_buy_price_per_symbol = buys.groupby("Symbol")["Purchase Price"].mean()
+
+            sells = sells.copy()
+            sells["Realized Gain"] = sells.apply(
+                lambda row: (row["Purchase Price"] - avg_buy_price_per_symbol.get(row["Symbol"], row["Purchase Price"])) * row["Quantity"], axis=1
+            )
+            sells["Year"] = sells["Date"].dt.year
+
+            # Aggregate realized gains by year
+            annual_realized = sells.groupby("Year")["Realized Gain"].sum().reset_index()
+
+            # Calculate annual invested amount (sum of buy investments per year)
+            buys["Year"] = buys["Date"].dt.year
+            annual_invested = buys.groupby("Year")["Investment"].sum().reset_index()
+
+            # Merge annual realized gains with invested amount
+            annual_summary = pd.merge(annual_realized, annual_invested, on="Year", how="left")
+
+            # Calculate % realized gain/loss
+            annual_summary["Realized Gain %"] = (annual_summary["Realized Gain"] / annual_summary["Investment"]) * 100
+
+            st.subheader("📅 Annual Realized Gains/Losses Summary")
+            st.dataframe(
+                annual_summary.rename(columns={
+                    "Year": "Year",
+                    "Realized Gain": "Realized Gain (€)",
+                    "Investment": "Investment (€)",
+                    "Realized Gain %": "Realized Gain (%)"
+                }),
+                use_container_width=True
+            )
+
+
         # AI Trigger
         if st.button("🤖 Run AI Portfolio Analysis"):
             with st.spinner("Sending portfolio to Mistral AI..."):
