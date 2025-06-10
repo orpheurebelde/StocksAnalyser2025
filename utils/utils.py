@@ -102,6 +102,7 @@ def get_stock_info(ticker):
 
     return fetch_and_cache_stock_info(ticker)
 
+@st.cache_data(ttl=CACHE_DURATION_HOURS * 3600, show_spinner=False)
 def get_stock_price_yf(ticker):
     try:
         return yf.Ticker(ticker).history(period="1d")["Close"].iloc[-1]
