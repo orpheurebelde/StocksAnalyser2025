@@ -35,7 +35,7 @@ if uploaded_file:
         df["Current Price"] = df["Symbol"].map(current_prices)
 
         # Unrealized Gain/Loss Calculation
-        df["Investment"] = df["Quantity"] * df["Price"]
+        df["Investment"] = df["Quantity"] * df["Purchase Price"]
         df["Market Value"] = df["Quantity"] * df["Current Price"]
         df["Unrealized Gain"] = df["Market Value"] - df["Investment"]
 
