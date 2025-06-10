@@ -40,8 +40,8 @@ if uploaded_file:
         df["Unrealized Gain"] = df["Market Value"] - df["Investment"]
 
         # Separate Buy and Sell to compute Realized Gains
-        buys = df[df["Type"].str.lower() == "buy"]
-        sells = df[df["Type"].str.lower() == "sell"]
+        buys = df[df["Transaction Type"].str.lower() == "buy"]
+        sells = df[df["Transaction Type"].str.lower() == "sell"]
 
         # Grouped Summary per Symbol
         summary = df.groupby("Symbol").agg({
@@ -59,11 +59,11 @@ if uploaded_file:
 
         # Realized Gain Estimation (naive method)
         realized = sells.copy()
-        realized["Realized Gain"] = (sells["Price"] - buys.groupby("Symbol")["Price"].transform("mean")) * sells["Quantity"]
+        realized["Realized Gain"] = (sells["Purchase Price"] - buys.groupby("Symbol")["Purchase Price"].transform("mean")) * sells["Quantity"]
 
         if not realized.empty:
             st.subheader("💰 Realized Gains")
-            st.dataframe(realized[["Date", "Symbol", "Quantity", "Price", "Realized Gain"]], use_container_width=True)
+            st.dataframe(realized[["Date", "Symbol", "Quantity", "Purchase Price", "Realized Gain"]], use_container_width=True)
 
         # Annual Performance Summary
         df["Year"] = df["Date"].dt.year
