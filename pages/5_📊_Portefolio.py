@@ -1,6 +1,5 @@
 import streamlit as st 
 import pandas as pd
-from utils.utils import get_stock_price_yf
 from datetime import datetime
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")
@@ -10,20 +9,19 @@ st.title("📊 Portfolio Analysis & AI Suggestions")
 uploaded_file = st.file_uploader("📁 Upload Portfolio CSV", type=["csv"])
 
 if uploaded_file:
-    # Read CSV while skipping bad lines
     df = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=True, on_bad_lines='skip')
     df.columns = [col.strip() for col in df.columns]
     st.write("Columns found in CSV:", list(df.columns))
 
-    # Check required columns (Symbol instead of Ticker)
-    required_cols = {"Date", "Symbol", "Quantity", "Purchase Price"}
+    # Required columns except no yfinance price needed
+    required_cols = {"Date", "Symbol", "Quantity", "Purchase Price", "Current Price"}
     missing_cols = required_cols - set(df.columns)
     if missing_cols:
         st.error(f"Missing required columns in CSV: {missing_cols}")
     else:
-        # Handle missing or empty "Transaction Type"
+        # Handle Transaction Type missing/empty
         if "Transaction Type" not in df.columns or df["Transaction Type"].isnull().all() or df["Transaction Type"].eq("").all():
-            st.warning("⚠️ 'Transaction Type' is missing or empty. Please classify each transaction.")
+            st.warning("⚠️ 'Transaction Type' missing or empty. Please classify each transaction.")
 
             user_choices = []
             for i, row in df.iterrows():
@@ -43,17 +41,12 @@ if uploaded_file:
         # Clean symbol column
         df["Symbol"] = df["Symbol"].str.upper().str.split('.').str[0]
 
-        # Add current price via yfinance
-        tickers = df["Symbol"].unique()
-        current_prices = {ticker: get_stock_price_yf(ticker) for ticker in tickers}
-        df["Current Price"] = df["Symbol"].map(current_prices)
-
-        # Financial calculations
+        # Financial calculations based on CSV Current Price
         df["Investment"] = df["Quantity"] * df["Purchase Price"]
         df["Market Value"] = df["Quantity"] * df["Current Price"]
         df["Unrealized Gain"] = df["Market Value"] - df["Investment"]
 
-        # Separate Buy and Sell
+        # Separate buys and sells
         buys = df[df["Transaction Type"].str.lower() == "buy"]
         sells = df[df["Transaction Type"].str.lower() == "sell"]
 
@@ -71,16 +64,28 @@ if uploaded_file:
         st.subheader("📄 Line-by-Line Transactions")
         st.dataframe(df.sort_values(by="Date"), use_container_width=True)
 
-        # Estimate Realized Gains (naive)
-        realized = sells.copy()
+        # Realized Gains Calculation by Year
         if not buys.empty and not sells.empty:
-            avg_buy_prices = buys.groupby("Symbol")["Purchase Price"].transform("mean")
-            realized["Realized Gain"] = (realized["Purchase Price"] - avg_buy_prices) * realized["Quantity"]
+            # Average buy price per symbol for sell transactions
+            avg_buy_price_per_symbol = buys.groupby("Symbol")["Purchase Price"].mean()
 
-            st.subheader("💰 Realized Gains")
-            st.dataframe(realized[["Date", "Symbol", "Quantity", "Purchase Price", "Realized Gain"]], use_container_width=True)
+            # Calculate realized gain for sells using avg buy price
+            sells = sells.copy()
+            sells["Realized Gain"] = sells.apply(
+                lambda row: (row["Purchase Price"] - avg_buy_price_per_symbol.get(row["Symbol"], row["Purchase Price"])) * row["Quantity"], axis=1
+            )
 
-        # Annual performance
+            st.subheader("💰 Realized Gains per Transaction")
+            st.dataframe(sells[["Date", "Symbol", "Quantity", "Purchase Price", "Realized Gain"]], use_container_width=True)
+
+            # Aggregate realized gains/losses by year
+            sells["Year"] = sells["Date"].dt.year
+            annual_realized = sells.groupby("Year")["Realized Gain"].sum().reset_index()
+
+            st.subheader("📅 Annual Realized Gains/Losses")
+            st.dataframe(annual_realized, use_container_width=True)
+
+        # Annual performance summary for unrealized gains
         df["Year"] = df["Date"].dt.year
         annual_summary = df.groupby(["Symbol", "Year"]).agg({
             "Investment": "sum",
@@ -88,7 +93,7 @@ if uploaded_file:
             "Unrealized Gain": "sum"
         }).reset_index()
 
-        st.subheader("📈 Annual Performance")
+        st.subheader("📈 Annual Performance (Unrealized Gains)")
         st.dataframe(annual_summary, use_container_width=True)
 
         # AI Trigger
@@ -98,7 +103,7 @@ if uploaded_file:
                     f"Analyze this portfolio:\n\n{summary.to_string(index=False)}\n\n"
                     "Suggest rebalancing and improvements using Modern Portfolio Theory."
                 )
-                # Placeholder AI logic
-                ai_response = "✅ Based on current metrics, you might consider rebalancing away from overexposed tech stocks..."
+                # Placeholder for AI call
+                ai_response = "✅ Based on current metrics, consider rebalancing away from overexposed tech stocks..."
                 st.success("AI analysis complete.")
                 st.markdown(f"**AI Suggestion:**\n\n{ai_response}")
