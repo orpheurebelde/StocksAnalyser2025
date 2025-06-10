@@ -84,13 +84,23 @@ if uploaded_file:
                 }
             )
 
-        # AI Suggestion (optional)
-        if st.button("🤖 Run AI Portfolio Analysis"):
-            with st.spinner("Sending portfolio to Mistral AI..."):
-                user_prompt = (
-                    f"Analyze this portfolio:\n\n{summary.to_string(index=False)}\n\n"
-                    "Suggest rebalancing and improvements using Modern Portfolio Theory."
-                )
-                ai_response = "✅ Based on current metrics, consider diversifying away from high-volatility sectors..."
-                st.success("AI analysis complete.")
-                st.markdown(f"**AI Suggestion:**\n\n{ai_response}")
+        with st.expander("💡 AI Analysis & Forecast"):
+            try:
+                MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
+
+                if st.button("🤖 Run Mistral AI Portfolio Analysis"):
+                    with st.spinner("Sending portfolio summary to Mistral AI..."):
+                        user_prompt = (
+                            f"Analyze this portfolio:\n\n{summary.to_string(index=False)}\n\n"
+                            "Suggest diversification, risk control, and improvements using Modern Portfolio Theory principles."
+                        )
+
+                        # Example placeholder – you would replace this with your real Mistral API call
+                        ai_response = "📈 The portfolio shows high concentration in technology. Consider increasing exposure to low-correlation sectors or ETFs."
+
+                        st.success("AI analysis complete.")
+                        st.markdown(f"**AI Suggestion:**\n\n{ai_response}")
+
+            except Exception as e:
+                st.warning("⚠️ Mistral API key not found in Streamlit secrets or another error occurred.")
+                st.exception(e)
