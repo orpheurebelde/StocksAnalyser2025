@@ -97,7 +97,7 @@ if selected_display != "Select a stock...":
             )
             metric_box_style = (
                 "border: 2px solid #28a745;padding: 12px;border-radius: 15px;text-align: center;"
-                "margin-bottom: 12px;color: white;font-size: 20px;font-weight: bold;"
+                "margin-bottom: 12px;color: white;font-size: 24px;font-weight: bold;"
                 "background-color: rgba(40, 167, 69, 0.85);display: flex;align-items: center;"
                 "justify-content: center;height: 48px;"
             )
