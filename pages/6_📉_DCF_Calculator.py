@@ -96,11 +96,16 @@ if selected_display != "Select a stock...":
 
                 Always use both values together to form a complete picture.
                 """)
-                
+
             with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
                 st.write(f"**Current Market Cap:** {format_currency(market_cap)}")
                 st.write(f"**Future Company Value:** {format_currency(future_value)}")
-                st.write(f"**Discounted Present Value:** {format_currency(present_value)}")
+                #Categorize with colors the discount rate compared to the base rate
+                if discount_rate < base_discount_rate:
+                    st.write(f"**Discount Rate:** <span style='color: green;'>{format_percent(discount_rate)}</span>")
+                else:
+                    st.write(f"**Discount Rate:** <span style='color: red;'>{format_percent(discount_rate)}</span>")
+                #st.write(f"**Discounted Present Value:** {format_currency(present_value)}")
                 st.write(f"**Fair Value Per Share (Today):** {format_currency_dec(fair_value_per_share)}")
 
                 comparison = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
