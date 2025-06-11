@@ -92,7 +92,7 @@ if selected_display != "Select a stock...":
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
             projection_box_style = (
                 "border: 2px solid #FFA500;padding: 12px;border-radius: 12px;"
-                "text-align: center;margin-bottom: 12px;color: white;font-size: 30px;"
+                "text-align: center;margin-bottom: 12px;color: white;font-size: 20px;"
                 "font-weight: 600;background-color: rgba(255,165,0,0.15);"
             )
             metric_box_style = (
