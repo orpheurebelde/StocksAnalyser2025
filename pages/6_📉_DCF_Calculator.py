@@ -31,7 +31,6 @@ if selected_display != "Select a stock...":
         current_price = info.get("currentPrice", None)
         eps_ttm = info.get("trailingEps", None)
         pe_ratio = info.get("trailingPE", None)
-        revenue = info.get("totalRevenue", None)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -66,28 +65,42 @@ if selected_display != "Select a stock...":
         growth_rate = base_growth_rate * growth_multipliers[scenario]
         discount_rate = base_discount_rate * discount_multipliers[scenario]
 
-        use_revenue_model = False
+        if not eps_ttm or eps_ttm <= 0 or not pe_ratio or pe_ratio <= 0:
+            st.warning("⚠️ EPS or PE ratio is invalid. Using revenue-based fallback DCF model.")
 
-        if not market_cap or not shares_outstanding or not current_price:
-            st.error("❌ Required financials (Market Cap, Shares Outstanding, or Current Price) are missing.")
-        elif eps_ttm is None or eps_ttm <= 0:
-            st.warning("⚠️ EPS is negative or missing. Using revenue-based DCF instead.")
-            use_revenue_model = True
-        elif pe_ratio is None or pe_ratio <= 0:
-            st.warning("⚠️ PE ratio is invalid or missing. Using revenue-based DCF instead.")
-            use_revenue_model = True
+            revenue_ttm = info.get("totalRevenue", None)
 
-        if use_revenue_model:
-            target_ps_ratio = st.number_input("🔢 Target P/S Ratio (at year 5)", value=4.0, step=0.1)
-            revenue_growth_rate = growth_rate
-            if revenue:
-                future_revenue = revenue * ((1 + revenue_growth_rate) ** years)
-                future_value = future_revenue * target_ps_ratio
+            if not revenue_ttm or revenue_ttm <= 0:
+                st.error("❌ Revenue data not available to perform fallback DCF.")
+            else:
+                with st.expander("⚙️ Adjust P/S Growth Factor"):
+                    ps_factor = st.slider("P/S Growth Factor", min_value=0.1, max_value=1.0, value=0.6, step=0.05)
+
+                estimated_ps_ratio = base_growth_rate * 100 * ps_factor
+                st.markdown(f"🔢 Auto-calculated P/S Ratio based on growth: **{estimated_ps_ratio:.2f}**")
+
+                projected_revenue = [revenue_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
+                projected_market_cap = [rev * estimated_ps_ratio for rev in projected_revenue]
+
+                future_value = projected_market_cap[-1]
                 present_value = future_value / ((1 + discount_rate) ** years)
                 fair_value_per_share = present_value / shares_outstanding
-            else:
-                st.error("❌ Revenue data is missing. Unable to perform revenue-based DCF.")
-                raise ValueError("Missing revenue data")
+
+                pv_color = "green" if future_value > market_cap else "red"
+                valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
+
+                with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
+                    st.markdown(f"""
+                    <div style='padding: 10px; background-color: #transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
+                        <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
+                        <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
+                        <p><strong>Discounted Present Value:</strong> 
+                            <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
+                        </p>
+                        <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
+                        <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
         else:
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
             projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
@@ -99,40 +112,22 @@ if selected_display != "Select a stock...":
             present_value = future_value / ((1 + discount_rate) ** years)
             fair_value_per_share = present_value / shares_outstanding
 
-        with st.expander("ℹ️ Why Fair Value Might Exceed Next Year’s Price"):
-            st.markdown("""
-            The **Fair Value Today** is calculated by discounting the company's **expected future earnings or revenues over multiple years**
-            to reflect what an investor should pay **right now** to receive that future value.
+            pv_color = "green" if future_value > market_cap else "red"
+            valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
 
-            However, the **Projected Stock Price for next year** is a single-point estimate based on:
-            
-            - Projected EPS (or Revenue)
-            - A potentially shrinking PE or P/S ratio
+            with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
+                st.markdown(f"""
+                <div style='padding: 10px; background-color: #transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
+                    <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
+                    <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
+                    <p><strong>Discounted Present Value:</strong> 
+                        <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
+                    </p>
+                    <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
+                    <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-            Therefore, it's normal for the fair value today to appear higher than next year's stock price —
-            especially for companies with strong long-term growth potential or temporarily compressed valuations.
-
-            Always use both values together to form a complete picture.
-            """)
-
-        pv_color = "green" if future_value > market_cap else "red"
-        valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
-
-        with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
-            st.markdown(f"""
-            <div style='padding: 10px; background-color: #transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
-                <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
-                <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
-                <p><strong>Discounted Present Value:</strong> 
-                    <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
-                </p>
-                <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
-                <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
-
-        if not use_revenue_model:
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
             projection_box_style = (
                 "border: 2px solid #FFA500;padding: 12px;border-radius: 12px;"
