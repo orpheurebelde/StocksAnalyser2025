@@ -1,7 +1,8 @@
 import streamlit as st
 import yfinance as yf
 import numpy as np
-from utils.utils import load_stock_list, get_stock_info  # Assuming these are in your utils.py
+from utils.utils import load_stock_list, get_stock_info
+import time
 
 st.set_page_config(page_title="📉 DCF Calculator", layout="centered")
 st.title("📉 Discounted Cash Flow (DCF) Calculator")
@@ -78,16 +79,68 @@ if selected_display != "Select a stock...":
                 st.write(f"**Compared to Current Price ({format_currency_dec(current_price)}):** {comparison}")
 
             # ⬇️ Detailed 5-Year DCF Projection
-            with st.expander("🔮 5-Year Stock Price Projection (DCF Model)", expanded=False):
+            # Scenario selector
+            scenario = st.selectbox(
+                "Choose Projection Scenario",
+                ["Base", "Bull", "Bear"],
+                index=0,
+                help="Select different projection scenarios."
+            )
+
+            # Modify growth_rate and discount_rate based on scenario (example)
+            growth_multipliers = {"Base": 1.0, "Bull": 1.2, "Bear": 0.8}
+            discount_multipliers = {"Base": 1.0, "Bull": 0.9, "Bear": 1.1}
+
+            # Example base rates (you would have them set from inputs)
+            base_growth_rate = 0.10
+            base_discount_rate = 0.10
+
+            growth_rate = base_growth_rate * growth_multipliers[scenario]
+            discount_rate = base_discount_rate * discount_multipliers[scenario]
+
+            # Dummy projected data generation (replace with your actual calculation)
+            years = 5
+            projected_eps = [1.0 * (1 + growth_rate) ** i for i in range(1, years + 1)]
+            projected_pe = [15 * (1 - 0.05 * i) for i in range(years)]  # just example declining PE
+            projected_stock_price = [eps * pe for eps, pe in zip(projected_eps, projected_pe)]
+            projected_market_cap = [price * 1e8 for price in projected_stock_price]  # example cap
+
+            # Styling
+            metric_box_style = (
+                "border: 2px solid #28a745;"  # bootstrap green
+                "padding: 12px;"
+                "border-radius: 15px;"
+                "text-align: center;"
+                "margin-bottom: 12px;"
+                "color: white;"
+                "font-size: 18px;"
+                "font-weight: bold;"
+                "background-color: rgba(40, 167, 69, 0.85);"  # green with some transparency
+                "display: flex;"
+                "align-items: center;"
+                "justify-content: center;"
+                "height: 48px;"
+            )
+
+            projection_box_style = (
+                "border: 2px solid #FFA500;"
+                "padding: 10px;"
+                "border-radius: 12px;"
+                "text-align: center;"
+                "margin-bottom: 12px;"
+                "color: #000000;"
+                "background-color: rgba(255,165,0,0.05);"
+            )
+
+            # Layout
+
+            with st.expander("🔮 5-Year Stock Price Projection (DCF Model)", expanded=True):
                 years_labels = [f"Year {i}" for i in range(1, years + 1)]
-                cols = st.columns(6)
-
-                # Header row
-                cols[0].markdown("**Metric**")
+                header_cols = st.columns(6)
+                header_cols[0].markdown("**Metric**")
                 for i, year in enumerate(years_labels):
-                    cols[i + 1].markdown(f"<b>{year}</b>", unsafe_allow_html=True)
+                    header_cols[i + 1].markdown(f"<b>{year}</b>", unsafe_allow_html=True)
 
-                # Metric rows
                 metrics = ["EPS", "PE Ratio", "Stock Price", "Market Cap"]
                 rows = {
                     "EPS": projected_eps,
@@ -96,35 +149,30 @@ if selected_display != "Select a stock...":
                     "Market Cap": projected_market_cap
                 }
 
-                box_style = (
-                    "border: 2px solid #FFA500; "
-                    "padding: 10px; "
-                    "border-radius: 12px; "
-                    "text-align: center; "
-                    "margin-bottom: 12px; "
-                    "color: #000000; "
-                    "background-color: rgba(255,165,0,0.05);"  # light transparent orange background (optional)
-                )
-
                 for metric in metrics:
-                    cols = st.columns(6)
-                    cols[0].markdown(f"**{metric}**")
-
+                    row_cols = st.columns(6)
+                    # Metric label column with green rounded box and white text
+                    row_cols[0].markdown(
+                        f"<div style='{metric_box_style}'>{metric}</div>", unsafe_allow_html=True
+                    )
+                    # Projection data columns with orange border boxes
                     for i in range(years):
                         val = rows[metric][i]
                         if metric == "PE Ratio":
-                            fmt = format_ratio(val)
-                        elif metric == "EPS":
-                            fmt = format_currency_dec(val)
-                        elif "Price" in metric:
-                            fmt = format_currency_dec(val)
+                            fmt = f"{val:.2f}"
+                        elif metric == "EPS" or metric == "Stock Price":
+                            fmt = f"${val:,.2f}"
                         else:
-                            fmt = format_currency(val)
+                            fmt = f"${val:,.0f}"
 
-                        cols[i + 1].markdown(
-                            f"<div style='{box_style}'>{fmt}</div>",
-                            unsafe_allow_html=True
+                        row_cols[i + 1].markdown(
+                            f"<div style='{projection_box_style}'>{fmt}</div>", unsafe_allow_html=True
                         )
+
+            # Optionally add a little animation (simulate loading)
+            with st.spinner("Updating projections based on scenario..."):
+                time.sleep(0.5)
+                st.rerun()  # Uncomment if you want instant rerun on scenario change
 
     except Exception as e:
         st.error("⚠️ Error while calculating DCF.")
