@@ -98,8 +98,7 @@ if selected_display != "Select a stock...":
                 """)
 
             # Comparison between Present Value and Market Cap
-            pv_diff = present_value - market_cap
-            pv_color = "green" if pv_diff > 0 else "red"
+            pv_color = "green" if future_value > market_cap else "red"
             valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
 
             # Styled expander using markdown and HTML
