@@ -79,6 +79,24 @@ if selected_display != "Select a stock...":
             present_value = future_value / ((1 + discount_rate) ** years)
             fair_value_per_share = present_value / shares_outstanding
 
+            with st.expander("ℹ️ Why Fair Value Might Exceed Next Year’s Price"):
+                st.markdown("""
+                The **Fair Value Today** is calculated by discounting the company's **expected future earnings over multiple years**
+                (5 in this model) to reflect what an investor should pay **right now** to receive that future value.
+
+                However, the **Projected Stock Price for next year** is a single-point estimate based on:
+                
+                - Projected EPS for the year
+                - A potentially shrinking PE ratio
+                
+                As such, it doesn't represent the full intrinsic value of the company, just how the stock may be priced by the market short-term.
+
+                Therefore, it's normal (and not an error) for the fair value today to appear higher than next year's stock price —
+                especially for companies with strong long-term growth potential or temporarily compressed valuations.
+
+                Always use both values together to form a complete picture.
+                """)
+                
             with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
                 st.write(f"**Current Market Cap:** {format_currency(market_cap)}")
                 st.write(f"**Future Company Value:** {format_currency(future_value)}")
