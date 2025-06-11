@@ -97,19 +97,24 @@ if selected_display != "Select a stock...":
                 Always use both values together to form a complete picture.
                 """)
 
-            with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
-                st.write(f"**Current Market Cap:** {format_currency(market_cap)}")
-                st.write(f"**Future Company Value:** {format_currency(future_value)}")
-                #Categorize with colors the discount rate compared to the base rate
-                if discount_rate < base_discount_rate:
-                    st.write(f"**Discount Rate:** <span style='color: green;'>{format_percent(discount_rate)}</span>")
-                else:
-                    st.write(f"**Discount Rate:** <span style='color: red;'>{format_percent(discount_rate)}</span>")
-                #st.write(f"**Discounted Present Value:** {format_currency(present_value)}")
-                st.write(f"**Fair Value Per Share (Today):** {format_currency_dec(fair_value_per_share)}")
+            # Comparison between Present Value and Market Cap
+            pv_diff = present_value - market_cap
+            pv_color = "green" if pv_diff > 0 else "red"
+            valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
 
-                comparison = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
-                st.write(f"**Compared to Current Price ({format_currency_dec(current_price)}):** {comparison}")
+            # Styled expander using markdown and HTML
+            with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
+                st.markdown(f"""
+                <div style='padding: 10px; background-color: #f9f9f9; font-size: 20px; border-radius: 10px; border: 1px solid #ccc;'>
+                    <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
+                    <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
+                    <p><strong>Discounted Present Value:</strong> 
+                        <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
+                    </p>
+                    <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
+                    <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
+                </div>
+                """, unsafe_allow_html=True)
 
             # Styling
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
