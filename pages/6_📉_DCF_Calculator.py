@@ -35,7 +35,19 @@ if selected_display != "Select a stock...":
             with col1:
                 growth_rate = st.number_input("📈 Estimated Annual Company Growth (%)", value=10.0, step=0.5)
             with col2:
-                discount_rate = st.number_input("💸 Discount Rate (%)", value=10.0, step=0.5)
+                discount_rate = st.number_input(
+                "💸 Discount Rate (%)",
+                value=10.0,
+                step=0.5,
+                min_value=6.0,
+                max_value=15.0,
+                help=(
+                    "Suggested Discount Rates by Company Risk:\n"
+                    "• Low-risk (e.g., Apple, MSFT): 6% – 8%\n"
+                    "• Medium-risk (e.g., large growth companies): 8% – 10%\n"
+                    "• High-risk (e.g., small-cap, tech startups): 10% – 15%"
+                )
+            )
 
             # Convert to decimals
             growth_rate /= 100
