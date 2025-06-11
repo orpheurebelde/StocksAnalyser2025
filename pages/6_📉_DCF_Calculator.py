@@ -5,7 +5,7 @@ from utils.utils import load_stock_list, get_stock_info
 import time
 import datetime
 
-st.set_page_config(page_title="📉 DCF Calculator", layout="wide")
+st.set_page_config(page_title="DCF Calculator", layout="wide")
 st.title("Discounted Cash Flow (DCF) Calculator")
 
 # Load and display stock selector
