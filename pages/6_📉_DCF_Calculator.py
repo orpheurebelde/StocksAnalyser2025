@@ -102,8 +102,8 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
 
-                    # Native Streamlit space after HTML box
-                    st.markdown("###")  # Adds vertical space
+                # Native Streamlit space after HTML box
+                st.markdown("###")  # Adds vertical space
 
         else:
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
