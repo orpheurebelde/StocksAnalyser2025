@@ -101,9 +101,8 @@ if selected_display != "Select a stock...":
                             <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
                         </div>
                     """, unsafe_allow_html=True)
-
-                # Native Streamlit space after HTML box
-                st.markdown("###")  # Adds vertical space
+                    # Native Streamlit space after HTML box
+                    st.markdown("###")  # Adds vertical space
 
         else:
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
