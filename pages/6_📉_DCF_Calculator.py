@@ -91,16 +91,18 @@ if selected_display != "Select a stock...":
 
                 with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
                     st.markdown(f"""
-                    <div style='padding: 10px; background-color: #transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc; margin-bottom: 20px;'>
-                        <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
-                        <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
-                        <p><strong>Discounted Present Value:</strong> 
-                            <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
-                        </p>
-                        <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
-                        <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
-                    </div>
+                        <div style='padding: 10px; background-color: transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc; margin-bottom: 20px;'>
+                            <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
+                            <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
+                            <p><strong>Discounted Present Value:</strong> 
+                                <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
+                            </p>
+                            <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
+                            <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
+                        </div>
+                        <div style='margin-bottom: 30px;'>&nbsp;</div>
                     """, unsafe_allow_html=True)
+
         else:
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
             projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
