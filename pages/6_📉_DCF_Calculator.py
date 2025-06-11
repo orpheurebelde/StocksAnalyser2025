@@ -104,7 +104,7 @@ if selected_display != "Select a stock...":
             # Styled expander using markdown and HTML
             with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
                 st.markdown(f"""
-                <div style='padding: 10px; background-color: #f9f9f9; border-radius: 10px; border: 1px solid #ccc;'>
+                <div style='padding: 10px; background-color: #transparent; border-radius: 10px; border: 1px solid #ccc;'>
                     <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
                     <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
                     <p><strong>Discounted Present Value:</strong> 
