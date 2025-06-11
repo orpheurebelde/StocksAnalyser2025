@@ -106,8 +106,29 @@ if selected_display != "Select a stock...":
             projected_market_cap = [price * 1e8 for price in projected_stock_price]  # example cap
 
             # Styling
+            # Updated styles
+            header_style = (
+                "text-align: center;"
+                "font-weight: bold;"
+                "font-size: 18px;"
+                "color: black;"
+                "margin-bottom: 10px;"
+            )
+
+            projection_box_style = (
+                "border: 2px solid #FFA500;"
+                "padding: 12px;"
+                "border-radius: 12px;"
+                "text-align: center;"
+                "margin-bottom: 12px;"
+                "color: white;"              # White text
+                "font-size: 16px;"           # Larger font size
+                "font-weight: 600;"
+                "background-color: rgba(255,165,0,0.15);"  # Slightly more visible transparent orange bg
+            )
+
             metric_box_style = (
-                "border: 2px solid #28a745;"  # bootstrap green
+                "border: 2px solid #28a745;"
                 "padding: 12px;"
                 "border-radius: 15px;"
                 "text-align: center;"
@@ -115,31 +136,19 @@ if selected_display != "Select a stock...":
                 "color: white;"
                 "font-size: 18px;"
                 "font-weight: bold;"
-                "background-color: rgba(40, 167, 69, 0.85);"  # green with some transparency
+                "background-color: rgba(40, 167, 69, 0.85);"
                 "display: flex;"
                 "align-items: center;"
                 "justify-content: center;"
                 "height: 48px;"
             )
 
-            projection_box_style = (
-                "border: 2px solid #FFA500;"
-                "padding: 10px;"
-                "border-radius: 12px;"
-                "text-align: center;"
-                "margin-bottom: 12px;"
-                "color: #000000;"
-                "background-color: rgba(255,165,0,0.05);"
-            )
-
-            # Layout
-
             with st.expander("🔮 5-Year Stock Price Projection (DCF Model)", expanded=True):
                 years_labels = [f"Year {i}" for i in range(1, years + 1)]
                 header_cols = st.columns(6)
-                header_cols[0].markdown("**Metric**")
+                header_cols[0].markdown(f"<div style='{header_style}'>Metric</div>", unsafe_allow_html=True)
                 for i, year in enumerate(years_labels):
-                    header_cols[i + 1].markdown(f"<b>{year}</b>", unsafe_allow_html=True)
+                    header_cols[i + 1].markdown(f"<div style='{header_style}'>{year}</div>", unsafe_allow_html=True)
 
                 metrics = ["EPS", "PE Ratio", "Stock Price", "Market Cap"]
                 rows = {
