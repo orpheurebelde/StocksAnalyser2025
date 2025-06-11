@@ -102,7 +102,7 @@ if selected_display != "Select a stock...":
                     </div>
                     """, unsafe_allow_html=True)
                     #add an extra line break for better spacing
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
         else:
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
             projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
