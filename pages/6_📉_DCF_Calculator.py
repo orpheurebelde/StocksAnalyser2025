@@ -113,6 +113,7 @@ if selected_display != "Select a stock...":
                     </p>
                     <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
                     <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
+                    <p>------</p>
                 </div>
                 """, unsafe_allow_html=True)
 
