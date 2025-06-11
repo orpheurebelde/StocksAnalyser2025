@@ -6,7 +6,7 @@ import time
 import datetime
 
 st.set_page_config(page_title="📉 DCF Calculator", layout="wide")
-st.title("📉 Discounted Cash Flow (DCF) Calculator")
+st.title("Discounted Cash Flow (DCF) Calculator")
 
 # Load and display stock selector
 stock_df = load_stock_list()
