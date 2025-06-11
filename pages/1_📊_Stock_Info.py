@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
+from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
 import re
 import time
 
@@ -28,13 +28,6 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 st.title("📁 Análise de Ações | S&P 500 e NASDAQ")
-
-# Load stock list
-@st.cache_data
-def load_stock_list():
-    df = pd.read_csv("stocks_list.csv", sep=";")
-    df["Display"] = df["Ticker"] + " - " + df["Name"]
-    return df
 
 stock_df = load_stock_list()
 stock_df = stock_df.sort_values(by="Display")  # Sort alphabetically by Display column
