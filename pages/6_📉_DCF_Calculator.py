@@ -5,7 +5,7 @@ from utils.utils import load_stock_list, get_stock_info
 import time
 import datetime
 
-st.set_page_config(page_title="DCF Calculator", layout="wide")
+st.set_page_config(page_title="📉 DCF Calculator", layout="wide")
 st.title("Discounted Cash Flow (DCF) Calculator")
 
 # Load and display stock selector
@@ -31,44 +31,64 @@ if selected_display != "Select a stock...":
         current_price = info.get("currentPrice", None)
         eps_ttm = info.get("trailingEps", None)
         pe_ratio = info.get("trailingPE", None)
+        revenue = info.get("totalRevenue", None)
 
-        if not market_cap or not shares_outstanding or not eps_ttm or eps_ttm <= 0 or not pe_ratio:
-            st.error("❌ Required financials (EPS, Market Cap, Shares Outstanding, or PE ratio) are missing or invalid.")
+        col1, col2 = st.columns(2)
+        with col1:
+            base_growth_rate = st.number_input("📈 Estimated Annual Company Growth (%)", value=10.0, step=0.5) / 100
+        with col2:
+            base_discount_rate = st.number_input(
+                "💸 Discount Rate (%)",
+                value=10.0,
+                step=0.5,
+                min_value=6.0,
+                max_value=15.0,
+                help=(
+                    "Suggested Discount Rates by Company Risk:\n"
+                    "• Low-risk (e.g., Apple, MSFT): 6% – 8%\n"
+                    "• Medium-risk (e.g., large growth companies): 8% – 10%\n"
+                    "• High-risk (e.g., small-cap, tech startups): 10% – 15%"
+                )
+            ) / 100
+
+        years = 5
+
+        scenario = st.selectbox(
+            "Choose Projection Scenario",
+            ["Base", "Bull", "Bear"],
+            index=0,
+            help="Select different projection scenarios."
+        )
+
+        growth_multipliers = {"Base": 1.0, "Bull": 1.5, "Bear": 0.5}
+        discount_multipliers = {"Base": 1.0, "Bull": 0.85, "Bear": 1.2}
+
+        growth_rate = base_growth_rate * growth_multipliers[scenario]
+        discount_rate = base_discount_rate * discount_multipliers[scenario]
+
+        use_revenue_model = False
+
+        if not market_cap or not shares_outstanding or not current_price:
+            st.error("❌ Required financials (Market Cap, Shares Outstanding, or Current Price) are missing.")
+        elif eps_ttm is None or eps_ttm <= 0:
+            st.warning("⚠️ EPS is negative or missing. Using revenue-based DCF instead.")
+            use_revenue_model = True
+        elif pe_ratio is None or pe_ratio <= 0:
+            st.warning("⚠️ PE ratio is invalid or missing. Using revenue-based DCF instead.")
+            use_revenue_model = True
+
+        if use_revenue_model:
+            target_ps_ratio = st.number_input("🔢 Target P/S Ratio (at year 5)", value=4.0, step=0.1)
+            revenue_growth_rate = growth_rate
+            if revenue:
+                future_revenue = revenue * ((1 + revenue_growth_rate) ** years)
+                future_value = future_revenue * target_ps_ratio
+                present_value = future_value / ((1 + discount_rate) ** years)
+                fair_value_per_share = present_value / shares_outstanding
+            else:
+                st.error("❌ Revenue data is missing. Unable to perform revenue-based DCF.")
+                raise ValueError("Missing revenue data")
         else:
-            col1, col2 = st.columns(2)
-            with col1:
-                base_growth_rate = st.number_input("📈 Estimated Annual Company Growth (%)", value=10.0, step=0.5) / 100
-            with col2:
-                base_discount_rate = st.number_input(
-                    "💸 Discount Rate (%)",
-                    value=10.0,
-                    step=0.5,
-                    min_value=6.0,
-                    max_value=15.0,
-                    help=(
-                        "Suggested Discount Rates by Company Risk:\n"
-                        "• Low-risk (e.g., Apple, MSFT): 6% – 8%\n"
-                        "• Medium-risk (e.g., large growth companies): 8% – 10%\n"
-                        "• High-risk (e.g., small-cap, tech startups): 10% – 15%"
-                    )
-                ) / 100
-
-            years = 5
-
-            scenario = st.selectbox(
-                "Choose Projection Scenario",
-                ["Base", "Bull", "Bear"],
-                index=0,
-                help="Select different projection scenarios."
-            )
-
-            # Improved scenario multipliers
-            growth_multipliers = {"Base": 1.0, "Bull": 1.5, "Bear": 0.5}
-            discount_multipliers = {"Base": 1.0, "Bull": 0.85, "Bear": 1.2}
-
-            growth_rate = base_growth_rate * growth_multipliers[scenario]
-            discount_rate = base_discount_rate * discount_multipliers[scenario]
-
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
             projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
 
@@ -79,45 +99,40 @@ if selected_display != "Select a stock...":
             present_value = future_value / ((1 + discount_rate) ** years)
             fair_value_per_share = present_value / shares_outstanding
 
-            with st.expander("ℹ️ Why Fair Value Might Exceed Next Year’s Price"):
-                st.markdown("""
-                The **Fair Value Today** is calculated by discounting the company's **expected future earnings over multiple years**
-                (5 in this model) to reflect what an investor should pay **right now** to receive that future value.
+        with st.expander("ℹ️ Why Fair Value Might Exceed Next Year’s Price"):
+            st.markdown("""
+            The **Fair Value Today** is calculated by discounting the company's **expected future earnings or revenues over multiple years**
+            to reflect what an investor should pay **right now** to receive that future value.
 
-                However, the **Projected Stock Price for next year** is a single-point estimate based on:
-                
-                - Projected EPS for the year
-                - A potentially shrinking PE ratio
-                
-                As such, it doesn't represent the full intrinsic value of the company, just how the stock may be priced by the market short-term.
+            However, the **Projected Stock Price for next year** is a single-point estimate based on:
+            
+            - Projected EPS (or Revenue)
+            - A potentially shrinking PE or P/S ratio
 
-                Therefore, it's normal (and not an error) for the fair value today to appear higher than next year's stock price —
-                especially for companies with strong long-term growth potential or temporarily compressed valuations.
+            Therefore, it's normal for the fair value today to appear higher than next year's stock price —
+            especially for companies with strong long-term growth potential or temporarily compressed valuations.
 
-                Always use both values together to form a complete picture.
-                """)
+            Always use both values together to form a complete picture.
+            """)
 
-            # Comparison between Present Value and Market Cap
-            pv_color = "green" if future_value > market_cap else "red"
-            valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
+        pv_color = "green" if future_value > market_cap else "red"
+        valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
 
-            # Styled expander using markdown and HTML
-            with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
-                st.markdown(f"""
-                <div style='padding: 10px; background-color: #transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
-                    <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
-                    <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
-                    <p><strong>Discounted Present Value:</strong> 
-                        <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
-                    </p>
-                    <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
-                    <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                # ⬇️ This adds space between the box and the bottom of the expander
-                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+        with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
+            st.markdown(f"""
+            <div style='padding: 10px; background-color: #transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
+                <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
+                <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
+                <p><strong>Discounted Present Value:</strong> 
+                    <span style='color: {pv_color}; font-weight: bold;'>{format_currency(present_value)}</span>
+                </p>
+                <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
+                <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
-            # Styling
+        if not use_revenue_model:
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
             projection_box_style = (
                 "border: 2px solid #FFA500;padding: 12px;border-radius: 12px;"
@@ -160,8 +175,8 @@ if selected_display != "Select a stock...":
                             fmt = f"${val:,.0f}"
                         row_cols[i + 1].markdown(f"<div style='{projection_box_style}'>{fmt}</div>", unsafe_allow_html=True)
 
-            with st.spinner("Updating projections based on scenario..."):
-                time.sleep(0.5)
+        with st.spinner("Updating projections based on scenario..."):
+            time.sleep(0.5)
 
     except Exception as e:
         st.error("⚠️ Error while calculating DCF.")
