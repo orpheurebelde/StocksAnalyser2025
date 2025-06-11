@@ -102,7 +102,7 @@ if selected_display != "Select a stock...":
                         </div>
                     """, unsafe_allow_html=True)
                     # Native Streamlit space after HTML box
-                    st.markdown("<div style='margin-bottom: 30px;'>&nbsp;</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-bottom: 20px;'>&nbsp;</div>", unsafe_allow_html=True)
 
         else:
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
@@ -131,7 +131,7 @@ if selected_display != "Select a stock...":
                 </div>
                 """, unsafe_allow_html=True)
                 # Native Streamlit space after HTML box
-                st.markdown("<div style='margin-bottom: 30px;'>&nbsp;</div>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-bottom: 20px;'>&nbsp;</div>", unsafe_allow_html=True)
 
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
             projection_box_style = (
