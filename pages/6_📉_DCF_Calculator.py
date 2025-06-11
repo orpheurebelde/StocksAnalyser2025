@@ -172,8 +172,7 @@ if selected_display != "Select a stock...":
             # Optionally add a little animation (simulate loading)
             with st.spinner("Updating projections based on scenario..."):
                 time.sleep(0.5)
-                st.rerun()  # Uncomment if you want instant rerun on scenario change
-
+                
     except Exception as e:
         st.error("⚠️ Error while calculating DCF.")
         st.exception(e)
