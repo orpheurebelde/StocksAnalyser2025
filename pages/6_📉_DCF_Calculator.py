@@ -35,7 +35,6 @@ if selected_display != "Select a stock...":
         if not market_cap or not shares_outstanding or not eps_ttm or eps_ttm <= 0 or not pe_ratio:
             st.error("❌ Required financials (EPS, Market Cap, Shares Outstanding, or PE ratio) are missing or invalid.")
         else:
-            # Inputs for base rates
             col1, col2 = st.columns(2)
             with col1:
                 base_growth_rate = st.number_input("📈 Estimated Annual Company Growth (%)", value=10.0, step=0.5) / 100
@@ -56,7 +55,6 @@ if selected_display != "Select a stock...":
 
             years = 5
 
-            # Scenario selector
             scenario = st.selectbox(
                 "Choose Projection Scenario",
                 ["Base", "Bull", "Bear"],
@@ -64,24 +62,19 @@ if selected_display != "Select a stock...":
                 help="Select different projection scenarios."
             )
 
-            # Scenario adjustment multipliers
-            growth_multipliers = {"Base": 1.0, "Bull": 1.2, "Bear": 0.8}
-            discount_multipliers = {"Base": 1.0, "Bull": 0.9, "Bear": 1.1}
+            # Improved scenario multipliers
+            growth_multipliers = {"Base": 1.0, "Bull": 1.5, "Bear": 0.5}
+            discount_multipliers = {"Base": 1.0, "Bull": 0.85, "Bear": 1.2}
 
             growth_rate = base_growth_rate * growth_multipliers[scenario]
             discount_rate = base_discount_rate * discount_multipliers[scenario]
 
-            # Projected EPS and PE ratio based on actual data and scenario adjustments
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
-
-            # For PE ratio, you might want a realistic model, e.g., slight decline or keep stable
-            # Example: slight decline of 5% per year (adjustable or customizable)
             projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
 
             projected_stock_price = [eps * pe for eps, pe in zip(projected_eps, projected_pe)]
             projected_market_cap = [price * shares_outstanding for price in projected_stock_price]
 
-            # Calculate future value and present value using last year projection
             future_value = projected_market_cap[-1]
             present_value = future_value / ((1 + discount_rate) ** years)
             fair_value_per_share = present_value / shares_outstanding
@@ -96,45 +89,21 @@ if selected_display != "Select a stock...":
                 st.write(f"**Compared to Current Price ({format_currency_dec(current_price)}):** {comparison}")
 
             # Styling
-            # Updated styles
-            header_style = (
-                "text-align: center;"
-                "font-weight: bold;"
-                "font-size: 18px;"
-                "color: white;"
-                "margin-bottom: 10px;"
-            )
-
+            header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
             projection_box_style = (
-                "border: 2px solid #FFA500;"
-                "padding: 12px;"
-                "border-radius: 12px;"
-                "text-align: center;"
-                "margin-bottom: 12px;"
-                "color: white;"              # White text
-                "font-size: 16px;"           # Larger font size
-                "font-weight: 600;"
-                "background-color: rgba(255,165,0,0.15);"  # Slightly more visible transparent orange bg
+                "border: 2px solid #FFA500;padding: 12px;border-radius: 12px;"
+                "text-align: center;margin-bottom: 12px;color: white;font-size: 16px;"
+                "font-weight: 600;background-color: rgba(255,165,0,0.15);"
             )
-
             metric_box_style = (
-                "border: 2px solid #28a745;"
-                "padding: 12px;"
-                "border-radius: 15px;"
-                "text-align: center;"
-                "margin-bottom: 12px;"
-                "color: white;"
-                "font-size: 18px;"
-                "font-weight: bold;"
-                "background-color: rgba(40, 167, 69, 0.85);"
-                "display: flex;"
-                "align-items: center;"
-                "justify-content: center;"
-                "height: 48px;"
+                "border: 2px solid #28a745;padding: 12px;border-radius: 15px;text-align: center;"
+                "margin-bottom: 12px;color: white;font-size: 18px;font-weight: bold;"
+                "background-color: rgba(40, 167, 69, 0.85);display: flex;align-items: center;"
+                "justify-content: center;height: 48px;"
             )
 
             with st.expander("🔮 5-Year Stock Price Projection (DCF Model)", expanded=True):
-                start_year = datetime.datetime.now().year + 1  # or +0 if you want to include the current year
+                start_year = datetime.datetime.now().year + 1
                 years_labels = [str(start_year + i) for i in range(5)]
                 header_cols = st.columns(6)
                 header_cols[0].markdown(f"<div style='{header_style}'>Metric</div>", unsafe_allow_html=True)
@@ -151,28 +120,20 @@ if selected_display != "Select a stock...":
 
                 for metric in metrics:
                     row_cols = st.columns(6)
-                    # Metric label column with green rounded box and white text
-                    row_cols[0].markdown(
-                        f"<div style='{metric_box_style}'>{metric}</div>", unsafe_allow_html=True
-                    )
-                    # Projection data columns with orange border boxes
+                    row_cols[0].markdown(f"<div style='{metric_box_style}'>{metric}</div>", unsafe_allow_html=True)
                     for i in range(years):
                         val = rows[metric][i]
                         if metric == "PE Ratio":
                             fmt = f"{val:.2f}"
-                        elif metric == "EPS" or metric == "Stock Price":
+                        elif metric in ["EPS", "Stock Price"]:
                             fmt = f"${val:,.2f}"
                         else:
                             fmt = f"${val:,.0f}"
+                        row_cols[i + 1].markdown(f"<div style='{projection_box_style}'>{fmt}</div>", unsafe_allow_html=True)
 
-                        row_cols[i + 1].markdown(
-                            f"<div style='{projection_box_style}'>{fmt}</div>", unsafe_allow_html=True
-                        )
-
-            # Optionally add a little animation (simulate loading)
             with st.spinner("Updating projections based on scenario..."):
                 time.sleep(0.5)
-                
+
     except Exception as e:
         st.error("⚠️ Error while calculating DCF.")
         st.exception(e)
