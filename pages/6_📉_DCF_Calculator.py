@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import numpy as np
-from utils import load_stock_list, get_stock_info  # Assuming these are in your utils.py
+from utils.utils import load_stock_list, get_stock_info  # Assuming these are in your utils.py
 
 st.set_page_config(page_title="📉 DCF Calculator", layout="centered")
 st.title("📉 Discounted Cash Flow (DCF) Calculator")
