@@ -3,6 +3,7 @@ import yfinance as yf
 import numpy as np
 from utils.utils import load_stock_list, get_stock_info
 import time
+import datetime
 
 st.set_page_config(page_title="📉 DCF Calculator", layout="wide")
 st.title("📉 Discounted Cash Flow (DCF) Calculator")
@@ -133,7 +134,8 @@ if selected_display != "Select a stock...":
             )
 
             with st.expander("🔮 5-Year Stock Price Projection (DCF Model)", expanded=True):
-                years_labels = [f"Year {i}" for i in range(1, years + 1)]
+                start_year = datetime.datetime.now().year + 1  # or +0 if you want to include the current year
+                years_labels = [str(start_year + i) for i in range(5)]
                 header_cols = st.columns(6)
                 header_cols[0].markdown(f"<div style='{header_style}'>Metric</div>", unsafe_allow_html=True)
                 for i, year in enumerate(years_labels):
