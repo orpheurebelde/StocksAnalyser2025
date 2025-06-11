@@ -24,51 +24,36 @@ if selected_display != "Select a stock...":
     info = get_stock_info(ticker)
 
     try:
-        eps = info.get("trailingEps", None)
-        pe_ratio = info.get("trailingPE", None)
+        market_cap = info.get("marketCap", None)
+        shares_outstanding = info.get("sharesOutstanding", None)
         current_price = info.get("currentPrice", None)
 
-        if not eps or not current_price:
-            st.error("❌ EPS or current price not available for this stock.")
+        if not market_cap or not shares_outstanding:
+            st.error("❌ Market Cap or Shares Outstanding not available.")
         else:
-            st.markdown(f"**Current EPS (TTM):** {format_currency_dec(eps)}")
-            st.markdown(f"**Current P/E Ratio:** {format_ratio(pe_ratio)}" if pe_ratio else "**P/E Ratio:** Not available")
-            st.markdown(f"**Current Stock Price:** {format_currency_dec(current_price)}")
-
             col1, col2 = st.columns(2)
             with col1:
-                growth_rate = st.number_input("📈 Estimated Annual EPS Growth (%)", value=10.0, step=0.5)
+                growth_rate = st.number_input("📈 Estimated Annual Company Growth (%)", value=10.0, step=0.5)
             with col2:
                 discount_rate = st.number_input("💸 Discount Rate (%)", value=10.0, step=0.5)
 
             # Convert to decimals
             growth_rate /= 100
             discount_rate /= 100
+            years = 5
 
-            # Calculate 5-year projections
-            projected_eps = [eps * ((1 + growth_rate) ** i) for i in range(1, 6)]
-            present_values = [eps_year / ((1 + discount_rate) ** i) for i, eps_year in enumerate(projected_eps, 1)]
+            # Future and Present Value Estimation
+            future_value = market_cap * ((1 + growth_rate) ** years)
+            present_value = future_value / ((1 + discount_rate) ** years)
+            fair_value_per_share = present_value / shares_outstanding
 
-            terminal_value = projected_eps[-1] * (1 + growth_rate) / (discount_rate - growth_rate)
-            terminal_value_pv = terminal_value / ((1 + discount_rate) ** 5)
+            st.markdown("### 📈 Company Valuation Projection (5 Years)")
+            st.write(f"**Current Market Cap:** {format_currency(market_cap)}")
+            st.write(f"**Future Company Value:** {format_currency(future_value)}")
+            st.write(f"**Discounted Present Value:** {format_currency(present_value)}")
+            st.write(f"**Fair Value Per Share (Today):** {format_currency_dec(fair_value_per_share)}")
 
-            fair_value = sum(present_values) + terminal_value_pv
-
-            # EPS Forecast Table
-            st.markdown("### 📊 5-Year EPS Forecast")
-            st.table({
-                "Year": [f"Year {i}" for i in range(1, 6)],
-                "Projected EPS": [format_currency_dec(e) for e in projected_eps],
-                "Present Value": [format_currency_dec(pv) for pv in present_values]
-            })
-
-            # Final DCF Result
-            st.markdown("---")
-            st.subheader("💰 Final DCF Estimate")
-            st.write(f"**Terminal Value (after 5 years):** {format_currency(terminal_value)}")
-            st.write(f"**Present Value of Terminal Value:** {format_currency(terminal_value_pv)}")
-            st.write(f"**Estimated Fair Value Per Share:** {format_currency_dec(fair_value)}")
-            comparison = "🟢 Undervalued" if fair_value > current_price else "🔴 Overvalued"
+            comparison = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
             st.write(f"**Compared to Current Price ({format_currency_dec(current_price)}):** {comparison}")
 
     except Exception as e:
