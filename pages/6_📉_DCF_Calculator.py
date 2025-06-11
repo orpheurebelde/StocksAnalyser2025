@@ -130,6 +130,8 @@ if selected_display != "Select a stock...":
                     <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
                 </div>
                 """, unsafe_allow_html=True)
+                # Native Streamlit space after HTML box
+                st.markdown("###")  # Adds vertical space
 
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
             projection_box_style = (
