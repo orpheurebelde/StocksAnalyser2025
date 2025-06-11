@@ -79,11 +79,15 @@ if selected_display != "Select a stock...":
 
             # ⬇️ Detailed 5-Year DCF Projection
             with st.expander("🔮 5-Year Stock Price Projection (DCF Model)", expanded=False):
-                cols = st.columns(6)
                 years_labels = [f"Year {i}" for i in range(1, years + 1)]
-                for i, year in enumerate([""] + years_labels):
-                    cols[i].markdown(f"<b>{year}</b>", unsafe_allow_html=True)
+                cols = st.columns(6)
 
+                # Header row
+                cols[0].markdown("**Metric**")
+                for i, year in enumerate(years_labels):
+                    cols[i + 1].markdown(f"<b>{year}</b>", unsafe_allow_html=True)
+
+                # Metric rows
                 metrics = ["EPS", "PE Ratio", "Stock Price", "Market Cap"]
                 rows = {
                     "EPS": projected_eps,
@@ -92,8 +96,20 @@ if selected_display != "Select a stock...":
                     "Market Cap": projected_market_cap
                 }
 
+                box_style = (
+                    "border: 2px solid #FFA500; "
+                    "padding: 10px; "
+                    "border-radius: 12px; "
+                    "text-align: center; "
+                    "margin-bottom: 12px; "
+                    "color: #000000; "
+                    "background-color: rgba(255,165,0,0.05);"  # light transparent orange background (optional)
+                )
+
                 for metric in metrics:
+                    cols = st.columns(6)
                     cols[0].markdown(f"**{metric}**")
+
                     for i in range(years):
                         val = rows[metric][i]
                         if metric == "PE Ratio":
@@ -106,7 +122,7 @@ if selected_display != "Select a stock...":
                             fmt = format_currency(val)
 
                         cols[i + 1].markdown(
-                            f"<div style='background-color:#FFA50033; padding:8px; border-radius:12px; text-align:center'><b>{fmt}</b></div>",
+                            f"<div style='{box_style}'>{fmt}</div>",
                             unsafe_allow_html=True
                         )
 
