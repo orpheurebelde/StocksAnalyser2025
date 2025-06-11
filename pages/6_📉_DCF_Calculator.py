@@ -100,7 +100,7 @@ if selected_display != "Select a stock...":
                 "text-align: center;"
                 "font-weight: bold;"
                 "font-size: 18px;"
-                "color: black;"
+                "color: white;"
                 "margin-bottom: 10px;"
             )
 
