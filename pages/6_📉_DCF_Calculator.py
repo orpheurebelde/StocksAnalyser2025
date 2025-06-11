@@ -114,8 +114,8 @@ if selected_display != "Select a stock...":
                     <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
                 </div>
                 """, unsafe_allow_html=True)
-            # ⬇️ This adds space between the box and the bottom of the expander
-            st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+                # ⬇️ This adds space between the box and the bottom of the expander
+                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
             # Styling
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
