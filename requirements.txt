@@ -2,10 +2,6 @@ streamlit
 pandas
 yfinance
 plotly
-langchain
-langchain-community
 requests
 matplotlib
-BytesIO
-xlrd
 ta
