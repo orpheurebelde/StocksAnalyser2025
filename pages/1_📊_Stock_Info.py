@@ -529,7 +529,7 @@ if selected_display != "Select a stock...":
                     forward_pe = info.get("forwardPE", "N/A")
 
                     prompt = f"""
-                    You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
+                    You are a financial analyst. Based on the following metrics for the stock {ticker}, write a deep, concise and clear full stock analysis:
 
                     - Company Name: {company_name}
                     - Sector: {sector}
@@ -552,6 +552,7 @@ if selected_display != "Select a stock...":
                     5. Investment outlook
                     6. DCF valuation for the next 5 years and must include Base, Bull, and Bear cases
                     7. Current Fair Value vs Market Price
+                    8. Price Target for the next 12 months
 
                     Start now:
                     """
