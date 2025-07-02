@@ -524,6 +524,8 @@ if selected_display != "Select a stock...":
                     dividend_yield_val = info.get("dividendYield", None)
                     dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
                     summary_of_news = "N/A"
+                    fcf = format_number(info.get("freeCashflow", "N/A"))
+                    sharesoutstanding = info.get("sharesOutstanding", "N/A")
 
                     prompt = f"""
                     You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
@@ -537,6 +539,8 @@ if selected_display != "Select a stock...":
                     - EPS: {eps_current_year}
                     - Dividend Yield: {dividend_yield}
                     - Recent News: {summary_of_news}
+                    - Free Cash Flow: {fcf}
+                    - Shares Outstanding: {sharesoutstanding}
 
                     The analysis should include:
                     1. Executive summary
