@@ -552,7 +552,7 @@ if selected_display != "Select a stock...":
                     5. Investment outlook
                     6. DCF valuation for the next 5 years and must include Base, Bull, and Bear cases
                     7. Based on DCF Analyse current Fair Value vs Market Price
-                    7. Price target based on DCF and current market conditions
+                    8. Price target based on DCF and current market conditions
 
                     Start now:
                     """
