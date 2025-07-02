@@ -526,6 +526,7 @@ if selected_display != "Select a stock...":
                     summary_of_news = "N/A"
                     fcf = format_number(info.get("freeCashflow", "N/A"))
                     sharesoutstanding = info.get("sharesOutstanding", "N/A")
+                    forward_pe = info.get("forwardPE", "N/A")
 
                     prompt = f"""
                     You are a financial analyst. Based on the following metrics for the stock {ticker}, write a concise and clear stock analysis:
@@ -541,14 +542,15 @@ if selected_display != "Select a stock...":
                     - Recent News: {summary_of_news}
                     - Free Cash Flow: {fcf}
                     - Shares Outstanding: {sharesoutstanding}
+                    - Forward P/E: {forward_pe}
 
                     The analysis should include:
                     1. Executive summary
-                    2. Valuation commentary
+                    2. Valuation commentary including forward P/E ratio and Financial Health review
                     3. Growth potential
                     4. Risks
                     5. Investment outlook
-                    6. DCF valuation for the next 5 years
+                    6. DCF valuation for the next 5 years including Base, Bull, and Bear cases and actual Fair Value
                     7. Price target based on DCF and current market conditions
 
                     Start now:
