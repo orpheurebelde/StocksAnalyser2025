@@ -549,10 +549,9 @@ if selected_display != "Select a stock...":
                     2. Valuation commentary including forward P/E ratio and Financial Health review
                     3. Growth potential
                     4. Risks
-                    5. Investment outlook
-                    6. DCF valuation for the next 5 years and must include Base, Bull, and Bear cases
-                    7. Current Fair Value vs Market Price
-                    8. Price Target for the next 12 months
+                    5. DCF valuation for the next 5 years and must include Base, Bull, and Bear cases
+                    6. Current Fair Value vs Market Price
+                    7. Price Target for the next 12 months
 
                     Start now:
                     """
