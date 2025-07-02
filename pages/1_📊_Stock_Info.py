@@ -544,6 +544,8 @@ if selected_display != "Select a stock...":
                     3. Growth potential
                     4. Risks
                     5. Investment outlook
+                    6. DCF valuation for the next 5 years
+                    7. Price target based on DCF and current market conditions
 
                     Start now:
                     """
