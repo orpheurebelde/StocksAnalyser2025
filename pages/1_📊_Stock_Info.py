@@ -531,41 +531,56 @@ if selected_display != "Select a stock...":
 
                     # Prompt for Mistral
                     prompt = f"""
-                        You are a senior equity research analyst. Write a detailed, structured stock analysis for the company below using ONLY the data provided. Avoid making up numbers not included.
+                        You are a senior equity research analyst. Analyze the following company using ONLY the data provided below. 
+                        DO NOT assume or fabricate values that are not present.
 
-                        Company Profile:
+                        ### Company Data:
                         - Name: {company_name}
                         - Sector: {sector}
                         - Market Cap: {market_cap}
+                        - Current Price: ${current_stock_price}
                         - P/E Ratio (TTM): {trail_pe}
                         - Forward P/E: {forward_pe}
                         - Revenue (Last FY): {revenue}
                         - Net Income (Last FY): {net_income}
+                        - EPS (TTM): {eps_current_year}
                         - Free Cash Flow: {fcf}
-                        - EPS: {eps_current_year}
                         - Dividend Yield: {dividend_yield}
                         - Shares Outstanding: {sharesoutstanding}
-                        - Current Stock Price: {current_stock_price}
-                        - Recent News: {summary_of_news}
+                        - Recent News: {summary_of_news or 'None'}
 
-                        Structure your response as follows:
+                        ### Your Output Structure:
 
-                        1. **Executive Summary** - One paragraph max.
-                        2. **Valuation Analysis** - Compare P/E and Forward P/E to sector averages. Discuss over/under valuation.
-                        3. **Financial Health** - Assess cash flow, debt levels, profitability.
-                        4. **Growth Potential** - Evaluate EPS, revenue trends, and industry tailwinds.
-                        5. **Risks** - List at least two relevant risks (e.g., market saturation, rising rates).
-                        6. **DCF Valuation (5-Year Forecast)** - Include detailed estimates for:
-                        - Base Case: moderate growth & margins
-                        - Bull Case: optimistic growth, margin expansion
-                        - Bear Case: slow growth, compression
-                        For each case, output a 5-year DCF value and implied share price.
-                        7. **Fair Value Assessment** - Compare average DCF value to current price (${current_stock_price}).
-                        8. **12-Month Price Target & Investment Recommendation** - Provide a clear outlook.
+                        1. **Executive Summary**  
+                        Provide a 3–4 sentence summary of the company using ONLY the provided data.
 
-                        ONLY use available metrics. Do not assume data like WACC or growth if not present.
+                        2. **Valuation**  
+                        Use P/E and Forward P/E to assess whether the stock is overvalued or undervalued vs. typical sector ranges.
 
-                        Start your analysis now.
+                        3. **Financial Health**  
+                        Evaluate the company’s cash flow, net income, and FCF. Mention any warning signs or strengths.
+
+                        4. **Growth Potential**  
+                        Based on EPS and revenue trends, evaluate potential growth (without guessing growth rates).
+
+                        5. **Risks**  
+                        List at least two risks based on the available data.
+
+                        6. **DCF Valuation (5-Year Forecast)**  
+                        Estimate **Base**, **Bull**, and **Bear** scenarios using only the provided data. If key inputs (e.g., growth rate, WACC) are missing, clearly state assumptions and keep values reasonable. Return:
+                        - Base Case: $X.XX
+                        - Bull Case: $X.XX
+                        - Bear Case: $X.XX
+
+                        7. **Fair Value Assessment**  
+                        Compare the DCF-based fair value range to the current price of ${current_stock_price}. State if it's undervalued, overvalued, or fairly priced.
+
+                        8. **12-Month Price Target & Recommendation**  
+                        Give a 12-month target using a realistic assumption. Recommend Buy, Hold, or Sell, with justification.
+
+                        ⚠️ Do not invent numbers. Use approximations only if grounded in provided values.
+
+                        Begin now.
                         """
                     
                     if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
