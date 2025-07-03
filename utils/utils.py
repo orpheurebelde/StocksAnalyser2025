@@ -194,8 +194,6 @@ def format_number(num):
             return f"{num}"
     return num
 
-import streamlit as st
-import time
 
 def login(USERNAME, PASSWORD):
     st.subheader("🔐 Login")
@@ -422,12 +420,6 @@ def fetch_price_data(ticker: str) -> pd.DataFrame:
     if df.empty:
         raise ValueError(f"No data found for ticker '{ticker}'")
     return df
-
-import pandas as pd
-from ta.momentum import RSIIndicator
-from ta.trend import IchimokuIndicator, MACD
-
-from ta.volatility import BollingerBands
 
 def analyze_price_action(df):
     # Required columns
