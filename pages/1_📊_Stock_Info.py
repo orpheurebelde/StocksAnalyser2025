@@ -508,78 +508,78 @@ if selected_display != "Select a stock...":
                 st.image(info["logo_url"], width=120)
 
             # AI Analysis Section
-with st.expander("💡 AI Analysis & Forecast"):
-    MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
+            with st.expander("💡 AI Analysis & Forecast"):
+                MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
 
-    if ticker:
-        info = get_stock_info(ticker)
+                if ticker:
+                    info = get_stock_info(ticker)
 
-        company_name = info.get("longName") or info.get("shortName") or ticker
-        sector = info.get("sector", "N/A")
-        market_cap = format_number(info.get("marketCap", "N/A"))
-        trail_pe = info.get("trailingPE", "N/A")
-        revenue = format_number(info.get("totalRevenue", "N/A"))
-        net_income = format_number(info.get("netIncomeToCommon", "N/A"))
-        eps_current_year = info.get("trailingEps", "N/A")
-        dividend_yield_val = info.get("dividendYield", None)
-        dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
-        summary_of_news = "N/A"
-        fcf = format_number(info.get("freeCashflow", "N/A"))
-        sharesoutstanding = info.get("sharesOutstanding", "N/A")
-        forward_pe = info.get("forwardPE", "N/A")
-        current_stock_price = info.get("currentPrice", "N/A")
+                    company_name = info.get("longName") or info.get("shortName") or ticker
+                    sector = info.get("sector", "N/A")
+                    market_cap = format_number(info.get("marketCap", "N/A"))
+                    trail_pe = info.get("trailingPE", "N/A")
+                    revenue = format_number(info.get("totalRevenue", "N/A"))
+                    net_income = format_number(info.get("netIncomeToCommon", "N/A"))
+                    eps_current_year = info.get("trailingEps", "N/A")
+                    dividend_yield_val = info.get("dividendYield", None)
+                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                    summary_of_news = "N/A"
+                    fcf = format_number(info.get("freeCashflow", "N/A"))
+                    sharesoutstanding = info.get("sharesOutstanding", "N/A")
+                    forward_pe = info.get("forwardPE", "N/A")
+                    current_stock_price = info.get("currentPrice", "N/A")
 
-        # Prompt for Mistral
-        prompt = f"""
-            You are a senior equity research analyst. Write a detailed, structured stock analysis for the company below using ONLY the data provided. Avoid making up numbers not included.
+                    # Prompt for Mistral
+                    prompt = f"""
+                        You are a senior equity research analyst. Write a detailed, structured stock analysis for the company below using ONLY the data provided. Avoid making up numbers not included.
 
-            Company Profile:
-            - Name: {company_name}
-            - Sector: {sector}
-            - Market Cap: {market_cap}
-            - P/E Ratio (TTM): {trail_pe}
-            - Forward P/E: {forward_pe}
-            - Revenue (Last FY): {revenue}
-            - Net Income (Last FY): {net_income}
-            - Free Cash Flow: {fcf}
-            - EPS: {eps_current_year}
-            - Dividend Yield: {dividend_yield}
-            - Shares Outstanding: {sharesoutstanding}
-            - Current Stock Price: {current_stock_price}
-            - Recent News: {summary_of_news}
+                        Company Profile:
+                        - Name: {company_name}
+                        - Sector: {sector}
+                        - Market Cap: {market_cap}
+                        - P/E Ratio (TTM): {trail_pe}
+                        - Forward P/E: {forward_pe}
+                        - Revenue (Last FY): {revenue}
+                        - Net Income (Last FY): {net_income}
+                        - Free Cash Flow: {fcf}
+                        - EPS: {eps_current_year}
+                        - Dividend Yield: {dividend_yield}
+                        - Shares Outstanding: {sharesoutstanding}
+                        - Current Stock Price: {current_stock_price}
+                        - Recent News: {summary_of_news}
 
-            Structure your response as follows:
+                        Structure your response as follows:
 
-            1. **Executive Summary** - One paragraph max.
-            2. **Valuation Analysis** - Compare P/E and Forward P/E to sector averages. Discuss over/under valuation.
-            3. **Financial Health** - Assess cash flow, debt levels, profitability.
-            4. **Growth Potential** - Evaluate EPS, revenue trends, and industry tailwinds.
-            5. **Risks** - List at least two relevant risks (e.g., market saturation, rising rates).
-            6. **DCF Valuation (5-Year Forecast)** - Include detailed estimates for:
-            - Base Case: moderate growth & margins
-            - Bull Case: optimistic growth, margin expansion
-            - Bear Case: slow growth, compression
-            For each case, output a 5-year DCF value and implied share price.
-            7. **Fair Value Assessment** - Compare average DCF value to current price (${current_stock_price}).
-            8. **12-Month Price Target & Investment Recommendation** - Provide a clear outlook.
+                        1. **Executive Summary** - One paragraph max.
+                        2. **Valuation Analysis** - Compare P/E and Forward P/E to sector averages. Discuss over/under valuation.
+                        3. **Financial Health** - Assess cash flow, debt levels, profitability.
+                        4. **Growth Potential** - Evaluate EPS, revenue trends, and industry tailwinds.
+                        5. **Risks** - List at least two relevant risks (e.g., market saturation, rising rates).
+                        6. **DCF Valuation (5-Year Forecast)** - Include detailed estimates for:
+                        - Base Case: moderate growth & margins
+                        - Bull Case: optimistic growth, margin expansion
+                        - Bear Case: slow growth, compression
+                        For each case, output a 5-year DCF value and implied share price.
+                        7. **Fair Value Assessment** - Compare average DCF value to current price (${current_stock_price}).
+                        8. **12-Month Price Target & Investment Recommendation** - Provide a clear outlook.
 
-            ONLY use available metrics. Do not assume data like WACC or growth if not present.
+                        ONLY use available metrics. Do not assume data like WACC or growth if not present.
 
-            Start your analysis now.
-            """
-        
-        if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
-            with st.spinner("Generating AI stock analysis..."):
-                analysis = get_ai_analysis(prompt, MISTRAL_API_KEY)
+                        Start your analysis now.
+                        """
+                    
+                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
+                        with st.spinner("Generating AI stock analysis..."):
+                            analysis = get_ai_analysis(prompt, MISTRAL_API_KEY)
 
-            if analysis.startswith("ERROR:"):
-                st.error("AI analysis failed.")
-                st.code(analysis, language="text")
-            else:
-                st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-                sections = re.split(r'\n(?=\d+\.)', analysis)
-                for section in sections:
-                    st.markdown(section.strip().replace('\n', '  \n'))
+                        if analysis.startswith("ERROR:"):
+                            st.error("AI analysis failed.")
+                            st.code(analysis, language="text")
+                        else:
+                            st.markdown(f"**AI Analysis for {ticker.upper()}:**")
+                            sections = re.split(r'\n(?=\d+\.)', analysis)
+                            for section in sections:
+                                st.markdown(section.strip().replace('\n', '  \n'))
 
             with st.expander("Company Info", expanded=False):
                 _, info = fetch_data(ticker)
