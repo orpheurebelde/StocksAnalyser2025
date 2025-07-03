@@ -545,5 +545,46 @@ def analyze_price_action(df):
 
     return score, explanations
 
+def calculate_dcf_valuation(ticker, revenue_growth_base=0.08, revenue_growth_bull=0.12, revenue_growth_bear=0.04, 
+                            discount_rate=0.10, years=5, terminal_growth_rate=0.025):
+    stock = yf.Ticker(ticker)
+    info = stock.info
+
+    try:
+        revenue = info.get("totalRevenue", None)
+        fcf_margin = 0.15  # fallback free cash flow margin
+        if "freeCashflow" in info and revenue and info["freeCashflow"]:
+            fcf_margin = info["freeCashflow"] / revenue
+
+        def project_fcf(growth_rate):
+            fcf = []
+            rev = revenue
+            for _ in range(years):
+                rev *= (1 + growth_rate)
+                fcf.append(rev * fcf_margin)
+            return fcf
+
+        def discount_cash_flows(fcf_list):
+            discounted = [fcf / (1 + discount_rate) ** (i+1) for i, fcf in enumerate(fcf_list)]
+            terminal_value = fcf_list[-1] * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
+            terminal_discounted = terminal_value / ((1 + discount_rate) ** years)
+            return sum(discounted) + terminal_discounted
+
+        base = discount_cash_flows(project_fcf(revenue_growth_base))
+        bull = discount_cash_flows(project_fcf(revenue_growth_bull))
+        bear = discount_cash_flows(project_fcf(revenue_growth_bear))
+
+        shares_outstanding = info.get("sharesOutstanding", 1)
+        price = info.get("currentPrice", 0)
+
+        return {
+            "Base": round(base / shares_outstanding, 2),
+            "Bull": round(bull / shares_outstanding, 2),
+            "Bear": round(bear / shares_outstanding, 2),
+            "Current Price": price
+        }
+
+    except Exception as e:
+        return {"Error": str(e)}
 
 

@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
+from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, calculate_dcf_valuation
 import re
 import time
 
@@ -594,3 +594,58 @@ if selected_display != "Select a stock...":
                     st.write(info)
                 else:
                     st.warning("No stock selected.")
+            
+        @st.cache_data(show_spinner=False)
+        def get_current_price(ticker):
+            return yf.Ticker(ticker).info.get("currentPrice", 0)
+
+        # Assuming you already have `ticker = st.text_input(...)` or similar above
+
+        if ticker:
+            st.subheader(f"📈 DCF Valuation for {ticker}")
+
+            with st.expander("🛠️ Customize DCF Inputs"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    base_growth = st.number_input("Base Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=8.0, step=0.5) / 100
+                with col2:
+                    bull_growth = st.number_input("Bull Case Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=12.0, step=0.5) / 100
+                with col3:
+                    bear_growth = st.number_input("Bear Case Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=4.0, step=0.5) / 100
+                
+                discount_rate = st.slider("Discount Rate (%)", min_value=4.0, max_value=15.0, value=10.0, step=0.5) / 100
+
+            with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
+                with st.spinner("Calculating DCF..."):
+                    result = calculate_dcf_valuation(
+                        ticker,
+                        revenue_growth_base=base_growth,
+                        revenue_growth_bull=bull_growth,
+                        revenue_growth_bear=bear_growth,
+                        discount_rate=discount_rate
+                    )
+
+                if "Error" in result:
+                    st.error(f"❌ Error: {result['Error']}")
+                else:
+                    current_price = result['Current Price']
+                    st.metric("📊 Current Price", f"${current_price:.2f}")
+
+                    cols = st.columns(3)
+                    for i, case in enumerate(["Bear", "Base", "Bull"]):
+                        valuation = result[case]
+                        delta = valuation - current_price
+                        delta_pct = (delta / current_price) * 100
+
+                        color = "normal"
+                        if delta > 0:
+                            color = "inverse"
+                        elif delta < 0:
+                            color = "off"
+
+                        cols[i].metric(
+                            f"{case} Case Valuation",
+                            f"${valuation:.2f}",
+                            f"{delta_pct:.1f}%",
+                            delta_color=color
+                        )
