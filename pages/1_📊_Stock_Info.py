@@ -595,14 +595,9 @@ if selected_display != "Select a stock...":
                 else:
                     st.warning("No stock selected.")
             
-        @st.cache_data(show_spinner=False)
-        def get_current_price(ticker):
-            return yf.Ticker(ticker).info.get("currentPrice", 0)
 
-        # Assuming you already have `ticker = st.text_input(...)` or similar above
-
-        if ticker:
-            st.subheader(f"📈 DCF Valuation for {ticker}")
+            if ticker:
+                st.subheader(f"📈 DCF Valuation for {ticker}")
 
             with st.expander("🛠️ Customize DCF Inputs"):
                 col1, col2, col3 = st.columns(3)
