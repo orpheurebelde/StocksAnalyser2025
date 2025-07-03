@@ -550,18 +550,18 @@ with st.expander("💡 AI Analysis & Forecast"):
 
             Structure your response as follows:
 
-            1. **Executive Summary** – One paragraph max.
-            2. **Valuation Analysis** – Compare P/E and Forward P/E to sector averages. Discuss over/under valuation.
-            3. **Financial Health** – Assess cash flow, debt levels, profitability.
-            4. **Growth Potential** – Evaluate EPS, revenue trends, and industry tailwinds.
-            5. **Risks** – List at least two relevant risks (e.g., market saturation, rising rates).
-            6. **DCF Valuation (5-Year Forecast)** – Include detailed estimates for:
+            1. **Executive Summary** - One paragraph max.
+            2. **Valuation Analysis** - Compare P/E and Forward P/E to sector averages. Discuss over/under valuation.
+            3. **Financial Health** - Assess cash flow, debt levels, profitability.
+            4. **Growth Potential** - Evaluate EPS, revenue trends, and industry tailwinds.
+            5. **Risks** - List at least two relevant risks (e.g., market saturation, rising rates).
+            6. **DCF Valuation (5-Year Forecast)** - Include detailed estimates for:
             - Base Case: moderate growth & margins
             - Bull Case: optimistic growth, margin expansion
             - Bear Case: slow growth, compression
             For each case, output a 5-year DCF value and implied share price.
-            7. **Fair Value Assessment** – Compare average DCF value to current price (${current_stock_price}).
-            8. **12-Month Price Target & Investment Recommendation** – Provide a clear outlook.
+            7. **Fair Value Assessment** - Compare average DCF value to current price (${current_stock_price}).
+            8. **12-Month Price Target & Investment Recommendation** - Provide a clear outlook.
 
             ONLY use available metrics. Do not assume data like WACC or growth if not present.
 
