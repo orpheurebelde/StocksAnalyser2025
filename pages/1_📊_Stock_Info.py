@@ -507,92 +507,84 @@ if selected_display != "Select a stock...":
             if info.get("logo_url", "").startswith("http"):
                 st.image(info["logo_url"], width=120)
 
+            def clean_ai_output(analysis: str, true_price: float) -> str:
+                """
+                Replaces all fabricated price mentions with the real current price.
+                """
+                current_price_str = f"${true_price:.2f}"
+                analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
+                analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
+                return analysis.strip()
+
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
                 MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
+                ticker = st.session_state.get("selected_ticker")
 
                 if ticker:
                     info = get_stock_info(ticker)
 
+                    # Collect structured data
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = info.get("sector", "N/A")
                     market_cap = format_number(info.get("marketCap", "N/A"))
                     trail_pe = info.get("trailingPE", "N/A")
+                    forward_pe = info.get("forwardPE", "N/A")
                     revenue = format_number(info.get("totalRevenue", "N/A"))
                     net_income = format_number(info.get("netIncomeToCommon", "N/A"))
-                    eps_current_year = info.get("trailingEps", "N/A")
+                    eps_current = info.get("trailingEps", "N/A")
+                    fcf = format_number(info.get("freeCashflow", "N/A"))
                     dividend_yield_val = info.get("dividendYield", None)
                     dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                    shares_outstanding = info.get("sharesOutstanding", "N/A")
+                    current_price = info.get("currentPrice", "N/A")
                     summary_of_news = "N/A"
-                    fcf = format_number(info.get("freeCashflow", "N/A"))
-                    sharesoutstanding = info.get("sharesOutstanding", "N/A")
-                    forward_pe = info.get("forwardPE", "N/A")
-                    current_stock_price = info.get("currentPrice", "N/A")
 
-                    # Prompt for Mistral
+                    # Prompt
                     prompt = f"""
-                        You are a senior equity research analyst. Analyze the following company using ONLY the data provided below. 
-                        DO NOT assume or fabricate values that are not present.
+                        You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
 
-                        ### Company Data:
-                        - Name: {company_name}
+                        - Company: {company_name}
                         - Sector: {sector}
                         - Market Cap: {market_cap}
-                        - Current Price: ${current_stock_price}
-                        - P/E Ratio (TTM): {trail_pe}
+                        - Current Price: ${current_price}
+                        - P/E (TTM): {trail_pe}
                         - Forward P/E: {forward_pe}
-                        - Revenue (Last FY): {revenue}
-                        - Net Income (Last FY): {net_income}
-                        - EPS (TTM): {eps_current_year}
+                        - Revenue: {revenue}
+                        - Net Income: {net_income}
+                        - EPS: {eps_current}
                         - Free Cash Flow: {fcf}
                         - Dividend Yield: {dividend_yield}
-                        - Shares Outstanding: {sharesoutstanding}
-                        - Recent News: {summary_of_news or 'None'}
+                        - Shares Outstanding: {shares_outstanding}
+                        - News: {summary_of_news}
 
-                        ### Your Output Structure:
-
-                        1. **Executive Summary**  
-                        Provide a 3–4 sentence summary of the company using ONLY the provided data.
-
-                        2. **Valuation**  
-                        Use P/E and Forward P/E to assess whether the stock is overvalued or undervalued vs. typical sector ranges.
-
-                        3. **Financial Health**  
-                        Evaluate the company’s cash flow, net income, and FCF. Mention any warning signs or strengths.
-
-                        4. **Growth Potential**  
-                        Based on EPS and revenue trends, evaluate potential growth (without guessing growth rates).
-
-                        5. **Risks**  
-                        List at least two risks based on the available data.
-
-                        6. **DCF Valuation (5-Year Forecast)**  
-                        Estimate **Base**, **Bull**, and **Bear** scenarios using only the provided data. If key inputs (e.g., growth rate, WACC) are missing, clearly state assumptions and keep values reasonable. Return:
+                        Structure the analysis:
+                        1. **Executive Summary** - Max 3 sentences.
+                        2. **Valuation** - Use P/E & Fwd P/E to evaluate price fairness.
+                        3. **Financial Health** - Net Income, FCF, Cash vs Debt.
+                        4. **Growth Potential** - EPS, Sector outlook, revenue.
+                        5. **Risks** - Competitive, macro, financial, etc.
+                        6. **DCF Valuation** - Provide Base, Bull, Bear share price:
                         - Base Case: $X.XX
                         - Bull Case: $X.XX
                         - Bear Case: $X.XX
+                        7. **Fair Value vs Current Price**
+                        8. **12-Month Target & Recommendation** - Buy, Hold or Sell.
 
-                        7. **Fair Value Assessment**  
-                        Compare the DCF-based fair value range to the current price of ${current_stock_price}. State if it's undervalued, overvalued, or fairly priced.
-
-                        8. **12-Month Price Target & Recommendation**  
-                        Give a 12-month target using a realistic assumption. Recommend Buy, Hold, or Sell, with justification.
-
-                        ⚠️ Do not invent numbers. Use approximations only if grounded in provided values.
-
-                        Begin now.
+                        ❗DO NOT invent data. Stick only to the provided inputs.
                         """
-                    
-                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
-                        with st.spinner("Generating AI stock analysis..."):
-                            analysis = get_ai_analysis(prompt, MISTRAL_API_KEY)
 
-                        if analysis.startswith("ERROR:"):
-                            st.error("AI analysis failed.")
-                            st.code(analysis, language="text")
+                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
+                        with st.spinner("Calling Mistral for analysis..."):
+                            raw = get_ai_analysis(prompt, MISTRAL_API_KEY)
+
+                        if raw.startswith("ERROR:"):
+                            st.error("Failed to generate AI analysis.")
+                            st.code(raw)
                         else:
+                            corrected = clean_ai_output(raw, true_price=info.get("currentPrice", 0.0))
                             st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-                            sections = re.split(r'\n(?=\d+\.)', analysis)
+                            sections = re.split(r'\n(?=\d+\.)', corrected)
                             for section in sections:
                                 st.markdown(section.strip().replace('\n', '  \n'))
 
