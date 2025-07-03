@@ -596,8 +596,8 @@ if selected_display != "Select a stock...":
                     st.warning("No stock selected.")
             
 
-            if ticker:
-                st.subheader(f"📈 DCF Valuation for {ticker}")
+        if ticker:
+            st.subheader(f"📈 DCF Valuation for {ticker}")
 
             with st.expander("🛠️ Customize DCF Inputs"):
                 col1, col2, col3 = st.columns(3)
