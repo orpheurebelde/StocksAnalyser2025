@@ -171,7 +171,7 @@ def get_ai_analysis(prompt, api_key):
             "model": "mistral-small-latest",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
-            "max_tokens": 800
+            "max_tokens": 1500
         }
 
         response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data)
