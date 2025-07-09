@@ -41,6 +41,15 @@ def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, flo
 def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
 def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
 
+def clean_ai_output(analysis: str, true_price: float) -> str:
+    """
+    Replaces all fabricated price mentions with the real current price.
+    """
+    current_price_str = f"${true_price:.2f}"
+    analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
+    analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
+    return analysis.strip()
+
 if selected_display != "Select a stock...":
     ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     info = get_stock_info(ticker)
@@ -503,15 +512,6 @@ if selected_display != "Select a stock...":
             with st.expander("📦 Ownership"):
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
-
-            def clean_ai_output(analysis: str, true_price: float) -> str:
-                """
-                Replaces all fabricated price mentions with the real current price.
-                """
-                current_price_str = f"${true_price:.2f}"
-                analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
-                analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
-                return analysis.strip()
             
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
