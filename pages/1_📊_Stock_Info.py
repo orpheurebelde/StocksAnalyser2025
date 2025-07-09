@@ -603,22 +603,18 @@ if selected_display != "Select a stock...":
                 
                 discount_rate = st.slider("Discount Rate (%)", min_value=4.0, max_value=15.0, value=10.0, step=0.5) / 100
 
+        if selected_display and isinstance(selected_display, str) and " - " in selected_display and selected_display != "Select a stock...":
+            ticker_symbol = selected_display.split(" - ")[0].strip().upper()
+
             with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
                 with st.spinner("Calculating DCF..."):
-                    # Safely extract ticker from dropdown
-                    selected_display = st.selectbox("🔎 Search Stock", options, index=0)
-                    if selected_display and isinstance(selected_display, str) and " - " in selected_display:
-                        ticker_symbol = selected_display.split(" - ")[0].strip().upper()
-
-                        result = calculate_dcf_valor(
-                            ticker_symbol,
-                            revenue_growth_base=base_growth,
-                            revenue_growth_bull=bull_growth,
-                            revenue_growth_bear=bear_growth,
-                            discount_rate=discount_rate
-                        )
-                    else:
-                        st.error("Invalid ticker selected. Please try again.")
+                    result = calculate_dcf_valor(
+                        ticker_symbol,
+                        revenue_growth_base=base_growth,
+                        revenue_growth_bull=bull_growth,
+                        revenue_growth_bear=bear_growth,
+                        discount_rate=discount_rate
+                    )
 
                 if "Error" in result:
                     st.error(f"❌ Error: {result['Error']}")
@@ -644,3 +640,5 @@ if selected_display != "Select a stock...":
                             f"{delta_pct:.1f}%",
                             delta_color=color
                         )
+        else:
+            st.warning("⚠️ Please select a valid stock ticker from the dropdown above to view DCF valuation.")
