@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
+from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, calculate_dcf_valuation
 import re
 import time
 
@@ -504,67 +504,80 @@ if selected_display != "Select a stock...":
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
 
+            if info.get("logo_url", "").startswith("http"):
+                st.image(info["logo_url"], width=120)
+
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
                 MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
+                ticker = st.session_state.get("selected_ticker")
 
                 if ticker:
                     info = get_stock_info(ticker)
 
+                    # Collect structured data
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = info.get("sector", "N/A")
                     market_cap = format_number(info.get("marketCap", "N/A"))
                     trail_pe = info.get("trailingPE", "N/A")
+                    forward_pe = info.get("forwardPE", "N/A")
                     revenue = format_number(info.get("totalRevenue", "N/A"))
                     net_income = format_number(info.get("netIncomeToCommon", "N/A"))
-                    eps_current_year = info.get("trailingEps", "N/A")
+                    eps_current = info.get("trailingEps", "N/A")
+                    fcf = format_number(info.get("freeCashflow", "N/A"))
                     dividend_yield_val = info.get("dividendYield", None)
                     dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                    shares_outstanding = info.get("sharesOutstanding", "N/A")
+                    current_price = info.get("currentPrice", "N/A")
                     summary_of_news = "N/A"
-                    fcf = format_number(info.get("freeCashflow", "N/A"))
-                    sharesoutstanding = info.get("sharesOutstanding", "N/A")
-                    forward_pe = info.get("forwardPE", "N/A")
 
+                    # Prompt
                     prompt = f"""
-                    You are a financial analyst. Based on the following metrics for the stock {ticker}, write a deep, concise and clear full stock analysis:
+                        You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
 
-                    - Company Name: {company_name}
-                    - Sector: {sector}
-                    - Market Cap: {market_cap}
-                    - P/E Ratio: {trail_pe}
-                    - Revenue (last FY): {revenue}
-                    - Net Income (last FY): {net_income}
-                    - EPS: {eps_current_year}
-                    - Dividend Yield: {dividend_yield}
-                    - Recent News: {summary_of_news}
-                    - Free Cash Flow: {fcf}
-                    - Shares Outstanding: {sharesoutstanding}
-                    - Forward P/E: {forward_pe}
+                        - Company: {company_name}
+                        - Sector: {sector}
+                        - Market Cap: {market_cap}
+                        - Current Price: ${current_price}
+                        - P/E (TTM): {trail_pe}
+                        - Forward P/E: {forward_pe}
+                        - Revenue: {revenue}
+                        - Net Income: {net_income}
+                        - EPS: {eps_current}
+                        - Free Cash Flow: {fcf}
+                        - Dividend Yield: {dividend_yield}
+                        - Shares Outstanding: {shares_outstanding}
+                        - News: {summary_of_news}
 
-                    The analysis should include:
-                    1. Executive summary
-                    2. Valuation commentary including forward P/E ratio and Financial Health review
-                    3. Growth potential
-                    4. Risks
-                    5. DCF valuation for the next 5 years and must include Base, Bull, and Bear cases
-                    6. Current Fair Value vs Market Price
-                    7. Price Target for the next 12 months
+                        Structure the analysis:
+                        1. **Executive Summary** - Max 3 sentences.
+                        2. **Valuation** - Use P/E & Fwd P/E to evaluate price fairness.
+                        3. **Financial Health** - Net Income, FCF, Cash vs Debt.
+                        4. **Growth Potential** - EPS, Sector outlook, revenue.
+                        5. **Risks** - Competitive, macro, financial, etc.
+                        6. **DCF Valuation** - Provide Base, Bull, Bear share price:
+                        - Base Case: $X.XX
+                        - Bull Case: $X.XX
+                        - Bear Case: $X.XX
+                        7. **Fair Value vs Current Price**
+                        8. **12-Month Target & Recommendation** - Buy, Hold or Sell.
 
-                    Start now:
-                    """
+                        ❗DO NOT invent data. Stick only to the provided inputs.
+                        """
 
-                if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
-                    with st.spinner("Generating AI stock analysis..."):
-                        analysis = get_ai_analysis(prompt, MISTRAL_API_KEY)
+                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
+                        with st.spinner("Calling Mistral for analysis..."):
+                            raw = get_ai_analysis(prompt, MISTRAL_API_KEY)
 
-                    if analysis.startswith("ERROR:"):
-                        st.error("AI analysis failed.")
-                        st.code(analysis, language="text")
-                    else:
-                        st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-                        sections = re.split(r'\n(?=\d+\.)', analysis)
-                        for section in sections:
-                            st.markdown(section.strip().replace('\n', '  \n'))
+                        if raw.startswith("ERROR:"):
+                            st.error("Failed to generate AI analysis.")
+                            st.code(raw)
+                        else:
+                            corrected = clean_ai_output(raw, true_price=info.get("currentPrice", 0.0))
+                            st.markdown(f"**AI Analysis for {ticker.upper()}:**")
+                            sections = re.split(r'\n(?=\d+\.)', corrected)
+                            for section in sections:
+                                st.markdown(section.strip().replace('\n', '  \n'))
 
             with st.expander("Company Info", expanded=False):
                 _, info = fetch_data(ticker)
@@ -572,3 +585,50 @@ if selected_display != "Select a stock...":
                     st.write(info)
                 else:
                     st.warning("No stock selected.")
+
+        if ticker:
+            with st.expander("🛠️ Customize DCF Inputs"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    base_growth = st.number_input("Base Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=8.0, step=0.5) / 100
+                with col2:
+                    bull_growth = st.number_input("Bull Case Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=12.0, step=0.5) / 100
+                with col3:
+                    bear_growth = st.number_input("Bear Case Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=4.0, step=0.5) / 100
+                
+                discount_rate = st.slider("Discount Rate (%)", min_value=4.0, max_value=15.0, value=10.0, step=0.5) / 100
+
+            with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
+                with st.spinner("Calculating DCF..."):
+                    result = calculate_dcf_valuation(
+                        ticker,
+                        revenue_growth_base=base_growth,
+                        revenue_growth_bull=bull_growth,
+                        revenue_growth_bear=bear_growth,
+                        discount_rate=discount_rate
+                    )
+
+                if "Error" in result:
+                    st.error(f"❌ Error: {result['Error']}")
+                else:
+                    current_price = result['Current Price']
+                    st.metric("📊 Current Price", f"${current_price:.2f}")
+
+                    cols = st.columns(3)
+                    for i, case in enumerate(["Bear", "Base", "Bull"]):
+                        valuation = result[case]
+                        delta = valuation - current_price
+                        delta_pct = (delta / current_price) * 100
+
+                        color = "normal"
+                        if delta > 0:
+                            color = "inverse"
+                        elif delta < 0:
+                            color = "off"
+
+                        cols[i].metric(
+                            f"{case} Case Valuation",
+                            f"${valuation:.2f}",
+                            f"{delta_pct:.1f}%",
+                            delta_color=color
+                        )
