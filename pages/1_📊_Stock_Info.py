@@ -605,14 +605,18 @@ if selected_display != "Select a stock...":
 
             with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
                 with st.spinner("Calculating DCF..."):
-                    ticker_symbol = selected_display.split(" - ")[0].strip().upper()
-                    result = calculate_dcf_valor(
-                        ticker,
-                        revenue_growth_base=base_growth,
-                        revenue_growth_bull=bull_growth,
-                        revenue_growth_bear=bear_growth,
-                        discount_rate=discount_rate
-                    )
+                    if selected_display and isinstance(selected_display, str) and " - " in selected_display:
+                        ticker_symbol = selected_display.split(" - ")[0].strip().upper()
+
+                        result = calculate_dcf_valor(
+                            ticker_symbol,
+                            revenue_growth_base=base_growth,
+                            revenue_growth_bull=bull_growth,
+                            revenue_growth_bear=bear_growth,
+                            discount_rate=discount_rate
+                        )
+                    else:
+                        st.error("Invalid ticker selected. Please try again.")
 
                 if "Error" in result:
                     st.error(f"❌ Error: {result['Error']}")
