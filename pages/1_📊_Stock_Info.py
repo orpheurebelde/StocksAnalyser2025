@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, calculate_dcf_valuation
+from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, calculate_dcf_valuation, clean_ai_output
 import re
 import time
 
@@ -503,9 +503,6 @@ if selected_display != "Select a stock...":
             with st.expander("📦 Ownership"):
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
-
-            if info.get("logo_url", "").startswith("http"):
-                st.image(info["logo_url"], width=120)
 
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
