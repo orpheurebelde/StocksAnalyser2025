@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, calculate_dcf_valuation, clean_ai_output
+from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, calculate_dcf_valuation
 import re
 import time
 
@@ -504,6 +504,15 @@ if selected_display != "Select a stock...":
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
 
+            def clean_ai_output(analysis: str, true_price: float) -> str:
+                """
+                Replaces all fabricated price mentions with the real current price.
+                """
+                current_price_str = f"${true_price:.2f}"
+                analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
+                analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
+                return analysis.strip()
+            
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
                 MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
