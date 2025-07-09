@@ -608,7 +608,6 @@ if selected_display != "Select a stock...":
 
             with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
                 with st.spinner("Calculating DCF..."):
-                    print(f"Running DCF for ticker: {ticker} ({type(ticker)})")
                     result = calculate_dcf_valor(
                         ticker_symbol,
                         revenue_growth_base=base_growth,
