@@ -545,7 +545,7 @@ def analyze_price_action(df):
 
     return score, explanations
 
-def calculate_dcf_valuation(ticker, revenue_growth_base=0.08, revenue_growth_bull=0.12, revenue_growth_bear=0.04, 
+def calculate_dcf_valor(ticker, revenue_growth_base=0.08, revenue_growth_bull=0.12, revenue_growth_bear=0.04, 
                             discount_rate=0.10, years=5, terminal_growth_rate=0.025):
     stock = yf.Ticker(ticker)
     info = stock.info
