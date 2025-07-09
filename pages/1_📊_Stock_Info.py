@@ -605,6 +605,8 @@ if selected_display != "Select a stock...":
 
             with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
                 with st.spinner("Calculating DCF..."):
+                    # Safely extract ticker from dropdown
+                    selected_display = st.selectbox("🔎 Search Stock", options, index=0)
                     if selected_display and isinstance(selected_display, str) and " - " in selected_display:
                         ticker_symbol = selected_display.split(" - ")[0].strip().upper()
 
