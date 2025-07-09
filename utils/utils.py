@@ -550,8 +550,8 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.08, revenue_growth_bull=0.
 
     # 🛡️ Ensure the ticker is a proper string
     if not isinstance(ticker, str):
-        raise ValueError(f"Ticker must be a string, got: {type(ticker)}")
-
+        raise ValueError("Expected ticker to be a string")
+    
     ticker = ticker.strip().upper()
     stock = yf.Ticker(ticker)
     info = stock.info
