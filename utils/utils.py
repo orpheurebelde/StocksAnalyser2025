@@ -547,6 +547,10 @@ def analyze_price_action(df):
 
 def calculate_dcf_valor(ticker, revenue_growth_base=0.08, revenue_growth_bull=0.12, revenue_growth_bear=0.04, 
                             discount_rate=0.10, years=5, terminal_growth_rate=0.025):
+    if not isinstance(ticker, str):
+        raise ValueError(f"Expected ticker to be a string, got {type(ticker).__name__} instead: {ticker}")
+
+    ticker = ticker.strip().upper()
     stock = yf.Ticker(ticker)
     info = stock.info
 
