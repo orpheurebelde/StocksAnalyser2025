@@ -504,9 +504,6 @@ if selected_display != "Select a stock...":
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
 
-            if info.get("logo_url", "").startswith("http"):
-                st.image(info["logo_url"], width=120)
-
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
                 MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
