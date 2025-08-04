@@ -34,14 +34,20 @@ if selected_display != "Select a stock...":
 
         col1, col2 = st.columns(2)
         with col1:
-            base_growth_rate = st.number_input("📈 Estimated Annual Company Growth (%)", value=10.0, step=0.5) / 100
+            base_growth_rate = st.number_input(
+                "📈 Estimated Annual Company Growth (%)",
+                value=10.0,
+                step=0.5,
+                min_value=0.1,
+                max_value=100.0  # changed to float
+            ) / 100
         with col2:
             base_discount_rate = st.number_input(
                 "💸 Discount Rate (%)",
                 value=10.0,
                 step=0.5,
                 min_value=6.0,
-                max_value=15.0,
+                max_value=15.0,  # ensure float, here 15.0 is fine since it has decimal
                 help=(
                     "Suggested Discount Rates by Company Risk:\n"
                     "• Low-risk (e.g., Apple, MSFT): 6% – 8%\n"
@@ -101,7 +107,6 @@ if selected_display != "Select a stock...":
                             <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
                         </div>
                     """, unsafe_allow_html=True)
-                    # Native Streamlit space after HTML box
                     st.markdown("<div style='margin-bottom: 10px;'>&nbsp;</div>", unsafe_allow_html=True)
 
         else:
@@ -120,7 +125,7 @@ if selected_display != "Select a stock...":
 
             with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
                 st.markdown(f"""
-                <div style='padding: 10px; background-color: #transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
+                <div style='padding: 10px; background-color: transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
                     <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
                     <p><strong>Future Company Value:</strong> {format_currency(future_value)}</p>
                     <p><strong>Discounted Present Value:</strong> 
@@ -130,7 +135,6 @@ if selected_display != "Select a stock...":
                     <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
                 </div>
                 """, unsafe_allow_html=True)
-                # Native Streamlit space after HTML box
                 st.markdown("<div style='margin-bottom: 10px;'>&nbsp;</div>", unsafe_allow_html=True)
 
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
