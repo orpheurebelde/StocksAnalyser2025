@@ -504,17 +504,17 @@ if selected_display != "Select a stock...":
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
 
-            if info.get("logo_url", "").startswith("http"):
-                st.image(info["logo_url"], width=120)
+                if info.get("logo_url", "").startswith("http"):
+                    st.image(info["logo_url"], width=120)
 
-            def clean_ai_output(analysis: str, true_price: float) -> str:
-                """
-                Replaces all fabricated price mentions with the real current price.
-                """
-                current_price_str = f"${true_price:.2f}"
-                analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
-                analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
-                return analysis.strip()
+                def clean_ai_output(analysis: str, true_price: float) -> str:
+                    """
+                    Replaces all fabricated price mentions with the real current price.
+                    """
+                    current_price_str = f"${true_price:.2f}"
+                    analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
+                    analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
+                    return analysis.strip()
 
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
