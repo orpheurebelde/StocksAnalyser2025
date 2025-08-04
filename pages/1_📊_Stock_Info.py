@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, calculate_dcf_valuation
+from utils.utils import calculate_dcf_valor, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
 import re
 import time
 
@@ -40,6 +40,15 @@ def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, flo
 def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
 def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
 def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
+
+def clean_ai_output(analysis: str, true_price: float) -> str:
+    """
+    Replaces all fabricated price mentions with the real current price.
+    """
+    current_price_str = f"${true_price:.2f}"
+    analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
+    analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
+    return analysis.strip()
 
 if selected_display != "Select a stock...":
     ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
@@ -504,17 +513,17 @@ if selected_display != "Select a stock...":
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
                 st.write(f"**Insider Ownership:** {format_percent(info.get('heldPercentInsiders'))}")
 
-                if info.get("logo_url", "").startswith("http"):
-                    st.image(info["logo_url"], width=120)
+                #if info.get("logo_url", "").startswith("http"):
+                    #st.image(info["logo_url"], width=120)
 
-                def clean_ai_output(analysis: str, true_price: float) -> str:
-                    """
-                    Replaces all fabricated price mentions with the real current price.
-                    """
-                    current_price_str = f"${true_price:.2f}"
-                    analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
-                    analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
-                    return analysis.strip()
+            def clean_ai_output(analysis: str, true_price: float) -> str:
+                """
+                Replaces all fabricated price mentions with the real current price.
+                """
+                current_price_str = f"${true_price:.2f}"
+                analysis = re.sub(r"(current\s+(stock|market)?\s*price\s*[:\-]?\s*)\$[0-9]+(?:\.[0-9]{1,2})?", rf"\1{current_price_str}", analysis, flags=re.IGNORECASE)
+                analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
+                return analysis.strip()
 
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
@@ -595,7 +604,6 @@ if selected_display != "Select a stock...":
                 else:
                     st.warning("No stock selected.")
 
-        if ticker:
             with st.expander("🛠️ Customize DCF Inputs"):
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -607,10 +615,13 @@ if selected_display != "Select a stock...":
                 
                 discount_rate = st.slider("Discount Rate (%)", min_value=4.0, max_value=15.0, value=10.0, step=0.5) / 100
 
+        if selected_display and isinstance(selected_display, str) and " - " in selected_display and selected_display != "Select a stock...":
+            ticker_symbol = selected_display.split(" - ")[0].strip().upper()
+
             with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
                 with st.spinner("Calculating DCF..."):
-                    result = calculate_dcf_valuation(
-                        ticker,
+                    result = calculate_dcf_valor(
+                        ticker_symbol,
                         revenue_growth_base=base_growth,
                         revenue_growth_bull=bull_growth,
                         revenue_growth_bear=bear_growth,
@@ -641,3 +652,7 @@ if selected_display != "Select a stock...":
                             f"{delta_pct:.1f}%",
                             delta_color=color
                         )
+        else:
+            st.warning("⚠️ Please select a valid stock ticker from the dropdown above to view DCF valuation.")
+        
+        
