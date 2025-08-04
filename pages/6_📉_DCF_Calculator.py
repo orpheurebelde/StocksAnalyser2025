@@ -1,32 +1,18 @@
 import streamlit as st
 import yfinance as yf
-import numpy as np
 import time
 import datetime
+from utils.utils import load_stock_list, get_stock_info  # Your existing utils
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
 st.title("Discounted Cash Flow (DCF) Calculator")
 
-# Helpers for formatting
+# Formatting helpers
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
 def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
 
-# Load your stock list function here or replace with your own
-# from utils.utils import load_stock_list, get_stock_info
-# For demo purposes, let's simulate:
-def load_stock_list():
-    return st.session_state.get("stock_df", None) or st.experimental_data_editor({"Display": ["Apple - AAPL", "Meta - META"], "Ticker": ["AAPL", "META"]})
-
-def get_stock_info(ticker):
-    stock = yf.Ticker(ticker)
-    return stock.info
-
-# UI: Stock selector
+# Load stock list and selector
 stock_df = load_stock_list()
-if stock_df is None or len(stock_df) == 0:
-    st.error("Stock list not loaded.")
-    st.stop()
-
 stock_df = stock_df.sort_values(by="Display")
 options = ["Select a stock..."] + stock_df["Display"].tolist()
 selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, index=0)
@@ -36,17 +22,16 @@ if selected_display != "Select a stock...":
     info = get_stock_info(ticker)
 
     try:
-        # Extract key data
+        # Extract fundamental data
         market_cap = info.get("marketCap")
         shares_outstanding = info.get("sharesOutstanding")
         current_price = info.get("currentPrice")
         eps_ttm = info.get("trailingEps")
         pe_ratio = info.get("trailingPE")
         revenue_ttm = info.get("totalRevenue")
-        total_debt = info.get("totalDebt", 0) or 0
-        total_cash = info.get("totalCash", 0) or 0
+        total_debt = info.get("totalDebt") or 0
+        total_cash = info.get("totalCash") or 0
 
-        # Inputs
         col1, col2 = st.columns(2)
         with col1:
             base_growth_rate = st.number_input("📈 Estimated Annual Company Growth (%)", value=10.0, step=0.5, min_value=0.1, max_value=100) / 100
@@ -66,7 +51,7 @@ if selected_display != "Select a stock...":
             ) / 100
 
         years = 5
-        terminal_growth_rate = 0.025  # 2.5% long-term growth
+        terminal_growth_rate = 0.025  # 2.5% long-term terminal growth
 
         scenario = st.selectbox(
             "Choose Projection Scenario",
@@ -84,31 +69,31 @@ if selected_display != "Select a stock...":
         def discount_cash_flows(cash_flows, discount_rate):
             return sum([cf / ((1 + discount_rate) ** (i + 1)) for i, cf in enumerate(cash_flows)])
 
-        # Try EPS/PE valuation if valid
+        # EPS / PE valuation model
         if eps_ttm and eps_ttm > 0 and pe_ratio and pe_ratio > 0:
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
-            # PE usually contracts slightly as company matures
+            # Assume PE ratio contracts by 5% per year as company matures
             projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
             projected_stock_prices = [eps * pe for eps, pe in zip(projected_eps, projected_pe)]
             projected_market_caps = [price * shares_outstanding for price in projected_stock_prices]
 
-            # Discount projected market caps
+            # Discount projected market caps yearly
             discounted_market_caps = [mc / ((1 + discount_rate) ** (i + 1)) for i, mc in enumerate(projected_market_caps)]
 
-            # Terminal value calculation
+            # Terminal value (Gordon Growth Model)
             terminal_value = projected_market_caps[-1] * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
             discounted_terminal_value = terminal_value / ((1 + discount_rate) ** years)
 
             present_value = sum(discounted_market_caps) + discounted_terminal_value
 
-            # Adjust for net debt
+            # Net debt adjustment
             net_debt = total_debt - total_cash
             equity_value = present_value - net_debt
 
             fair_value_per_share = equity_value / shares_outstanding
 
         else:
-            # Fallback to revenue / P-S ratio model
+            # Revenue / P-S ratio fallback model
             if not revenue_ttm or revenue_ttm <= 0:
                 st.error("❌ Revenue data not available to perform fallback DCF.")
                 st.stop()
@@ -122,10 +107,8 @@ if selected_display != "Select a stock...":
             projected_revenue = [revenue_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
             projected_market_caps = [rev * estimated_ps_ratio for rev in projected_revenue]
 
-            # Discount projected market caps
             discounted_market_caps = [mc / ((1 + discount_rate) ** (i + 1)) for i, mc in enumerate(projected_market_caps)]
 
-            # Terminal value
             terminal_value = projected_market_caps[-1] * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
             discounted_terminal_value = terminal_value / ((1 + discount_rate) ** years)
 
@@ -136,15 +119,14 @@ if selected_display != "Select a stock...":
 
             fair_value_per_share = equity_value / shares_outstanding
 
-        # Valuation comparison
+        # Comparison and coloring
         undervalued = fair_value_per_share > current_price
         valuation_diff_pct = ((fair_value_per_share - current_price) / current_price) * 100
 
-        # Color for valuation
         pv_color = "green" if undervalued else "red"
         valuation_vs_price = "🟢 Undervalued" if undervalued else "🔴 Overvalued"
 
-        # Output valuation summary
+        # Show valuation summary
         with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
             st.markdown(f"""
                 <div style='padding: 10px; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
@@ -161,7 +143,7 @@ if selected_display != "Select a stock...":
                 </div>
             """, unsafe_allow_html=True)
 
-        # Show detailed 5-year projections table (EPS/PE or Revenue/P-S)
+        # Display detailed 5-year projection table
         header_style = "text-align: center;font-weight: bold;font-size: 18px;color: black;margin-bottom: 10px;"
         projection_box_style = (
             "border: 2px solid #FFA500;padding: 12px;border-radius: 12px;"
@@ -202,7 +184,6 @@ if selected_display != "Select a stock...":
                 projected_revenue = [revenue_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
                 projected_market_cap = [rev * estimated_ps_ratio for rev in projected_revenue]
 
-                # We don’t track changing P/S here but could be added if desired
                 rows = {
                     "Revenue": projected_revenue,
                     "P/S Ratio": [estimated_ps_ratio] * years,
@@ -228,6 +209,5 @@ if selected_display != "Select a stock...":
     except Exception as e:
         st.error("⚠️ Error while calculating DCF.")
         st.exception(e)
-
 else:
     st.warning("⚠️ Please select a valid stock ticker from the dropdown above to view DCF valuation.")
