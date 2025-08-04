@@ -546,11 +546,10 @@ def analyze_price_action(df):
     return score, explanations
 
 def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.18, revenue_growth_bear=0.05, 
-                        discount_rate=0.10, years=5, terminal_growth_rate=0.025):
-    try:
-        if not isinstance(ticker, str) or not ticker.strip():
-            raise ValueError("Invalid ticker symbol provided.")
+                        discount_rate=0.10, years=5, terminal_growth_rate=0.025, fcf_margin_cap=0.5):
+    import yfinance as yf
 
+    try:
         ticker = ticker.strip().upper()
         stock = yf.Ticker(ticker)
         info = stock.info
@@ -560,7 +559,8 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.
         if not revenue or not free_cf:
             raise ValueError("Missing revenue or FCF data.")
 
-        fcf_margin = free_cf / revenue if isinstance(free_cf, (int, float)) else 0.15
+        # Cap FCF margin
+        fcf_margin = min(free_cf / revenue, fcf_margin_cap)
 
         def project_fcf(growth_rate):
             fcf = []
@@ -578,10 +578,22 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.
             terminal_discounted = terminal_value / ((1 + discount_rate) ** years)
             return sum(discounted) + terminal_discounted
 
-        base = discount_cash_flows(project_fcf(revenue_growth_base))
-        bull = discount_cash_flows(project_fcf(revenue_growth_bull))
-        bear = discount_cash_flows(project_fcf(revenue_growth_bear))
+        # Projected DCF values
+        dcf_base = discount_cash_flows(project_fcf(revenue_growth_base))
+        dcf_bull = discount_cash_flows(project_fcf(revenue_growth_bull))
+        dcf_bear = discount_cash_flows(project_fcf(revenue_growth_bear))
 
+        # Subtract net debt
+        total_debt = info.get("totalDebt", 0)
+        cash = info.get("totalCash", 0)
+        net_debt = total_debt - cash
+
+        # Equity values
+        base_equity = dcf_base - net_debt
+        bull_equity = dcf_bull - net_debt
+        bear_equity = dcf_bear - net_debt
+
+        # Price per share
         shares_outstanding = info.get("sharesOutstanding")
         if not shares_outstanding or shares_outstanding < 1:
             raise ValueError("Invalid or missing shares outstanding.")
@@ -589,10 +601,11 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.
         price = info.get("currentPrice", 0)
 
         return {
-            "Base": round(base / shares_outstanding, 2),
-            "Bull": round(bull / shares_outstanding, 2),
-            "Bear": round(bear / shares_outstanding, 2),
-            "Current Price": price
+            "Base": round(base_equity / shares_outstanding, 2),
+            "Bull": round(bull_equity / shares_outstanding, 2),
+            "Bear": round(bear_equity / shares_outstanding, 2),
+            "Current Price": price,
+            "Net Debt": net_debt
         }
 
     except Exception as e:
