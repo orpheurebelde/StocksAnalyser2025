@@ -545,12 +545,9 @@ def analyze_price_action(df):
 
     return score, explanations
 
-def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.18, revenue_growth_bear=0.5, 
+def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.18, revenue_growth_bear=0.05, 
                         discount_rate=0.10, years=5, terminal_growth_rate=0.025):
-    # 🔍 Debug print
-    print(f"[DEBUG] Received ticker: {repr(ticker)} (type: {type(ticker)})")
     try:
-        # Validate ticker
         if not isinstance(ticker, str) or not ticker.strip():
             raise ValueError("Invalid ticker symbol provided.")
 
@@ -559,10 +556,11 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.
         info = stock.info
 
         revenue = info.get("totalRevenue")
-        fcf_margin = 0.15  # default fallback
+        free_cf = info.get("freeCashflow")
+        if not revenue or not free_cf:
+            raise ValueError("Missing revenue or FCF data.")
 
-        if info.get("freeCashflow") and revenue:
-            fcf_margin = info["freeCashflow"] / revenue
+        fcf_margin = free_cf / revenue if isinstance(free_cf, (int, float)) else 0.15
 
         def project_fcf(growth_rate):
             fcf = []
@@ -573,6 +571,8 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.
             return fcf
 
         def discount_cash_flows(fcf_list):
+            if terminal_growth_rate >= discount_rate:
+                raise ValueError("Terminal growth rate must be less than discount rate.")
             discounted = [fcf / (1 + discount_rate) ** (i + 1) for i, fcf in enumerate(fcf_list)]
             terminal_value = fcf_list[-1] * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
             terminal_discounted = terminal_value / ((1 + discount_rate) ** years)
@@ -582,7 +582,10 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.
         bull = discount_cash_flows(project_fcf(revenue_growth_bull))
         bear = discount_cash_flows(project_fcf(revenue_growth_bear))
 
-        shares_outstanding = info.get("sharesOutstanding", 1)
+        shares_outstanding = info.get("sharesOutstanding")
+        if not shares_outstanding or shares_outstanding < 1:
+            raise ValueError("Invalid or missing shares outstanding.")
+
         price = info.get("currentPrice", 0)
 
         return {
