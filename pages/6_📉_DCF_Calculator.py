@@ -87,7 +87,6 @@ if selected_display != "Select a stock...":
             return last_cashflow * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
 
         if not eps_ttm or eps_ttm <= 0 or not pe_ratio or pe_ratio <= 0:
-            # Fallback Revenue / P-S ratio model
             st.warning("⚠️ EPS or PE ratio is invalid. Using revenue-based fallback DCF model.")
 
             revenue_ttm = info.get("totalRevenue")
@@ -95,28 +94,20 @@ if selected_display != "Select a stock...":
             if not revenue_ttm or revenue_ttm <= 0:
                 st.error("❌ Revenue data not available to perform fallback DCF.")
             else:
-                with st.expander("⚙️ Adjust P/S Growth Factor"):
-                    ps_factor = st.slider("P/S Growth Factor", min_value=0.1, max_value=1.0, value=0.6, step=0.05)
+                with st.expander("⚙️ Adjust Free Cash Flow Margin (%)"):
+                    fcf_margin = st.slider("Estimated FCF Margin (%)", min_value=1.0, max_value=50.0, value=10.0, step=0.5) / 100
 
-                estimated_ps_ratio = base_growth_rate * 100 * ps_factor
-                st.markdown(f"🔢 Auto-calculated P/S Ratio based on growth: **{estimated_ps_ratio:.2f}**")
+                estimated_fcf = revenue_ttm * fcf_margin
+                st.markdown(f"🔢 Estimated Free Cash Flow based on margin: **{format_currency_dec(estimated_fcf)}**")
 
-                # Project revenues
-                projected_revenue = [revenue_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
+                projected_cashflows = [estimated_fcf * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
 
-                # Calculate projected market caps (proxy for cashflows)
-                projected_cashflows = [rev * estimated_ps_ratio for rev in projected_revenue]
-
-                # Discount each year cashflow
                 discounted_sum = discounted_cash_flows(projected_cashflows, discount_rate)
 
-                # Terminal value on last projected cashflow
                 terminal_value = calc_terminal_value(projected_cashflows[-1], discount_rate, terminal_growth_rate)
                 discounted_terminal = terminal_value / ((1 + discount_rate) ** years)
 
                 enterprise_value = discounted_sum + discounted_terminal
-
-                # Adjust for net debt to get equity value
                 equity_value = enterprise_value - net_debt
 
                 fair_value_per_share = equity_value / shares_outstanding
