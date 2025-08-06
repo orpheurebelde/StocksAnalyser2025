@@ -100,17 +100,36 @@ if selected_display != "Select a stock...":
                 estimated_fcf = revenue_ttm * fcf_margin
                 st.markdown(f"🔢 Estimated Free Cash Flow based on margin: **{format_currency_dec(estimated_fcf)}**")
 
-                projected_cashflows = [estimated_fcf * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
+                projected_cashflows = []
+                for i in range(1, years + 1):
+                    yearly_growth = max(growth_rate - (i * 0.01), 0.01)  # Example: decaying growth
+                    yearly_fcf = estimated_fcf * ((1 + yearly_growth) ** i)
+                    projected_cashflows.append(yearly_fcf)
 
                 discounted_sum = discounted_cash_flows(projected_cashflows, discount_rate)
 
                 terminal_value = calc_terminal_value(projected_cashflows[-1], discount_rate, terminal_growth_rate)
                 discounted_terminal = terminal_value / ((1 + discount_rate) ** years)
 
+                if terminal_value > 2 * discounted_sum:
+                    st.warning("⚠️ Terminal value contributes more than 2x the projected FCFs. This could indicate overvaluation.")
+
                 enterprise_value = discounted_sum + discounted_terminal
                 equity_value = enterprise_value - net_debt
 
+                enterprise_vs_market = enterprise_value / market_cap
+                if enterprise_vs_market > 2:
+                    st.warning(f"⚠️ Enterprise value is {enterprise_vs_market:.2f}x current market cap. Recheck growth assumptions.")
+
+                shares_outstanding = info.get("sharesOutstanding")
+                if not shares_outstanding or shares_outstanding <= 0:
+                    st.error("❌ Invalid or missing shares outstanding.")
+                    st.stop()
+
                 fair_value_per_share = equity_value / shares_outstanding
+
+                if fair_value_per_share > current_price * 3:
+                    st.warning("⚠️ Fair value per share seems unreasonably high. Please review growth and margin assumptions.")
 
                 pv_color = "green" if equity_value > market_cap else "red"
                 valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
@@ -129,25 +148,35 @@ if selected_display != "Select a stock...":
                     st.markdown("<div style='margin-bottom: 10px;'>&nbsp;</div>", unsafe_allow_html=True)
 
         else:
-            # EPS / PE based model with yearly discounting and terminal value
+            # EPS-based model (realistic): EPS → Net Income → FCF
 
             projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
             projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
             projected_stock_price = [eps * pe for eps, pe in zip(projected_eps, projected_pe)]
 
-            # Calculate yearly cashflows as stock price * shares (proxy for equity value)
-            projected_cashflows = [price * shares_outstanding for price in projected_stock_price]
+            # Estimar lucro líquido: EPS × ações
+            projected_net_income = [eps * shares_outstanding for eps in projected_eps]
+
+            # Slider para definir margem de FCF sobre lucro líquido (ex: 60%)
+            with st.expander("⚙️ Ajustar Margem de FCF sobre Lucro Líquido (%)"):
+                fcf_margin_from_net_income = st.slider(
+                    "Margem de FCF (%)", min_value=10.0, max_value=100.0, value=60.0, step=1.0
+                ) / 100
+
+            # Calcular FCF realista
+            projected_cashflows = [net_income * fcf_margin_from_net_income for net_income in projected_net_income]
 
             discounted_sum = discounted_cash_flows(projected_cashflows, discount_rate)
 
             terminal_value = calc_terminal_value(projected_cashflows[-1], discount_rate, terminal_growth_rate)
             discounted_terminal = terminal_value / ((1 + discount_rate) ** years)
 
-            enterprise_value = discounted_sum + discounted_terminal - net_debt
+            enterprise_value = discounted_sum + discounted_terminal
+            equity_value = enterprise_value - net_debt
 
-            fair_value_per_share = enterprise_value / shares_outstanding
+            fair_value_per_share = equity_value / shares_outstanding
 
-            pv_color = "green" if enterprise_value > market_cap else "red"
+            pv_color = "green" if equity_value > market_cap else "red"
             valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
 
             with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
@@ -156,13 +185,14 @@ if selected_display != "Select a stock...":
                     <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
                     <p><strong>Enterprise Value (Discounted):</strong> {format_currency_dec(enterprise_value)}</p>
                     <p><strong>Net Debt (Debt - Cash):</strong> {format_currency(net_debt)}</p>
+                    <p><strong>Equity Value (Enterprise Value - Net Debt):</strong> {format_currency_dec(equity_value)}</p>
                     <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
                     <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 st.markdown("<div style='margin-bottom: 10px;'>&nbsp;</div>", unsafe_allow_html=True)
 
-            # Show detailed 5-year projections table
+            # Mostrar projeções detalhadas
             header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
             projection_box_style = (
                 "border: 2px solid #FFA500;padding: 12px;border-radius: 12px;"
@@ -176,20 +206,21 @@ if selected_display != "Select a stock...":
                 "justify-content: center;height: 48px;"
             )
 
-            with st.expander("🔮 5-Year Stock Price Projection (DCF Model)", expanded=True):
+            with st.expander("🔮 5-Year Stock Metrics Projection", expanded=True):
                 start_year = datetime.datetime.now().year + 1
                 years_labels = [str(start_year + i) for i in range(5)]
                 header_cols = st.columns(6)
-                header_cols[0].markdown(f"<div style='{header_style}'>Metric</div>", unsafe_allow_html=True)
+                header_cols[0].markdown(f"<div style='{header_style}'>Métrica</div>", unsafe_allow_html=True)
                 for i, year in enumerate(years_labels):
                     header_cols[i + 1].markdown(f"<div style='{header_style}'>{year}</div>", unsafe_allow_html=True)
 
-                metrics = ["EPS", "PE Ratio", "Stock Price", "Market Cap"]
+                metrics = ["EPS", "PE Ratio", "Stock Price", "Net Income", "FCF"]
                 rows = {
                     "EPS": projected_eps,
                     "PE Ratio": projected_pe,
                     "Stock Price": projected_stock_price,
-                    "Market Cap": projected_cashflows
+                    "Net Income": projected_net_income,
+                    "FCF": projected_cashflows
                 }
 
                 for metric in metrics:
@@ -197,13 +228,14 @@ if selected_display != "Select a stock...":
                     row_cols[0].markdown(f"<div style='{metric_box_style}'>{metric}</div>", unsafe_allow_html=True)
                     for i in range(years):
                         val = rows[metric][i]
-                        if metric == "PE Ratio":
+                        if metric in ["PE Ratio"]:
                             fmt = f"{val:.2f}"
                         elif metric in ["EPS", "Stock Price"]:
                             fmt = f"${val:,.2f}"
                         else:
                             fmt = f"${val:,.0f}"
                         row_cols[i + 1].markdown(f"<div style='{projection_box_style}'>{fmt}</div>", unsafe_allow_html=True)
+
 
         with st.spinner("Updating projections based on scenario..."):
             time.sleep(0.5)
