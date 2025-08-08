@@ -515,12 +515,14 @@ if selected_display != "Select a stock...":
 
                 #if info.get("logo_url", "").startswith("http"):
                     #st.image(info["logo_url"], width=120)
-
+            
+            
+            ticker = st.session_state.get("selected_ticker")
+            
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
                 if ticker:
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
-                    ticker = st.session_state.get("selected_ticker")
                     info = get_stock_info(ticker)
 
                 # Collect structured data
