@@ -616,7 +616,7 @@ if selected_display != "Select a stock...":
                     current_price = info.get("currentPrice", "N/A")
 
                     prompt = f"""
-                    You are a professional equity analyst. Perform a detailed 5-year Discounted Cash Flow (DCF) valuation using ONLY the following data:
+                    You are a professional equity analyst.Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for NVIDIA (NVDA), generate a realistic 5-year DCF valuation. Use the following rules:
 
                     - Company: {company_name}
                     - Sector: {sector}
@@ -631,7 +631,7 @@ if selected_display != "Select a stock...":
                     - Dividend Yield: {dividend_yield}
                     - Shares Outstanding: {shares_outstanding}
 
-                    1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals.
+                    1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals extracted from Yahoo Finance above.
                     2. Assume a discount rate between 8% and 12% depending on risk.
                     3. Run a 5-year DCF model using Free Cash Flow.
                     4. Output valuation estimates per share:
@@ -641,7 +641,7 @@ if selected_display != "Select a stock...":
                     5. Compare to current price and estimate upside/downside.
                     6. Give a final fair value and investment recommendation (Buy, Hold, Sell).
 
-                    ❗Stick to the provided inputs. Do not invent financial data. Clarify what type of data is being used (trailing, forward, or estimate). Double-check if shares outstanding seems unusually high.
+                    ❗Emphasize realism and forward-looking assumptions over backward averages. Do not hallucinate share count or discount rates. If data is missing, infer it cautiously.
                     """
 
                     if st.button("🧠 Generate AI-Powered DCF Valuation"):
