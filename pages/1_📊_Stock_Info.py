@@ -610,65 +610,65 @@ if selected_display != "Select a stock...":
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
 
-                def clean_value(value, default="N/A"):
-                    """Ensure we return clean numbers or default for missing/bad data."""
-                    return value if value not in [None, "N/A", float("nan")] else default
+                    def clean_value(value, default="N/A"):
+                        """Ensure we return clean numbers or default for missing/bad data."""
+                        return value if value not in [None, "N/A", float("nan")] else default
 
-                # Extract raw values
-                company_name = info.get("longName") or info.get("shortName") or ticker
-                sector = clean_value(info.get("sector"))
-                market_cap = clean_value(info.get("marketCap"))
-                trailing_pe = clean_value(info.get("trailingPE"))
-                forward_pe = clean_value(info.get("forwardPE"))
-                revenue = clean_value(info.get("totalRevenue"))
-                net_income = clean_value(info.get("netIncomeToCommon"))
-                eps_current = clean_value(info.get("trailingEps"))
-                fcf = clean_value(info.get("freeCashflow"))
-                shares_outstanding = clean_value(info.get("sharesOutstanding"))
-                current_price = clean_value(info.get("currentPrice"))
+                    # Extract raw values
+                    company_name = info.get("longName") or info.get("shortName") or ticker
+                    sector = clean_value(info.get("sector"))
+                    market_cap = clean_value(info.get("marketCap"))
+                    trailing_pe = clean_value(info.get("trailingPE"))
+                    forward_pe = clean_value(info.get("forwardPE"))
+                    revenue = clean_value(info.get("totalRevenue"))
+                    net_income = clean_value(info.get("netIncomeToCommon"))
+                    eps_current = clean_value(info.get("trailingEps"))
+                    fcf = clean_value(info.get("freeCashflow"))
+                    shares_outstanding = clean_value(info.get("sharesOutstanding"))
+                    current_price = clean_value(info.get("currentPrice"))
 
-                # Format dividend yield only if valid
-                dividend_yield_raw = info.get("dividendYield", None)
-                if isinstance(dividend_yield_raw, (float, int)):
-                    dividend_yield = f"{dividend_yield_raw * 100:.2f}%"
-                else:
-                    dividend_yield = "N/A"
+                    # Format dividend yield only if valid
+                    dividend_yield_raw = info.get("dividendYield", None)
+                    if isinstance(dividend_yield_raw, (float, int)):
+                        dividend_yield = f"{dividend_yield_raw * 100:.2f}%"
+                    else:
+                        dividend_yield = "N/A"
 
-                # Validate shares outstanding
-                # Many stocks like NVIDIA, Apple, etc., report this correctly
-                # No need to divide arbitrarily unless specific tickers are misreporting.
-                if isinstance(shares_outstanding, (float, int)) and shares_outstanding > 100_000_000_000:
-                    # Sanity check: rarely are shares outstanding >100B
-                    print(f"Warning: unusually large shares outstanding for {ticker}: {shares_outstanding}")
+                    # Validate shares outstanding
+                    # Many stocks like NVIDIA, Apple, etc., report this correctly
+                    # No need to divide arbitrarily unless specific tickers are misreporting.
+                    if isinstance(shares_outstanding, (float, int)) and shares_outstanding > 100_000_000_000:
+                        # Sanity check: rarely are shares outstanding >100B
+                        print(f"Warning: unusually large shares outstanding for {ticker}: {shares_outstanding}")
 
-                    prompt = f"""
-                    You are a professional equity analyst.Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for NVIDIA (NVDA), generate a realistic 5-year DCF valuation. Use the following rules:
+                        prompt = f"""
+                        You are a professional equity analyst.Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for NVIDIA (NVDA), generate a realistic 5-year DCF valuation. Use the following rules:
 
-                    - Company: {company_name}
-                    - Sector: {sector}
-                    - Market Cap: {market_cap}
-                    - Current Price: ${current_price}
-                    - P/E (TTM): {trail_pe}
-                    - Forward P/E: {forward_pe}
-                    - Revenue: {revenue}
-                    - Net Income: {net_income}
-                    - EPS: {eps_current}
-                    - Free Cash Flow (TTM): {fcf}
-                    - Dividend Yield: {dividend_yield}
-                    - Shares Outstanding: {shares_outstanding}
+                        - Company: {company_name}
+                        - Sector: {sector}
+                        - Market Cap: {market_cap}
+                        - Current Price: ${current_price}
+                        - P/E (TTM): {trail_pe}
+                        - Forward P/E: {forward_pe}
+                        - Revenue: {revenue}
+                        - Net Income: {net_income}
+                        - EPS: {eps_current}
+                        - Free Cash Flow (TTM): {fcf}
+                        - Dividend Yield: {dividend_yield}
+                        - Shares Outstanding: {shares_outstanding}
 
-                    1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals extracted from Yahoo Finance above.
-                    2. Assume a discount rate between 8% and 12% depending on risk.
-                    3. Run a 5-year DCF model using Free Cash Flow.
-                    4. Output valuation estimates per share:
-                    - Base Case: $X.XX
-                    - Bull Case: $X.XX
-                    - Bear Case: $X.XX
-                    5. Compare to current price and estimate upside/downside.
-                    6. Give a final fair value and investment recommendation (Buy, Hold, Sell).
+                        1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals extracted from Yahoo Finance above.
+                        2. Assume a discount rate between 8% and 12% depending on risk.
+                        3. Run a 5-year DCF model using Free Cash Flow.
+                        4. Output valuation estimates per share:
+                        - Base Case: $X.XX
+                        - Bull Case: $X.XX
+                        - Bear Case: $X.XX
+                        5. Compare to current price and estimate upside/downside.
+                        6. Give a final fair value and investment recommendation (Buy, Hold, Sell).
 
-                    ❗Emphasize realism and forward-looking assumptions over backward averages. Do not hallucinate share count or discount rates. If data is missing, infer it cautiously.
-                    """
+                        ❗Emphasize realism and forward-looking assumptions over backward averages. Do not hallucinate share count or discount rates. If data is missing, infer it cautiously.
+                        """
 
                     if st.button("🧠 Generate AI-Powered DCF Valuation"):
                         with st.spinner("Calling Mistral for DCF valuation..."):
