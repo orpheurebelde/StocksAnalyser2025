@@ -678,7 +678,7 @@ if selected_display != "Select a stock...":
                             dividend_yield_percent = dividend_yield * 100
                         else:
                             dividend_yield_percent = dividend_yield
-                        dividend_yield_str = f"{dividend_yield_percent:.2f}%"
+                            dividend_yield_str = f"{dividend_yield_percent:.2f}%"
                     else:
                         dividend_yield_str = "N/A"
                     
@@ -702,7 +702,7 @@ if selected_display != "Select a stock...":
                         - Net Income: {net_income}
                         - EPS: {eps_current}
                         - Free Cash Flow (TTM): {fcf}
-                        - Dividend Yield: {dividend_yield_str}(This is the annual yield already in percent so do not change it)
+                        - Dividend Yield: {dividend_yield_str}
                         - Shares Outstanding: {shares_outstanding}
                         - Total Debt: {debt_data}
                         - Total Cash: {cash_data}
