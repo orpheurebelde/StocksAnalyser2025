@@ -670,14 +670,8 @@ if selected_display != "Select a stock...":
                     debt_data = info.get("totalDebt", 0.0)
                     cash_data = info.get("totalCash", 0.0)
                     eps_growth = info.get("earningsQuarterlyGrowth", 0.0)
-
-                    # Format dividend yield only if valid
                     dividend_yield_raw = info.get("dividendYield", None)
-                    if isinstance(dividend_yield_raw, (float, int)):
-                        dividend_yield = f"{dividend_yield_raw * 100:.2f}%"
-                    else:
-                        dividend_yield = "N/A"
-
+                    
                     # Validate shares outstanding
                     # Many stocks like NVIDIA, Apple, etc., report this correctly
                     # No need to divide arbitrarily unless specific tickers are misreporting.
