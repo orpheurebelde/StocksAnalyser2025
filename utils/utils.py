@@ -625,4 +625,56 @@ def estimate_past_shares_outstanding(ticker_symbol):
 
     return current_shares, estimated_past_shares, (current_shares - estimated_past_shares)
 
+def interpret_dilution_extended(dilution_pct, revenue_growth=None, eps_current=None,
+                                 eps_forward=None, sbc_expense=None, total_revenue=None,
+                                 cash_from_financing=None):    
+    comments = []
+
+    # Base on dilution %
+    if dilution_pct > 10:
+        comments.append("🔴 **High dilution** – potentially negative.")
+    elif 3 < dilution_pct <= 10:
+        comments.append("🟠 **Moderate dilution** – acceptable if supporting growth.")
+    elif 0 < dilution_pct <= 3:
+        comments.append("🟢 **Low dilution** – likely manageable.")
+    elif dilution_pct == 0:
+        comments.append("✅ **No dilution** – good for shareholders.")
+    elif dilution_pct < 0:
+        comments.append("🟢 **Share reduction** – likely due to buybacks.")
+
+    # Revenue growth
+    if revenue_growth is not None:
+        if revenue_growth > 0.1:
+            comments.append("📈 Revenue is growing strongly (>10%), indicating dilution may be growth-driven.")
+        elif revenue_growth > 0:
+            comments.append("📈 Revenue is growing slightly, a mild positive.")
+        else:
+            comments.append("⚠️ Revenue is not growing – dilution could be risky.")
+
+    # EPS trend
+    if eps_current and eps_forward:
+        if eps_forward > eps_current:
+            comments.append("📊 EPS is expected to **increase**, which may offset dilution.")
+        else:
+            comments.append("📉 EPS is not improving – dilution may harm shareholders.")
+
+    # SBC ratio
+    if sbc_expense and total_revenue:
+        sbc_ratio = sbc_expense / total_revenue
+        if sbc_ratio > 0.1:
+            comments.append(f"💸 **High SBC**: {sbc_ratio:.1%} of revenue – potential red flag.")
+        elif sbc_ratio > 0.03:
+            comments.append(f"💸 **Moderate SBC**: {sbc_ratio:.1%} of revenue.")
+        else:
+            comments.append(f"💸 **Low SBC**: {sbc_ratio:.1%} of revenue – good control of compensation.")
+
+    # Cash from financing
+    if cash_from_financing:
+        if cash_from_financing > 0:
+            comments.append("🏦 Company raised capital via financing – dilution may be for funding.")
+        else:
+            comments.append("💰 No major financing activity noted.")
+
+    return "\n\n".join(comments)
+
 

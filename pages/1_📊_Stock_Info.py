@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import estimate_past_shares_outstanding, calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
+from utils.utils import interpret_dilution_extended, estimate_past_shares_outstanding, calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
 import re
 import time
 
@@ -522,16 +522,43 @@ if selected_display != "Select a stock...":
 
             with st.expander("📈 Share Dilution Check (Estimation)"):
                 st.session_state.selected_ticker = ticker
+
+                info = get_stock_info(ticker)
+
+                revenue_growth = info.get("revenueGrowth", None)
+                net_income = info.get("netIncomeToCommon", None)
+                previous_net_income = info.get("trailingNetIncome", None)  # Optional
+                eps_current = info.get("trailingEps", None)
+                eps_forward = info.get("forwardEps", None)
+                sbc_expense = info.get("shareBasedCompensation", None)
+                total_revenue = info.get("totalRevenue", None)
+                cash_from_financing = info.get("totalCashFromFinancingActivities", None)
+
                 if ticker:
                     current_shares, past_shares, dilution = estimate_past_shares_outstanding(ticker)
+                    info = get_stock_info(ticker)
 
-                    if current_shares and past_shares:
+                    if current_shares and past_shares and info:
                         dilution_pct = (dilution / past_shares) * 100 if past_shares else 0
+
                         st.write(f"**Current Shares Outstanding**: {current_shares:,.0f}")
                         st.write(f"**Estimated Shares Outstanding 1 Year Ago**: {past_shares:,.0f}")
                         st.write(f"**Dilution Over 1 Year**: {dilution:,.0f} shares ({dilution_pct:.2f}%)")
-                else:
-                    st.warning("Could not estimate dilution due to missing data.")
+
+                        interpretation = interpret_dilution_extended(
+                            dilution_pct,
+                            revenue_growth=info.get("revenueGrowth"),
+                            eps_current=info.get("trailingEps"),
+                            eps_forward=info.get("forwardEps"),
+                            sbc_expense=info.get("shareBasedCompensation"),
+                            total_revenue=info.get("totalRevenue"),
+                            cash_from_financing=info.get("totalCashFromFinancingActivities"),
+                        )
+
+                        st.markdown(f"### 🧠 Dilution Context Analysis")
+                        st.markdown(interpretation)
+                    else:
+                        st.warning("Could not estimate dilution due to missing data.")
 
             with st.expander("📦 Ownership"):
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
