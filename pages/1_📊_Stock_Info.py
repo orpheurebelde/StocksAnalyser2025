@@ -521,58 +521,58 @@ if selected_display != "Select a stock...":
                 MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                 ticker = st.session_state.get("selected_ticker")
 
-                if ticker:
-                    info = get_stock_info(ticker)
+            if ticker:
+                info = get_stock_info(ticker)
 
-                    # Collect structured data
-                    company_name = info.get("longName") or info.get("shortName") or ticker
-                    sector = info.get("sector", "N/A")
-                    market_cap = format_number(info.get("marketCap", "N/A"))
-                    trail_pe = info.get("trailingPE", "N/A")
-                    forward_pe = info.get("forwardPE", "N/A")
-                    revenue = format_number(info.get("totalRevenue", "N/A"))
-                    net_income = format_number(info.get("netIncomeToCommon", "N/A"))
-                    eps_current = info.get("trailingEps", "N/A")
-                    fcf = format_number(info.get("freeCashflow", "N/A"))
-                    dividend_yield_val = info.get("dividendYield", None)
-                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
-                    shares_outstanding = info.get("sharesOutstanding", "N/A")
-                    current_price = info.get("currentPrice", "N/A")
-                    summary_of_news = "N/A"
+                # Collect structured data
+                company_name = info.get("longName") or info.get("shortName") or ticker
+                sector = info.get("sector", "N/A")
+                market_cap = format_number(info.get("marketCap", "N/A"))
+                trail_pe = info.get("trailingPE", "N/A")
+                forward_pe = info.get("forwardPE", "N/A")
+                revenue = format_number(info.get("totalRevenue", "N/A"))
+                net_income = format_number(info.get("netIncomeToCommon", "N/A"))
+                eps_current = info.get("trailingEps", "N/A")
+                fcf = format_number(info.get("freeCashflow", "N/A"))
+                dividend_yield_val = info.get("dividendYield", None)
+                dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                shares_outstanding = info.get("sharesOutstanding", "N/A")
+                current_price = info.get("currentPrice", "N/A")
+                summary_of_news = "N/A"
 
-                    # Prompt
-                    prompt = f"""
-                        You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
+                # Prompt
+                prompt = f"""
+                    You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
 
-                        - Company: {company_name}
-                        - Sector: {sector}
-                        - Market Cap: {market_cap}
-                        - Current Price: ${current_price}
-                        - P/E (TTM): {trail_pe}
-                        - Forward P/E: {forward_pe}
-                        - Revenue: {revenue}
-                        - Net Income: {net_income}
-                        - EPS: {eps_current}
-                        - Free Cash Flow: {fcf}
-                        - Dividend Yield: {dividend_yield}
-                        - Shares Outstanding: {shares_outstanding}
-                        - News: {summary_of_news}
+                    - Company: {company_name}
+                    - Sector: {sector}
+                    - Market Cap: {market_cap}
+                    - Current Price: ${current_price}
+                    - P/E (TTM): {trail_pe}
+                    - Forward P/E: {forward_pe}
+                    - Revenue: {revenue}
+                    - Net Income: {net_income}
+                    - EPS: {eps_current}
+                    - Free Cash Flow: {fcf}
+                    - Dividend Yield: {dividend_yield}
+                    - Shares Outstanding: {shares_outstanding}
+                    - News: {summary_of_news}
 
-                        Structure the analysis:
-                        1. **Executive Summary** - Max 3 sentences.
-                        2. **Valuation** - Use P/E & Fwd P/E to evaluate price fairness.
-                        3. **Financial Health** - Net Income, FCF, Cash vs Debt.
-                        4. **Growth Potential** - EPS, Sector outlook, revenue.
-                        5. **Risks** - Competitive, macro, financial, etc.
-                        6. **DCF Valuation** - Provide Base, Bull, Bear share price:
-                        - Base Case: $X.XX
-                        - Bull Case: $X.XX
-                        - Bear Case: $X.XX
-                        7. **Fair Value vs Current Price**
-                        8. **12-Month Target & Recommendation** - Buy, Hold or Sell.
+                    Structure the analysis:
+                    1. **Executive Summary** - Max 3 sentences.
+                    2. **Valuation** - Use P/E & Fwd P/E to evaluate price fairness.
+                    3. **Financial Health** - Net Income, FCF, Cash vs Debt.
+                    4. **Growth Potential** - EPS, Sector outlook, revenue.
+                    5. **Risks** - Competitive, macro, financial, etc.
+                    6. **DCF Valuation** - Provide Base, Bull, Bear share price:
+                    - Base Case: $X.XX
+                    - Bull Case: $X.XX
+                    - Bear Case: $X.XX
+                    7. **Fair Value vs Current Price**
+                    8. **12-Month Target & Recommendation** - Buy, Hold or Sell.
 
-                        ❗DO NOT invent data. Stick only to the provided inputs.
-                        """
+                    ❗DO NOT invent data. Stick only to the provided inputs.
+                    """
 
                 if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
                     with st.spinner("Calling Mistral for analysis..."):
