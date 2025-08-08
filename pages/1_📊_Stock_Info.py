@@ -702,7 +702,7 @@ if selected_display != "Select a stock...":
                         - Net Income: {net_income}
                         - EPS: {eps_current}
                         - Free Cash Flow (TTM): {fcf}
-                        - Dividend Yield: {dividend_yield_str}(annual yield already in percent)
+                        - Dividend Yield: {dividend_yield_str}(This is the annual yield already in percent so do not change it)
                         - Shares Outstanding: {shares_outstanding}
                         - Total Debt: {debt_data}
                         - Total Cash: {cash_data}
