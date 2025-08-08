@@ -616,6 +616,20 @@ if selected_display != "Select a stock...":
                     - Dividend Yield: {dividend_yield}
                     - Shares Outstanding: {shares_outstanding}
 
+                    Company Info:
+                    - Company: {company_name}
+                    - Sector: {sector}
+                    - Market Cap: {market_cap}
+                    - Current Price: ${current_price}
+                    - P/E (TTM): {trail_pe}
+                    - Forward P/E: {forward_pe}
+                    - Revenue: {revenue}
+                    - Net Income: {net_income}
+                    - EPS: {eps_current}
+                    - Free Cash Flow: {fcf}
+                    - Dividend Yield: {dividend_yield}
+                    - Shares Outstanding: {shares_outstanding}
+
                     1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals.
                     2. Assume a discount rate between 8% and 12% depending on risk.
                     3. Run a 5-year DCF model using Free Cash Flow.
