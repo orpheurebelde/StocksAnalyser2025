@@ -670,7 +670,17 @@ if selected_display != "Select a stock...":
                     debt_data = info.get("totalDebt", 0.0)
                     cash_data = info.get("totalCash", 0.0)
                     eps_growth = info.get("earningsQuarterlyGrowth", 0.0)
-                    dividend_yield_raw = info.get("dividendYield", None)
+                    dividend_yield = info.get("dividendYield")
+
+                    if dividend_yield is not None:
+                        # If it's a small number, it's likely a decimal (e.g., 0.0041 → 0.41%)
+                        if dividend_yield < 0.05:
+                            dividend_yield_percent = dividend_yield * 100
+                        else:
+                            dividend_yield_percent = dividend_yield
+                        dividend_yield_str = f"{dividend_yield_percent:.2f}%"
+                    else:
+                        dividend_yield_str = "N/A"
                     
                     # Validate shares outstanding
                     # Many stocks like NVIDIA, Apple, etc., report this correctly
