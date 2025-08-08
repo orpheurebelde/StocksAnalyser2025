@@ -574,19 +574,19 @@ if selected_display != "Select a stock...":
                         ❗DO NOT invent data. Stick only to the provided inputs.
                         """
 
-                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
-                        with st.spinner("Calling Mistral for analysis..."):
-                            raw = get_ai_analysis(prompt, MISTRAL_API_KEY)
+                if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
+                    with st.spinner("Calling Mistral for analysis..."):
+                        raw = get_ai_analysis(prompt, MISTRAL_API_KEY)
 
-                        if raw.startswith("ERROR:"):
-                            st.error("Failed to generate AI analysis.")
-                            st.code(raw)
-                        else:
-                            corrected = clean_ai_output(raw, true_price=info.get("currentPrice", 0.0))
-                            st.markdown(f"**AI Analysis for {ticker.upper()}:**")
-                            sections = re.split(r'\n(?=\d+\.)', corrected)
-                            for section in sections:
-                                st.markdown(section.strip().replace('\n', '  \n'))
+                    if raw.startswith("ERROR:"):
+                        st.error("Failed to generate AI analysis.")
+                        st.code(raw)
+                    else:
+                        corrected = clean_ai_output(raw, true_price=info.get("currentPrice", 0.0))
+                        st.markdown(f"**AI Analysis for {ticker.upper()}:**")
+                        sections = re.split(r'\n(?=\d+\.)', corrected)
+                        for section in sections:
+                            st.markdown(section.strip().replace('\n', '  \n'))
 
             with st.expander("Company Info", expanded=False):
                 _, info = fetch_data(ticker)
