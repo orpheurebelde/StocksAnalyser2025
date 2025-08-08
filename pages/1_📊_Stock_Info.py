@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import calculate_dcf_valor, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
+from utils.utils import calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
 import re
 import time
 
@@ -197,6 +197,16 @@ if selected_display != "Select a stock...":
                 with col2:
                     #Categorize with green,yellow and red PEG Ratio
                     peg_ratio = info.get("trailingPegRatio")
+
+                    # If PEG ratio is missing or invalid, calculate manually
+                    if not peg_ratio:
+                        pe = get_stock_info.get("forwardPE") or get_stock_info.get("trailingPE")
+                        eps_growth = get_stock_info.get("earningsQuarterlyGrowth")  # Often quarterly YoY, not ideal
+                        # You may also use your own forecast or a manual override if available
+                        if eps_growth and pe:
+                            # Convert to annual growth rate if you know it's quarterly
+                            eps_growth_annualized = (1 + eps_growth) ** 4 - 1
+                            peg_ratio = calculate_peg_ratio(pe, eps_growth_annualized * 100)
                     # Define value and color
                     if peg_ratio is None:
                         color = "gray"

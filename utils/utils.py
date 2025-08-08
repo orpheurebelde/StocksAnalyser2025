@@ -599,5 +599,10 @@ def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.
 
     except Exception as e:
         return {"Error": str(e)}
+    
+def calculate_peg_ratio(pe_ratio, eps_growth_percent):
+    if pe_ratio is not None and eps_growth_percent is not None and eps_growth_percent != 0:
+        return round(pe_ratio / eps_growth_percent, 2)
+    return None
 
 
