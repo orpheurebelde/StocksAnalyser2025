@@ -516,6 +516,13 @@ if selected_display != "Select a stock...":
                 #if info.get("logo_url", "").startswith("http"):
                     #st.image(info["logo_url"], width=120)
 
+            with st.expander("Company Info", expanded=False):
+                _, info = fetch_data(ticker)
+                if info:
+                    st.write(info)
+                else:
+                    st.warning("No stock selected.")
+
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
                 if ticker:
@@ -587,13 +594,6 @@ if selected_display != "Select a stock...":
                                 st.markdown(section.strip().replace('\n', '  \n'))
                 else:
                     st.info("Please select a ticker to view AI analysis.")
-
-            with st.expander("Company Info", expanded=False):
-                _, info = fetch_data(ticker)
-                if info:
-                    st.write(info)
-                else:
-                    st.warning("No stock selected.")
 
             with st.expander("💰 AI DCF Valuation"):
                 if ticker:
