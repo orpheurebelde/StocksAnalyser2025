@@ -600,8 +600,23 @@ if selected_display != "Select a stock...":
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
 
+                    # SAFELY extract raw numeric values (do NOT format here)
+                    company_name = info.get("longName") or info.get("shortName") or ticker
+                    sector = info.get("sector", "N/A")
+                    market_cap = info.get("marketCap", "N/A")
+                    trail_pe = info.get("trailingPE", "N/A")
+                    forward_pe = info.get("forwardPE", "N/A")
+                    revenue = info.get("totalRevenue", "N/A")
+                    net_income = info.get("netIncomeToCommon", "N/A")
+                    eps_current = info.get("trailingEps", "N/A")
+                    fcf = info.get("freeCashflow", "N/A")
+                    dividend_yield_val = info.get("dividendYield", None)
+                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                    shares_outstanding = info.get("sharesOutstanding", "N/A")
+                    current_price = info.get("currentPrice", "N/A")
+
                     prompt = f"""
-                    You are a professional equity analyst. Perform a detailed Discounted Cash Flow (DCF) valuation using ONLY the following data:
+                    You are a professional equity analyst. Perform a detailed 5-year Discounted Cash Flow (DCF) valuation using ONLY the following data:
 
                     - Company: {company_name}
                     - Sector: {sector}
@@ -612,21 +627,7 @@ if selected_display != "Select a stock...":
                     - Revenue: {revenue}
                     - Net Income: {net_income}
                     - EPS: {eps_current}
-                    - Free Cash Flow: {fcf}
-                    - Dividend Yield: {dividend_yield}
-                    - Shares Outstanding: {shares_outstanding}
-
-                    Company Info:
-                    - Company: {company_name}
-                    - Sector: {sector}
-                    - Market Cap: {market_cap}
-                    - Current Price: ${current_price}
-                    - P/E (TTM): {trail_pe}
-                    - Forward P/E: {forward_pe}
-                    - Revenue: {revenue}
-                    - Net Income: {net_income}
-                    - EPS: {eps_current}
-                    - Free Cash Flow: {fcf}
+                    - Free Cash Flow (TTM): {fcf}
                     - Dividend Yield: {dividend_yield}
                     - Shares Outstanding: {shares_outstanding}
 
@@ -640,7 +641,7 @@ if selected_display != "Select a stock...":
                     5. Compare to current price and estimate upside/downside.
                     6. Give a final fair value and investment recommendation (Buy, Hold, Sell).
 
-                    ❗Stick to the provided inputs. Do not invent financial data. If data is missing, clearly say so and skip DCF.
+                    ❗Stick to the provided inputs. Do not invent financial data. Clarify what type of data is being used (trailing, forward, or estimate). Double-check if shares outstanding seems unusually high.
                     """
 
                     if st.button("🧠 Generate AI-Powered DCF Valuation"):
