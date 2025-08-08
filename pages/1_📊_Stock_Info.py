@@ -207,26 +207,27 @@ if selected_display != "Select a stock...":
                             # Convert to annual growth rate if you know it's quarterly
                             eps_growth_annualized = (1 + eps_growth) ** 4 - 1
                             peg_ratio = calculate_peg_ratio(pe, eps_growth_annualized * 100)
-                    # Define value and color
-                    if peg_ratio is None:
-                        color = "gray"
-                        value = "N/A"
-                    elif peg_ratio < 1:
-                        color = "green"
-                        value = f"{peg_ratio:.2f}"
-                    elif 1 <= peg_ratio <= 2:
-                        color = "orange"
-                        value = f"{peg_ratio:.2f}"
                     else:
-                        color = "red"
-                        value = f"{peg_ratio:.2f}"
-                    # Display like st.metric with style
-                    st.markdown(f"""
-                        <div style='display: flex; flex-direction: column; align-items: start;'>
-                            <span style='font-size: 16px; color: #FFFFFF;'>PEG Ratio</span>
-                            <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                        # Define value and color
+                        if peg_ratio is None:
+                            color = "gray"
+                            value = "N/A"
+                        elif peg_ratio < 1:
+                            color = "green"
+                            value = f"{peg_ratio:.2f}"
+                        elif 1 <= peg_ratio <= 2:
+                            color = "orange"
+                            value = f"{peg_ratio:.2f}"
+                        else:
+                            color = "red"
+                            value = f"{peg_ratio:.2f}"
+                        # Display like st.metric with style
+                        st.markdown(f"""
+                            <div style='display: flex; flex-direction: column; align-items: start;'>
+                                <span style='font-size: 16px; color: #FFFFFF;'>PEG Ratio</span>
+                                <span style='font-size: 32px; font-weight: bold; color: {color};'>{value}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
                     #Categorize with green,yellow and red Price To Book Ratio
                     pb_ratio = info.get("priceToBook")
                     # Define value and color
