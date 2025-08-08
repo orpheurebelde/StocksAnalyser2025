@@ -200,8 +200,8 @@ if selected_display != "Select a stock...":
 
                     # If PEG ratio is missing or invalid, calculate manually
                     if not peg_ratio:
-                        pe = get_stock_info.get("forwardPE") or get_stock_info.get("trailingPE")
-                        eps_growth = get_stock_info.get("earningsQuarterlyGrowth")  # Often quarterly YoY, not ideal
+                        pe = info.get("forwardPE") or info.get("trailingPE")
+                        eps_growth = info.get("earningsQuarterlyGrowth")
                         # You may also use your own forecast or a manual override if available
                         if eps_growth and pe:
                             # Convert to annual growth rate if you know it's quarterly
