@@ -667,6 +667,9 @@ if selected_display != "Select a stock...":
                     fcf = clean_value(info.get("freeCashflow"))
                     shares_outstanding = clean_value(info.get("sharesOutstanding"))
                     current_price = clean_value(info.get("currentPrice"))
+                    debt_data = info.get("totalDebt", 0.0)
+                    cash_data = info.get("totalCash", 0.0)
+                    eps_growth = info.get("earningsQuarterlyGrowth", 0.0)
 
                     # Format dividend yield only if valid
                     dividend_yield_raw = info.get("dividendYield", None)
@@ -697,6 +700,9 @@ if selected_display != "Select a stock...":
                         - Free Cash Flow (TTM): {fcf}
                         - Dividend Yield: {dividend_yield}
                         - Shares Outstanding: {shares_outstanding}
+                        - Total Debt: {debt_data}
+                        - Total Cash: {cash_data}
+                        - EPS Growth: {eps_growth}
 
                         1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals extracted from Yahoo Finance above.
                         2. Assume a discount rate between 8% and 12% depending on risk.
