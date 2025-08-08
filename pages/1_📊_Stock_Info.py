@@ -595,55 +595,53 @@ if selected_display != "Select a stock...":
                 else:
                     st.warning("No stock selected.")
 
-            with st.expander("🛠️ Customize DCF Inputs"):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    base_growth = st.number_input("Base Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=8.0, step=0.5) / 100
-                with col2:
-                    bull_growth = st.number_input("Bull Case Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=12.0, step=0.5) / 100
-                with col3:
-                    bear_growth = st.number_input("Bear Case Revenue CAGR (%)", min_value=0.0, max_value=50.0, value=4.0, step=0.5) / 100
-                
-                discount_rate = st.slider("Discount Rate (%)", min_value=4.0, max_value=15.0, value=10.0, step=0.5) / 100
+            with st.expander("💰 AI DCF Valuation"):
+                if ticker:
+                    MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
+                    info = get_stock_info(ticker)
 
-        if selected_display and isinstance(selected_display, str) and " - " in selected_display and selected_display != "Select a stock...":
-            ticker_symbol = selected_display.split(" - ")[0].strip().upper()
+                    prompt = f"""
+                    You are a professional equity analyst. Perform a detailed Discounted Cash Flow (DCF) valuation using ONLY the following data:
 
-            with st.expander("💰 Discounted Cash Flow (DCF) Valuation"):
-                with st.spinner("Calculating DCF..."):
-                    result = calculate_dcf_valor(
-                        ticker_symbol,
-                        revenue_growth_base=base_growth,
-                        revenue_growth_bull=bull_growth,
-                        revenue_growth_bear=bear_growth,
-                        discount_rate=discount_rate
-                    )
+                    - Company: {company_name}
+                    - Sector: {sector}
+                    - Market Cap: {market_cap}
+                    - Current Price: ${current_price}
+                    - P/E (TTM): {trail_pe}
+                    - Forward P/E: {forward_pe}
+                    - Revenue: {revenue}
+                    - Net Income: {net_income}
+                    - EPS: {eps_current}
+                    - Free Cash Flow: {fcf}
+                    - Dividend Yield: {dividend_yield}
+                    - Shares Outstanding: {shares_outstanding}
 
-                if "Error" in result:
-                    st.error(f"❌ Error: {result['Error']}")
+                    1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals.
+                    2. Assume a discount rate between 8% and 12% depending on risk.
+                    3. Run a 5-year DCF model using Free Cash Flow.
+                    4. Output valuation estimates per share:
+                    - Base Case: $X.XX
+                    - Bull Case: $X.XX
+                    - Bear Case: $X.XX
+                    5. Compare to current price and estimate upside/downside.
+                    6. Give a final fair value and investment recommendation (Buy, Hold, Sell).
+
+                    ❗Stick to the provided inputs. Do not invent financial data. If data is missing, clearly say so and skip DCF.
+                    """
+
+                    if st.button("🧠 Generate AI-Powered DCF Valuation"):
+                        with st.spinner("Calling Mistral for DCF valuation..."):
+                            raw_dcf = get_ai_analysis(prompt, MISTRAL_API_KEY)
+
+                        if raw_dcf.startswith("ERROR:"):
+                            st.error("Failed to generate AI DCF valuation.")
+                            st.code(raw_dcf)
+                        else:
+                            st.markdown("**📈 AI-Generated DCF Valuation:**")
+                            sections = re.split(r'\n(?=\d+\.)', raw_dcf)
+                            for section in sections:
+                                st.markdown(section.strip().replace('\n', '  \n'))
                 else:
-                    current_price = result['Current Price']
-                    st.metric("📊 Current Price", f"${current_price:.2f}")
-
-                    cols = st.columns(3)
-                    for i, case in enumerate(["Bear", "Base", "Bull"]):
-                        valuation = result[case]
-                        delta = valuation - current_price
-                        delta_pct = (delta / current_price) * 100
-
-                        color = "normal"
-                        if delta > 0:
-                            color = "inverse"
-                        elif delta < 0:
-                            color = "off"
-
-                        cols[i].metric(
-                            f"{case} Case Valuation",
-                            f"${valuation:.2f}",
-                            f"{delta_pct:.1f}%",
-                            delta_color=color
-                        )
-        else:
-            st.warning("⚠️ Please select a valid stock ticker from the dropdown above to view DCF valuation.")
+                    st.warning("Please select a stock ticker.")
         
         
