@@ -674,7 +674,7 @@ if selected_display != "Select a stock...":
 
                     if dividend_yield is not None:
                         # If it's a small number, it's likely a decimal (e.g., 0.0041 → 0.41%)
-                        if dividend_yield < 0.05:
+                        if dividend_yield < 0.01:
                             dividend_yield_percent = dividend_yield * 100
                         else:
                             dividend_yield_percent = dividend_yield
