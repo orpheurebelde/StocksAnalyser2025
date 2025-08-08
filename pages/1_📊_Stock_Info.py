@@ -523,7 +523,7 @@ if selected_display != "Select a stock...":
             with st.expander("📈 Share Dilution Check (Estimation)"):
                 ticker = st.session_state.selected_ticker  # or however you're getting the current ticker
                 if ticker:
-                    current_shares, past_shares, dilution = estimate_past_shares_outstanding(ticker_symbol)
+                    current_shares, past_shares, dilution = estimate_past_shares_outstanding(ticker)
 
                     if current_shares and past_shares:
                         dilution_pct = (dilution / past_shares) * 100 if past_shares else 0
