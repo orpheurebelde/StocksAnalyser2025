@@ -610,22 +610,36 @@ if selected_display != "Select a stock...":
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
 
-                    # SAFELY extract raw numeric values (do NOT format here)
-                    company_name = info.get("longName") or info.get("shortName") or ticker
-                    sector = info.get("sector", "N/A")
-                    market_cap = info.get("marketCap", "N/A")
-                    trail_pe = info.get("trailingPE", "N/A")
-                    forward_pe = info.get("forwardPE", "N/A")
-                    revenue = info.get("totalRevenue", "N/A")
-                    net_income = info.get("netIncomeToCommon", "N/A")
-                    eps_current = info.get("trailingEps", "N/A")
-                    fcf = info.get("freeCashflow", "N/A")
-                    dividend_yield_val = info.get("dividendYield", None)
-                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
-                    shares_outstanding = info.get("sharesOutstanding", "N/A")
-                    if shares_outstanding and shares_outstanding > 10_000_000_000:
-                        shares_outstanding = int(shares_outstanding / 10)
-                    current_price = info.get("currentPrice", "N/A")
+                def clean_value(value, default="N/A"):
+                    """Ensure we return clean numbers or default for missing/bad data."""
+                    return value if value not in [None, "N/A", float("nan")] else default
+
+                # Extract raw values
+                company_name = info.get("longName") or info.get("shortName") or ticker
+                sector = clean_value(info.get("sector"))
+                market_cap = clean_value(info.get("marketCap"))
+                trailing_pe = clean_value(info.get("trailingPE"))
+                forward_pe = clean_value(info.get("forwardPE"))
+                revenue = clean_value(info.get("totalRevenue"))
+                net_income = clean_value(info.get("netIncomeToCommon"))
+                eps_current = clean_value(info.get("trailingEps"))
+                fcf = clean_value(info.get("freeCashflow"))
+                shares_outstanding = clean_value(info.get("sharesOutstanding"))
+                current_price = clean_value(info.get("currentPrice"))
+
+                # Format dividend yield only if valid
+                dividend_yield_raw = info.get("dividendYield", None)
+                if isinstance(dividend_yield_raw, (float, int)):
+                    dividend_yield = f"{dividend_yield_raw * 100:.2f}%"
+                else:
+                    dividend_yield = "N/A"
+
+                # Validate shares outstanding
+                # Many stocks like NVIDIA, Apple, etc., report this correctly
+                # No need to divide arbitrarily unless specific tickers are misreporting.
+                if isinstance(shares_outstanding, (float, int)) and shares_outstanding > 100_000_000_000:
+                    # Sanity check: rarely are shares outstanding >100B
+                    print(f"Warning: unusually large shares outstanding for {ticker}: {shares_outstanding}")
 
                     prompt = f"""
                     You are a professional equity analyst.Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for NVIDIA (NVDA), generate a realistic 5-year DCF valuation. Use the following rules:
