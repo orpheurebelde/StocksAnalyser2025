@@ -613,6 +613,8 @@ if selected_display != "Select a stock...":
                     dividend_yield_val = info.get("dividendYield", None)
                     dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
                     shares_outstanding = info.get("sharesOutstanding", "N/A")
+                    if shares_outstanding and shares_outstanding > 10_000_000_000:
+                        shares_outstanding = int(shares_outstanding / 10)
                     current_price = info.get("currentPrice", "N/A")
 
                     prompt = f"""
