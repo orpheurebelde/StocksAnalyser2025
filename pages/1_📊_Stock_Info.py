@@ -518,9 +518,9 @@ if selected_display != "Select a stock...":
 
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
-                ticker = st.session_state.get("selected_ticker")
                 if ticker:
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
+                    ticker = st.session_state.get("selected_ticker")
                     info = get_stock_info(ticker)
 
                 # Collect structured data
