@@ -521,7 +521,7 @@ if selected_display != "Select a stock...":
                     st.write(f"**Revenue Growth:** {format_percent(rg)} ({rg_cat})")
 
             with st.expander("📈 Share Dilution Check (Estimation)"):
-                ticker = st.session_state.selected_ticker  # or however you're getting the current ticker
+                st.session_state.selected_ticker = ticker
                 if ticker:
                     current_shares, past_shares, dilution = estimate_past_shares_outstanding(ticker)
 
