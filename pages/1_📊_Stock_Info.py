@@ -518,12 +518,11 @@ if selected_display != "Select a stock...":
 
             # AI Analysis Section
             with st.expander("💡 AI Analysis & Forecast"):
-                ticker = st.session_state.get("selected_ticker")
                 if ticker:
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
 
-                    # Collect structured data
+                    # Structured info
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = info.get("sector", "N/A")
                     market_cap = format_number(info.get("marketCap", "N/A"))
@@ -586,6 +585,8 @@ if selected_display != "Select a stock...":
                             sections = re.split(r'\n(?=\d+\.)', corrected)
                             for section in sections:
                                 st.markdown(section.strip().replace('\n', '  \n'))
+                else:
+                    st.info("Please select a ticker to view AI analysis.")
 
             with st.expander("Company Info", expanded=False):
                 _, info = fetch_data(ticker)
