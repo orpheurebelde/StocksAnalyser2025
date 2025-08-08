@@ -605,4 +605,24 @@ def calculate_peg_ratio(pe_ratio, eps_growth_percent):
         return round(pe_ratio / eps_growth_percent, 2)
     return None
 
+def estimate_past_shares_outstanding(ticker_symbol):
+    ticker = yf.Ticker(ticker_symbol)
+
+    current_info = ticker.info
+    current_price = current_info.get("currentPrice")
+    current_market_cap = current_info.get("marketCap")
+    current_shares = current_info.get("sharesOutstanding")
+
+    # Get historical price and market cap for 1 year ago
+    hist = ticker.history(period="1y", interval="1mo")
+    if len(hist) < 2:
+        return None, None, None
+
+    past_price = hist['Close'].iloc[0]
+    # Estimate past shares using approximate market cap / price
+    past_market_cap = current_market_cap * 0.85  # crude approx: assume 15% growth
+    estimated_past_shares = past_market_cap / past_price if past_price else None
+
+    return current_shares, estimated_past_shares, (current_shares - estimated_past_shares)
+
 

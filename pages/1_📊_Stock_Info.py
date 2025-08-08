@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
+from utils.utils import estimate_past_shares_outstanding, calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
 import re
 import time
 
@@ -519,6 +519,18 @@ if selected_display != "Select a stock...":
                     rg = info.get('revenueGrowth')
                     rg_cat, rg_color = categorize_growth(rg)
                     st.write(f"**Revenue Growth:** {format_percent(rg)} ({rg_cat})")
+
+            with st.expander("📈 Share Dilution Check (Estimation)"):
+                ticker_symbol = st.session_state.selected_ticker  # or however you're getting the current ticker
+                current_shares, past_shares, dilution = estimate_past_shares_outstanding(ticker_symbol)
+
+                if current_shares and past_shares:
+                    dilution_pct = (dilution / past_shares) * 100 if past_shares else 0
+                    st.write(f"**Current Shares Outstanding**: {current_shares:,.0f}")
+                    st.write(f"**Estimated Shares Outstanding 1 Year Ago**: {past_shares:,.0f}")
+                    st.write(f"**Dilution Over 1 Year**: {dilution:,.0f} shares ({dilution_pct:.2f}%)")
+                else:
+                    st.warning("Could not estimate dilution due to missing data.")
 
             with st.expander("📦 Ownership"):
                 st.write(f"**Institutional Ownership:** {format_percent(info.get('heldPercentInstitutions'))}")
