@@ -31,14 +31,32 @@ if uploaded_file:
     # 📈 Fetch historical data for portfolio & benchmarks
         st.subheader("📈 Portfolio vs S&P 500 (VUAA) & Nasdaq-100 (EQQQ)")
 
+        import yfinance as yf
+
+        def fetch_symbol_with_auto_suffix(base_symbol, start_date):
+            """
+            Try fetching historical data for a symbol with possible Yahoo suffixes.
+            Returns the correct symbol string if found, otherwise None.
+            """
+            suffixes = ["", ".DE", ".AS"]
+            for suffix in suffixes:
+                try:
+                    hist = yf.download(base_symbol + suffix, start=start_date, progress=False)["Adj Close"]
+                    if not hist.empty:
+                        return base_symbol + suffix
+                except Exception:
+                    pass
+            return None  # No valid symbol found
+
+
         try:
             # Convert purchase dates to dictionary {Symbol: purchase_date}
             purchase_dates = df.groupby("Symbol")["Date"].min().to_dict()
 
-            # Download benchmark data
+            # Download benchmark data (no suffix needed for indices)
             benchmarks = {
-                "S&P 500 EUR (VUAA)": "VUAA.DE",   # Vanguard S&P 500 UCITS ETF EUR
-                "Nasdaq-100 EUR (EQQQ)": "EQQQ.DE" # Invesco Nasdaq-100 UCITS ETF EUR
+                "S&P 500 (^GSPC)": "^GSPC",
+                "Nasdaq-100 (^NDX)": "^NDX"
             }
             bench_data = {}
             for name, ticker in benchmarks.items():
@@ -47,20 +65,38 @@ if uploaded_file:
             # Calculate portfolio value history
             all_dates = None
             port_history = None
+
             for symbol, start_date in purchase_dates.items():
-                hist = yf.download(symbol + ".DE", start=start_date, progress=False)["Adj Close"]  # Adjust ticker suffix for exchange
+                # Auto-detect Yahoo symbol
+                yahoo_symbol = fetch_symbol_with_auto_suffix(symbol, start_date)
+                if not yahoo_symbol:
+                    st.warning(f"⚠️ Could not fetch data for {symbol}, skipping...")
+                    continue
+
+                # Get historical adjusted close prices
+                hist = yf.download(yahoo_symbol, start=start_date, progress=False)["Adj Close"]
+
+                # Multiply by total quantity held
                 qty = df.loc[df["Symbol"] == symbol, "Quantity"].sum()
                 value = hist * qty
+
+                # Add to portfolio total value
                 if port_history is None:
                     port_history = value
                 else:
                     port_history = port_history.add(value, fill_value=0)
+
+                # Track all unique dates
                 if all_dates is None:
                     all_dates = hist.index
                 else:
                     all_dates = all_dates.union(hist.index)
 
+            # Align portfolio history with all dates and forward-fill missing values
             port_history = port_history.reindex(all_dates).fillna(method="ffill")
+
+        except Exception as e:
+            st.error(f"Error fetching performance data: {e}")
 
             # Normalize for comparison (start = 100)
             port_norm = port_history / port_history.iloc[0] * 100
