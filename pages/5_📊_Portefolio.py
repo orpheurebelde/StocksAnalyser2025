@@ -48,7 +48,7 @@ if uploaded_file:
             all_dates = None
             port_history = None
             for symbol, start_date in purchase_dates.items():
-                hist = yf.download(symbol + ".AS", start=start_date, progress=False)["Adj Close"]  # Adjust ticker suffix for exchange
+                hist = yf.download(symbol + ".DE", start=start_date, progress=False)["Adj Close"]  # Adjust ticker suffix for exchange
                 qty = df.loc[df["Symbol"] == symbol, "Quantity"].sum()
                 value = hist * qty
                 if port_history is None:
