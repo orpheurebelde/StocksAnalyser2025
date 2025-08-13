@@ -126,10 +126,10 @@ if uploaded_file:
                 }
             )
 
-        # 4. TradingView Historical Data Metrics
+        # 4. TradingView Historical Data Metrics (full version)
         with st.expander("📊 Portfolio Metrics via TradingView Historical Data", expanded=False):
             try:
-                st.info("Fetching historical prices from TradingView (may take a few seconds)...")
+                st.info("Fetching historical prices from TradingView (may take some time)...")
                 tickers = df["Symbol"].unique()
                 price_history = {}
 
@@ -146,35 +146,54 @@ if uploaded_file:
                         interval=Interval.INTERVAL_1_DAY
                     )
                     analysis = handler.get_analysis()
-                    current_price = analysis.indicators.get("close", None)
+                    
+                    # Full historical candles
+                    hist = analysis.candles  # returns list of dicts with 'time', 'open', 'high', 'low', 'close', 'volume'
+                    if hist:
+                        # convert to DataFrame
+                        df_hist = pd.DataFrame(hist)
+                        df_hist['time'] = pd.to_datetime(df_hist['time'], unit='s')
+                        df_hist.set_index('time', inplace=True)
+                        price_history[t] = df_hist['close']
 
-                    if current_price:
-                        price_history[t] = pd.Series([current_price], index=[pd.Timestamp.today()])
-
-                # Build simplified portfolio time series
                 if price_history:
-                    portfolio_value = pd.Series(0, index=[pd.Timestamp.today()])
+                    # Align all series by date
+                    all_dates = pd.Index(sorted(set().union(*[s.index for s in price_history.values()])))
+                    portfolio_df = pd.DataFrame(index=all_dates)
+
                     for _, row in df.iterrows():
                         sym = row["Symbol"]
                         qty = row["Quantity"]
                         if sym in price_history:
-                            portfolio_value += price_history[sym] * qty
+                            s = price_history[sym].reindex(all_dates).ffill() * qty
+                            portfolio_df[sym] = s
 
-                    # Metrics placeholders
-                    port_return = (portfolio_value.iloc[-1] - portfolio_value.iloc[0]) / portfolio_value.iloc[0]
-                    port_cagr = port_return
-                    port_vol = np.nan
-                    port_sharpe = np.nan
-                    port_dd = np.nan
+                    # Portfolio total value
+                    portfolio_df['Total'] = portfolio_df.sum(axis=1)
+
+                    # Compute metrics
+                    rets = portfolio_df['Total'].pct_change().dropna()
+                    port_cagr = (portfolio_df['Total'].iloc[-1] / portfolio_df['Total'].iloc[0]) ** (252 / len(rets)) - 1
+                    port_vol = rets.std() * np.sqrt(252)
+                    rf = 0.0  # risk-free rate
+                    port_sharpe = (port_cagr - rf) / port_vol if port_vol != 0 else np.nan
+                    port_dd = (portfolio_df['Total'] / portfolio_df['Total'].cummax() - 1).min()
 
                     metrics_df = pd.DataFrame({
-                        "Metric": ["Approx. Return", "CAGR", "Volatility", "Sharpe Ratio", "Max Drawdown"],
-                        "Value": [port_return, port_cagr, port_vol, port_sharpe, port_dd]
+                        "Metric": ["CAGR", "Annualized Volatility", "Sharpe Ratio", "Max Drawdown"],
+                        "Value": [port_cagr, port_vol, port_sharpe, port_dd]
                     })
 
                     st.dataframe(metrics_df, use_container_width=True)
+                    
+                    # Optional: plot portfolio total over time
+                    import matplotlib.pyplot as plt
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    portfolio_df['Total'].plot(ax=ax, title="Portfolio Value Over Time")
+                    ax.set_ylabel("Portfolio Value (€)")
+                    st.pyplot(fig)
                 else:
-                    st.warning("No price data retrieved from TradingView.")
+                    st.warning("No historical price data retrieved from TradingView.")
 
             except Exception as e:
                 st.error(f"⚠️ Error fetching TradingView data: {e}")
