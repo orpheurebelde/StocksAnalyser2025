@@ -31,10 +31,12 @@ if uploaded_file:
     # 📈 Fetch historical data for portfolio & benchmarks
         st.subheader("📈 Portfolio vs S&P 500 (VUAA) & Nasdaq-100 (EQQQ)")
 
-        # Cache downloads to speed up Streamlit reruns
+        # —— Cached Yahoo download
         @st.cache_data(ttl=3600, show_spinner=False)
         def _safe_download_adjclose(ticker: str, start):
             try:
+                # Start 3 days earlier to avoid weekend/holiday missing data
+                start = pd.to_datetime(start) - pd.Timedelta(days=3)
                 df_y = yf.download(ticker, start=start, progress=False, auto_adjust=False)
                 if df_y is None or df_y.empty or "Adj Close" not in df_y:
                     return pd.Series(dtype=float)
@@ -44,26 +46,39 @@ if uploaded_file:
             except Exception:
                 return pd.Series(dtype=float)
 
+        # —— Xetra-first symbol detection
         @st.cache_data(ttl=3600, show_spinner=False)
-        def detect_yahoo_symbol(base_symbol: str, start):
-            # Try raw first, then common European/US suffixes
-            suffixes = [
-                "", ".DE", ".F", ".BE", ".AS", ".PA", ".BR", ".MI", ".SW", ".VI",
-                ".ST", ".HE", ".CO", ".OL", ".LS", ".MC", ".L", ".TO", ".IE"
-            ]
+        def detect_yahoo_symbol_xetra_first(base_symbol: str, start):
+            """
+            Detects Yahoo Finance symbol for a Xetra (.DE) portfolio, falling back to other exchanges if needed.
+            """
+            # If suffix already in CSV, test it directly
+            if "." in base_symbol:
+                s = _safe_download_adjclose(base_symbol, start)
+                if not s.empty:
+                    return base_symbol
+                return None  # Provided ticker is invalid
+            
+            # Try .DE first
+            s = _safe_download_adjclose(base_symbol + ".DE", start)
+            if not s.empty:
+                return base_symbol + ".DE"
+            
+            # Fall back to other common EU/US suffixes
+            suffixes = [".F", ".BE", ".AS", ".PA", ".BR", ".MI", ".SW", ".VI",
+                        ".ST", ".HE", ".CO", ".OL", ".LS", ".MC", ".L", ".TO", ".IE"]
             for suf in suffixes:
                 t = base_symbol + suf
                 s = _safe_download_adjclose(t, start)
                 if not s.empty:
                     return t
-            return None  # not found
+            return None
 
         def _normalize_to_100(series: pd.Series) -> pd.Series:
             s = series.dropna()
             if len(s) == 0:
                 return s
             base = s.iloc[0]
-            # If base is 0 for some reason, drop leading zeros
             if base == 0:
                 s = s[s != 0]
                 if len(s) == 0:
@@ -76,7 +91,6 @@ if uploaded_file:
             if len(s) < 2:
                 return np.nan, np.nan, np.nan, np.nan, np.nan
             rets = s.pct_change().dropna()
-            # CAGR using trading-day count
             cagr = (s.iloc[-1] / s.iloc[0]) ** (252 / len(s)) - 1
             vol = rets.std() * np.sqrt(252)
             downside = rets[rets < 0].std() * np.sqrt(252)
@@ -85,8 +99,6 @@ if uploaded_file:
             max_dd = ((s / s.cummax()) - 1).min()
             return cagr, vol, sharpe, sortino, max_dd
 
-
-
         try:
             # —— 0) Basic sanity check
             required_cols = {"Date", "Symbol", "Quantity"}
@@ -94,14 +106,13 @@ if uploaded_file:
                 st.error(f"CSV must include columns: {required_cols}")
                 st.stop()
 
-            # Ensure datetime & sorting
             df["Date"] = pd.to_datetime(df["Date"])
             df = df.sort_values("Date")
 
             # —— 1) Detect Yahoo symbols (per unique base symbol)
             base_start = df["Date"].min()
             unique_symbols = sorted(df["Symbol"].astype(str).str.strip().str.upper().unique())
-            symbol_map = {sym: detect_yahoo_symbol(sym, base_start) for sym in unique_symbols}
+            symbol_map = {sym: detect_yahoo_symbol_xetra_first(sym, base_start) for sym in unique_symbols}
 
             map_df = pd.DataFrame(
                 [{"CSV Symbol": k, "Yahoo Symbol": v if v else "❌ not found"} for k, v in symbol_map.items()]
@@ -123,7 +134,6 @@ if uploaded_file:
 
                 hist = _safe_download_adjclose(yahoo_sym, lot_start)
                 if hist.empty:
-                    # Shouldn't happen if detect_yahoo_symbol succeeded, but guard anyway
                     st.warning(f"No data for lot: {base_sym} ({yahoo_sym}) from {lot_start.date()}")
                     continue
 
@@ -134,7 +144,7 @@ if uploaded_file:
                 st.error("No usable price data for the portfolio (after mapping). Check tickers/dates.")
                 st.stop()
 
-            # —— 3) Benchmarks (indices: no suffix needed)
+            # —— 3) Benchmarks
             benchmarks = {
                 "S&P 500 (^GSPC)": "^GSPC",
                 "Nasdaq-100 (^NDX)": "^NDX",
@@ -142,13 +152,12 @@ if uploaded_file:
             bench_data = {}
             bench_warnings = []
 
-            bench_start = port_history.index.min()  # align benchmark start to earliest portfolio date
+            bench_start = port_history.index.min()
             for name, ticker in benchmarks.items():
                 s = _safe_download_adjclose(ticker, bench_start)
                 if len(s) < 2:
                     bench_warnings.append(name)
                     continue
-                # Align to portfolio calendar and ffill gaps (holidays/mismatched calendars)
                 s = s.reindex(port_history.index).ffill().dropna()
                 bench_data[name] = s
 
@@ -157,7 +166,6 @@ if uploaded_file:
 
             # —— 4) Normalize & plot
             port_norm = _normalize_to_100(port_history)
-
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(10, 5))
             ax.plot(port_norm.index, port_norm, label="Portfolio", linewidth=2)
@@ -169,9 +177,8 @@ if uploaded_file:
             st.pyplot(fig)
 
             # —— 5) Metrics table
-            rf = 0.0  # set to e.g. 0.033 for 3.3% annual risk-free if you prefer
-            metrics = {}
-            metrics["Portfolio"] = perf_metrics_from_prices(port_history, risk_free_annual=rf)
+            rf = 0.0
+            metrics = {"Portfolio": perf_metrics_from_prices(port_history, risk_free_annual=rf)}
             for name, s in bench_data.items():
                 metrics[name] = perf_metrics_from_prices(s, risk_free_annual=rf)
 
@@ -185,7 +192,7 @@ if uploaded_file:
 
         except Exception as e:
             st.error(f"⚠️ Error fetching performance data: {e}")
-    
+
         # Display the portfolio summary
         # 1. Transactions Table
         with st.expander("📄 Line-by-Line Transactions"):
