@@ -22,30 +22,28 @@ exchange_map = {
 }
 
 def detect_exchange(symbol):
-    """Automatically detect TradingView exchange using yfinance, fallback to manual GETTEX/NASDAQ/NYSE check."""
-    try:
-        stock = yf.Ticker(symbol)
-        exch = stock.info.get('exchange') or stock.info.get('fullExchangeName')
-        if exch:
-            exch_lower = exch.lower()
-            for k, v in exchange_map.items():
-                if k in exch_lower:
-                    return v  # (exchange_code, screener)
-    except Exception:
-        pass  # ignore errors and try fallback
-
-    # Fallback manual check
+    """Detect GETTEX, NASDAQ, NYSE automatically using tradingview_ta."""
     exchanges = [
         ("GETTEX", "europe"),
         ("NASDAQ", "america"),
         ("NYSE", "america")
     ]
-    base_url = "https://www.tradingview.com/symbols/{exchange}-{symbol}/"
+    
     for exchange, screener in exchanges:
-        url = base_url.format(exchange=exchange, symbol=symbol.upper())
-        resp = requests.get(url)
-        if resp.status_code == 200 and "Page not found" not in resp.text:
-            return exchange, screener
+        try:
+            handler = TA_Handler(
+                symbol=symbol,
+                screener=screener,
+                exchange=exchange,
+                interval=Interval.INTERVAL_1_DAY
+            )
+            # Attempt to get analysis
+            analysis = handler.get_analysis()
+            # If it works without exception, symbol is valid
+            if analysis:
+                return exchange, screener
+        except Exception:
+            continue
     return None, None
 
 # ===== Main logic =====
