@@ -1,9 +1,8 @@
 import streamlit as st 
 import pandas as pd
 from datetime import datetime
-import yfinance as yf
-import matplotlib.pyplot as plt
 import numpy as np
+from tradingview_ta import TA_Handler, Interval
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")
 st.title("📊 Portfolio Analysis & AI Suggestions")
@@ -145,3 +144,51 @@ if uploaded_file:
             except Exception as e:
                 st.warning("⚠️ Mistral API key not found in Streamlit secrets or another error occurred.")
                 st.exception(e)
+
+        # 4. Trading View Prices
+        with st.expander("📊 Portfolio Metrics via TradingView Historical Data", expanded=False):
+            try:
+                st.info("Fetching historical prices from TradingView (may take a few seconds)...")
+                tickers = df["Symbol"].unique()
+                price_history = {}
+
+                for t in tickers:
+                    # Adjust exchange as needed per ticker, here using NASDAQ/US as default
+                    handler = TA_Handler(
+                        symbol=t,
+                        screener="america",  # adjust to "europe" if needed
+                        exchange="NASDAQ",   # change per stock/exchange
+                        interval=Interval.INTERVAL_1_DAY
+                    )
+                    analysis = handler.get_analysis()
+                    
+                    # TradingView returns last close as 'close', but TA_Handler can also give historical candles
+                    # If full historical prices not available, we approximate with close
+                    current_price = analysis.indicators["close"]
+                    price_history[t] = pd.Series([current_price], index=[pd.Timestamp.today()])
+
+                # Build a simplified portfolio time series
+                portfolio_value = pd.Series(0, index=[pd.Timestamp.today()])
+                for _, row in df.iterrows():
+                    sym = row["Symbol"]
+                    qty = row["Quantity"]
+                    if sym in price_history:
+                        portfolio_value += price_history[sym] * qty
+
+                # Calculate simple returns and metrics
+                # Note: with only one data point, this is just illustrative
+                port_return = (portfolio_value.iloc[-1] - portfolio_value.iloc[0]) / portfolio_value.iloc[0]
+                port_cagr = port_return  # approximation
+                port_vol = np.nan         # cannot calculate with one point
+                port_sharpe = np.nan
+                port_dd = np.nan
+
+                metrics_df = pd.DataFrame({
+                    "Metric": ["Approx. Return", "CAGR", "Volatility", "Sharpe Ratio", "Max Drawdown"],
+                    "Value": [port_return, port_cagr, port_vol, port_sharpe, port_dd]
+                })
+
+                st.dataframe(metrics_df, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"⚠️ Error fetching TradingView data: {e}")
