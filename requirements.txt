@@ -7,3 +7,4 @@ matplotlib
 ta
 xlrd
 openpyxl
+tradingview_ta
