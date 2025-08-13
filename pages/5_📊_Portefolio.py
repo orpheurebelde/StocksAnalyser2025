@@ -37,8 +37,8 @@ if uploaded_file:
 
             # Download benchmark data
             benchmarks = {
-                "S&P 500 EUR (VUAA)": "VUAA.AS",   # Vanguard S&P 500 UCITS ETF EUR
-                "Nasdaq-100 EUR (EQQQ)": "EQQQ.AS" # Invesco Nasdaq-100 UCITS ETF EUR
+                "S&P 500 EUR (VUAA)": "VUAA.DE",   # Vanguard S&P 500 UCITS ETF EUR
+                "Nasdaq-100 EUR (EQQQ)": "EQQQ.DE" # Invesco Nasdaq-100 UCITS ETF EUR
             }
             bench_data = {}
             for name, ticker in benchmarks.items():
