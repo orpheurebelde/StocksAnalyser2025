@@ -1,36 +1,46 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
 from datetime import datetime
 import numpy as np
-import requests
-import requests
+from tradingview_ta import TA_Handler, Interval
+import yfinance as yf
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")
 st.title("📊 Portfolio Analysis & AI Suggestions")
 
 uploaded_file = st.file_uploader("📁 Upload Portfolio CSV", type=["csv"])
 
-# ===== Automatic TradingView exchange detection =====
+# ===== Exchange detection =====
+exchange_map = {
+    'gettex': ('GETTEX', 'europe'),
+    'xetra': ('XETR', 'europe'),
+    'nasdaq': ('NASDAQ', 'america'),
+    'nyse': ('NYSE', 'america'),
+    'ams': ('EURONEXT', 'europe'),
+    'par': ('EURONEXT', 'europe'),
+}
+
 def detect_exchange(symbol):
-    """Try GETTEX, NASDAQ, NYSE in order and return first valid match."""
+    """Detect GETTEX, NASDAQ, NYSE automatically using tradingview_ta."""
     exchanges = [
         ("GETTEX", "europe"),
         ("NASDAQ", "america"),
-        ("NYSE", "america"),
+        ("NYSE", "america")
     ]
-    base_url = "https://scanner.tradingview.com/{screener}/scan"
-
+    
     for exchange, screener in exchanges:
-        payload = {
-            "symbols": {"tickers": [f"{exchange}:{symbol}"], "query": {"types": []}},
-            "columns": ["name"]
-        }
         try:
-            r = requests.post(base_url.format(screener=screener), json=payload, timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                if "data" in data and len(data["data"]) > 0:
-                    return exchange, screener
+            handler = TA_Handler(
+                symbol=symbol,
+                screener=screener,
+                exchange=exchange,
+                interval=Interval.INTERVAL_1_DAY
+            )
+            # Attempt to get analysis
+            analysis = handler.get_analysis()
+            # If it works without exception, symbol is valid
+            if analysis:
+                return exchange, screener
         except Exception:
             continue
     return None, None
@@ -58,7 +68,15 @@ if uploaded_file:
         with st.expander("📄 Line-by-Line Transactions"):
             st.dataframe(
                 df.sort_values(by="Date"),
-                use_container_width=True
+                use_container_width=True,
+                column_config={
+                    "Purchase Price": st.column_config.NumberColumn("Purchase Price (€)", format="€%.2f"),
+                    "Current Price": st.column_config.NumberColumn("Current Price (€)", format="€%.2f"),
+                    "Investment": st.column_config.NumberColumn("Investment (€)", format="€%.2f"),
+                    "Market Value": st.column_config.NumberColumn("Market Value (€)", format="€%.2f"),
+                    "Unrealized Gain (€)": st.column_config.NumberColumn("Unrealized Gain (€)", format="€%.2f"),
+                    "Unrealized Gain (%)": st.column_config.NumberColumn("Unrealized Gain (%)", format="%.2f%%")
+                }
             )
 
         # 2. Stock Summary Table
@@ -71,7 +89,16 @@ if uploaded_file:
         summary["Unrealized Gain (%)"] = (summary["Unrealized Gain (€)"] / summary["Investment"]) * 100
 
         with st.expander("📌 Compiled Stock Summary"):
-            st.dataframe(summary, use_container_width=True)
+            st.dataframe(
+                summary,
+                use_container_width=True,
+                column_config={
+                    "Investment": st.column_config.NumberColumn("Investment (€)", format="€%.2f"),
+                    "Market Value": st.column_config.NumberColumn("Market Value (€)", format="€%.2f"),
+                    "Unrealized Gain (€)": st.column_config.NumberColumn("Unrealized Gain (€)", format="€%.2f"),
+                    "Unrealized Gain (%)": st.column_config.NumberColumn("Unrealized Gain (%)", format="%.2f%%")
+                }
+            )
 
         # 3. Annual Performance Summary
         annual = df.groupby("Year").agg({
@@ -82,7 +109,19 @@ if uploaded_file:
         annual["Unrealized Gain (%)"] = (annual["Unrealized Gain (€)"] / annual["Investment"]) * 100
 
         with st.expander("📅 Annual Unrealized Performance Summary", expanded=True):
-            st.dataframe(annual, use_container_width=True)
+            st.dataframe(
+                annual.rename(columns={
+                    "Investment": "Investment (€)",
+                    "Market Value": "Market Value (€)"
+                }),
+                use_container_width=True,
+                column_config={
+                    "Investment (€)": st.column_config.NumberColumn("Investment (€)", format="€%.2f"),
+                    "Market Value (€)": st.column_config.NumberColumn("Market Value (€)", format="€%.2f"),
+                    "Unrealized Gain (€)": st.column_config.NumberColumn("Unrealized Gain (€)", format="€%.2f"),
+                    "Unrealized Gain (%)": st.column_config.NumberColumn("Unrealized Gain (%)", format="%.2f%%")
+                }
+            )
 
         # 4. TradingView Historical Data Metrics
         with st.expander("📊 Portfolio Metrics via TradingView Historical Data", expanded=False):
