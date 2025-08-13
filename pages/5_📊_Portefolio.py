@@ -9,6 +9,27 @@ st.title("📊 Portfolio Analysis & AI Suggestions")
 
 uploaded_file = st.file_uploader("📁 Upload Portfolio CSV", type=["csv"])
 
+def map_ticker_to_tv(symbol: str):
+    """
+    Map a ticker symbol to TradingView exchange and screener.
+    Returns (exchange, screener) or (None, None) if unknown.
+    """
+    symbol = symbol.upper()
+    
+    # Europe suffixes
+    if symbol.endswith(".DE"):
+        return "XETRA", "europe"
+    elif symbol.endswith(".G"):   # GETTEX tickers
+        return "GETTEX", "europe"
+    # US tickers
+    elif symbol.isalpha():
+        return "NASDAQ", "america"
+    
+    # Add more exchange rules as needed
+    else:
+        return None, None
+
+
 if uploaded_file:
     df = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=True, on_bad_lines='skip')
     df.columns = [col.strip() for col in df.columns]
@@ -156,8 +177,8 @@ if uploaded_file:
                     # Adjust exchange as needed per ticker, here using NASDAQ/US as default
                     handler = TA_Handler(
                         symbol=t,
-                        screener="america",  # adjust to "europe" if needed
-                        exchange="NASDAQ",   # change per stock/exchange
+                        screener="europe",  # adjust to "europe" if needed
+                        exchange="GETTEX",   # change per stock/exchange
                         interval=Interval.INTERVAL_1_DAY
                     )
                     analysis = handler.get_analysis()
