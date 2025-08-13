@@ -4,21 +4,43 @@ from datetime import datetime
 import numpy as np
 from tradingview_ta import TA_Handler, Interval
 import requests
+import yfinance as yf
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")
 st.title("📊 Portfolio Analysis & AI Suggestions")
 
 uploaded_file = st.file_uploader("📁 Upload Portfolio CSV", type=["csv"])
 
+# ===== Exchange detection =====
+exchange_map = {
+    'gettex': ('GETTEX', 'europe'),
+    'xetra': ('XETR', 'europe'),
+    'nasdaq': ('NASDAQ', 'america'),
+    'nyse': ('NYSE', 'america'),
+    'ams': ('EURONEXT', 'europe'),
+    'par': ('EURONEXT', 'europe'),
+}
+
 def detect_exchange(symbol):
-    """Try GETTEX, NASDAQ, NYSE in order and return the matching one."""
+    """Automatically detect TradingView exchange using yfinance, fallback to manual GETTEX/NASDAQ/NYSE check."""
+    try:
+        stock = yf.Ticker(symbol)
+        exch = stock.info.get('exchange') or stock.info.get('fullExchangeName')
+        if exch:
+            exch_lower = exch.lower()
+            for k, v in exchange_map.items():
+                if k in exch_lower:
+                    return v  # (exchange_code, screener)
+    except Exception:
+        pass  # ignore errors and try fallback
+
+    # Fallback manual check
     exchanges = [
         ("GETTEX", "europe"),
         ("NASDAQ", "america"),
         ("NYSE", "america")
     ]
     base_url = "https://www.tradingview.com/symbols/{exchange}-{symbol}/"
-
     for exchange, screener in exchanges:
         url = base_url.format(exchange=exchange, symbol=symbol.upper())
         resp = requests.get(url)
@@ -26,7 +48,7 @@ def detect_exchange(symbol):
             return exchange, screener
     return None, None
 
-
+# ===== Main logic =====
 if uploaded_file:
     df = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=True, on_bad_lines='skip')
     df.columns = [col.strip() for col in df.columns]
@@ -45,7 +67,6 @@ if uploaded_file:
         df["Unrealized Gain (%)"] = (df["Unrealized Gain (€)"] / df["Investment"]) * 100
         df["Year"] = df["Date"].dt.year
 
-        # Display the portfolio summary
         # 1. Transactions Table
         with st.expander("📄 Line-by-Line Transactions"):
             st.dataframe(
@@ -105,65 +126,7 @@ if uploaded_file:
                 }
             )
 
-        with st.expander("💡 AI Analysis & Forecast"):
-            try:
-                MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
-
-                if st.button("🤖 Run Mistral AI Portfolio Analysis"):
-                    with st.spinner("Sending portfolio summary to Mistral AI..."):
-                        user_prompt = f"""
-        You are a financial advisor analyzing a portfolio. Use Modern Portfolio Theory and sound portfolio management principles.
-
-        Here is the aggregated portfolio summary:
-
-        {summary.to_string(index=False)}
-
-        And here is the annual performance breakdown:
-
-        {annual.to_string(index=False)}
-
-        Please perform the following:
-        1. Identify overexposed sectors or individual stocks.
-        2. Highlight diversification gaps.
-        3. Suggest rebalancing strategies.
-        4. Recommend ETF or stock alternatives to reduce risk and increase stability.
-        5. Provide a short-term (1 year) and medium-term (3–5 years) forecast based on current asset mix.
-        6. Mention any red flags like concentrated risk, declining sectors, or underperformers.
-
-        Be concise, professional, and use bullet points.
-        """
-
-                        import requests
-
-                        headers = {
-                            "Authorization": f"Bearer {MISTRAL_API_KEY}",
-                            "Content-Type": "application/json"
-                        }
-
-                        payload = {
-                            "model": "mistral-small",  # or mistral-medium / mistral-large
-                            "messages": [
-                                {"role": "system", "content": "You are a helpful financial analyst AI."},
-                                {"role": "user", "content": user_prompt}
-                            ],
-                            "temperature": 0.7
-                        }
-
-                        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload)
-
-                        if response.status_code == 200:
-                            ai_response = response.json()["choices"][0]["message"]["content"]
-                        else:
-                            ai_response = f"⚠️ API Error: {response.status_code} - {response.text}"
-
-                        st.success("AI analysis complete.")
-                        st.markdown(f"**AI Suggestion:**\n\n{ai_response}")
-
-            except Exception as e:
-                st.warning("⚠️ Mistral API key not found in Streamlit secrets or another error occurred.")
-                st.exception(e)
-
-        # 4. Trading View Prices
+        # 4. TradingView Historical Data Metrics
         with st.expander("📊 Portfolio Metrics via TradingView Historical Data", expanded=False):
             try:
                 st.info("Fetching historical prices from TradingView (may take a few seconds)...")
@@ -197,7 +160,7 @@ if uploaded_file:
                         if sym in price_history:
                             portfolio_value += price_history[sym] * qty
 
-                    # Calculate metrics (note: with one data point, metrics are placeholders)
+                    # Metrics placeholders
                     port_return = (portfolio_value.iloc[-1] - portfolio_value.iloc[0]) / portfolio_value.iloc[0]
                     port_cagr = port_return
                     port_vol = np.nan
