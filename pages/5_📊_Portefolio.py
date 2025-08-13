@@ -36,11 +36,11 @@ if uploaded_file:
         def _safe_download_adjclose(ticker: str, start):
             try:
                 df_y = yf.download(ticker, start=start, progress=False, auto_adjust=False)
-                if df_y is None or df_y.empty or "Adj Close" not in df_y:
-                    return pd.Series(dtype=float)
-                s = df_y["Adj Close"].dropna()
-                s.index = pd.to_datetime(s.index)
-                return s
+                if isinstance(df_y, pd.DataFrame) and "Adj Close" in df_y:
+                    s = df_y["Adj Close"].dropna()
+                    s.index = pd.to_datetime(s.index)
+                    return s
+                return pd.Series(dtype=float)
             except Exception:
                 return pd.Series(dtype=float)
 
@@ -130,7 +130,7 @@ if uploaded_file:
                 qty = float(row["Quantity"]) if pd.notna(row["Quantity"]) else 0.0
                 lot_start = pd.to_datetime(row["Date"])
 
-                if not yahoo_sym or qty == 0:
+                if yahoo_sym is None or pd.isna(yahoo_sym) or qty == 0:
                     continue
 
                 hist = _safe_download_adjclose(yahoo_sym, lot_start)
