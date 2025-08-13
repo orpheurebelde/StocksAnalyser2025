@@ -31,103 +31,157 @@ if uploaded_file:
     # 📈 Fetch historical data for portfolio & benchmarks
         st.subheader("📈 Portfolio vs S&P 500 (VUAA) & Nasdaq-100 (EQQQ)")
 
-        import yfinance as yf
+        # Cache downloads to speed up Streamlit reruns
+        @st.cache_data(ttl=3600, show_spinner=False)
+        def _safe_download_adjclose(ticker: str, start):
+            try:
+                df_y = yf.download(ticker, start=start, progress=False, auto_adjust=False)
+                if df_y is None or df_y.empty or "Adj Close" not in df_y:
+                    return pd.Series(dtype=float)
+                s = df_y["Adj Close"].dropna()
+                s.index = pd.to_datetime(s.index)
+                return s
+            except Exception:
+                return pd.Series(dtype=float)
 
-        def fetch_symbol_with_auto_suffix(base_symbol, start_date):
-            """
-            Try fetching historical data for a symbol with possible Yahoo suffixes.
-            Returns the correct symbol string if found, otherwise None.
-            """
-            suffixes = ["", ".DE", ".AS"]
-            for suffix in suffixes:
-                try:
-                    hist = yf.download(base_symbol + suffix, start=start_date, progress=False)["Adj Close"]
-                    if not hist.empty:
-                        return base_symbol + suffix
-                except Exception:
-                    pass
-            return None  # No valid symbol found
+        @st.cache_data(ttl=3600, show_spinner=False)
+        def detect_yahoo_symbol(base_symbol: str, start):
+            # Try raw first, then common European/US suffixes
+            suffixes = [
+                "", ".DE", ".F", ".BE", ".AS", ".PA", ".BR", ".MI", ".SW", ".VI",
+                ".ST", ".HE", ".CO", ".OL", ".LS", ".MC", ".L", ".TO", ".IE"
+            ]
+            for suf in suffixes:
+                t = base_symbol + suf
+                s = _safe_download_adjclose(t, start)
+                if not s.empty:
+                    return t
+            return None  # not found
+
+        def _normalize_to_100(series: pd.Series) -> pd.Series:
+            s = series.dropna()
+            if len(s) == 0:
+                return s
+            base = s.iloc[0]
+            # If base is 0 for some reason, drop leading zeros
+            if base == 0:
+                s = s[s != 0]
+                if len(s) == 0:
+                    return s
+                base = s.iloc[0]
+            return (s / base) * 100
+
+        def perf_metrics_from_prices(price_series: pd.Series, risk_free_annual: float = 0.0):
+            s = price_series.dropna()
+            if len(s) < 2:
+                return np.nan, np.nan, np.nan, np.nan, np.nan
+            rets = s.pct_change().dropna()
+            # CAGR using trading-day count
+            cagr = (s.iloc[-1] / s.iloc[0]) ** (252 / len(s)) - 1
+            vol = rets.std() * np.sqrt(252)
+            downside = rets[rets < 0].std() * np.sqrt(252)
+            sharpe = np.nan if vol == 0 else (cagr - risk_free_annual) / vol
+            sortino = np.nan if downside == 0 else (cagr - risk_free_annual) / downside
+            max_dd = ((s / s.cummax()) - 1).min()
+            return cagr, vol, sharpe, sortino, max_dd
+
 
 
         try:
-            # Convert purchase dates to dictionary {Symbol: purchase_date}
-            purchase_dates = df.groupby("Symbol")["Date"].min().to_dict()
+            # —— 0) Basic sanity check
+            required_cols = {"Date", "Symbol", "Quantity"}
+            if not required_cols.issubset(df.columns):
+                st.error(f"CSV must include columns: {required_cols}")
+                st.stop()
 
-            # Download benchmark data (no suffix needed for indices)
-            benchmarks = {
-                "S&P 500 (^GSPC)": "^GSPC",
-                "Nasdaq-100 (^NDX)": "^NDX"
-            }
-            bench_data = {}
-            for name, ticker in benchmarks.items():
-                bench_data[name] = yf.download(ticker, start=min(purchase_dates.values()), progress=False)["Adj Close"]
+            # Ensure datetime & sorting
+            df["Date"] = pd.to_datetime(df["Date"])
+            df = df.sort_values("Date")
 
-            # Calculate portfolio value history
-            all_dates = None
-            port_history = None
+            # —— 1) Detect Yahoo symbols (per unique base symbol)
+            base_start = df["Date"].min()
+            unique_symbols = sorted(df["Symbol"].astype(str).str.strip().str.upper().unique())
+            symbol_map = {sym: detect_yahoo_symbol(sym, base_start) for sym in unique_symbols}
 
-            for symbol, start_date in purchase_dates.items():
-                # Auto-detect Yahoo symbol
-                yahoo_symbol = fetch_symbol_with_auto_suffix(symbol, start_date)
-                if not yahoo_symbol:
-                    st.warning(f"⚠️ Could not fetch data for {symbol}, skipping...")
+            map_df = pd.DataFrame(
+                [{"CSV Symbol": k, "Yahoo Symbol": v if v else "❌ not found"} for k, v in symbol_map.items()]
+            )
+            with st.expander("🔍 Symbol mapping (CSV → Yahoo)"):
+                st.dataframe(map_df, use_container_width=True)
+
+            # —— 2) Build portfolio value from each lot (each row)
+            port_history = pd.Series(dtype=float)
+
+            for _, row in df.iterrows():
+                base_sym = str(row["Symbol"]).strip().upper()
+                yahoo_sym = symbol_map.get(base_sym)
+                qty = float(row["Quantity"]) if pd.notna(row["Quantity"]) else 0.0
+                lot_start = pd.to_datetime(row["Date"])
+
+                if not yahoo_sym or qty == 0:
                     continue
 
-                # Get historical adjusted close prices
-                hist = yf.download(yahoo_symbol, start=start_date, progress=False)["Adj Close"]
+                hist = _safe_download_adjclose(yahoo_sym, lot_start)
+                if hist.empty:
+                    # Shouldn't happen if detect_yahoo_symbol succeeded, but guard anyway
+                    st.warning(f"No data for lot: {base_sym} ({yahoo_sym}) from {lot_start.date()}")
+                    continue
 
-                # Multiply by total quantity held
-                qty = df.loc[df["Symbol"] == symbol, "Quantity"].sum()
-                value = hist * qty
+                lot_value = hist * qty
+                port_history = lot_value if port_history.empty else port_history.add(lot_value, fill_value=0.0)
 
-                # Add to portfolio total value
-                if port_history is None:
-                    port_history = value
-                else:
-                    port_history = port_history.add(value, fill_value=0)
+            if port_history.empty or len(port_history) < 2:
+                st.error("No usable price data for the portfolio (after mapping). Check tickers/dates.")
+                st.stop()
 
-                # Track all unique dates
-                if all_dates is None:
-                    all_dates = hist.index
-                else:
-                    all_dates = all_dates.union(hist.index)
+            # —— 3) Benchmarks (indices: no suffix needed)
+            benchmarks = {
+                "S&P 500 (^GSPC)": "^GSPC",
+                "Nasdaq-100 (^NDX)": "^NDX",
+            }
+            bench_data = {}
+            bench_warnings = []
 
-            # Align portfolio history with all dates and forward-fill missing values
-            port_history = port_history.reindex(all_dates).fillna(method="ffill")
+            bench_start = port_history.index.min()  # align benchmark start to earliest portfolio date
+            for name, ticker in benchmarks.items():
+                s = _safe_download_adjclose(ticker, bench_start)
+                if len(s) < 2:
+                    bench_warnings.append(name)
+                    continue
+                # Align to portfolio calendar and ffill gaps (holidays/mismatched calendars)
+                s = s.reindex(port_history.index).ffill().dropna()
+                bench_data[name] = s
 
-        except Exception as e:
-            st.error(f"Error fetching performance data: {e}")
+            for name in bench_warnings:
+                st.warning(f"Benchmark had no usable data: {name}")
 
-            # Normalize for comparison (start = 100)
-            port_norm = port_history / port_history.iloc[0] * 100
-            bench_norm = {name: data / data.iloc[0] * 100 for name, data in bench_data.items()}
+            # —— 4) Normalize & plot
+            port_norm = _normalize_to_100(port_history)
 
-            # 📊 Plot
+            import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(10, 5))
             ax.plot(port_norm.index, port_norm, label="Portfolio", linewidth=2)
-            for name, series in bench_norm.items():
-                ax.plot(series.index, series, label=name, alpha=0.8)
+            for name, series in bench_data.items():
+                ax.plot(series.index, _normalize_to_100(series), label=name)
+            ax.set_title("Portfolio vs Benchmarks (price-only, start = 100)")
+            ax.set_ylabel("Indexed Value")
             ax.legend()
-            ax.set_title("Portfolio vs Benchmarks (Total Return, EUR)")
-            ax.set_ylabel("Value (Start = 100)")
             st.pyplot(fig)
 
-            # 📏 Performance metrics
-            def perf_metrics(series):
-                returns = series.pct_change().dropna()
-                ann_return = (series.iloc[-1] / series.iloc[0]) ** (252/len(series)) - 1
-                ann_vol = returns.std() * np.sqrt(252)
-                sharpe = ann_return / ann_vol if ann_vol != 0 else np.nan
-                max_dd = ((series / series.cummax()) - 1).min()
-                return ann_return, ann_vol, sharpe, max_dd
-
+            # —— 5) Metrics table
+            rf = 0.0  # set to e.g. 0.033 for 3.3% annual risk-free if you prefer
             metrics = {}
-            metrics["Portfolio"] = perf_metrics(port_history)
-            for name, series in bench_data.items():
-                metrics[name] = perf_metrics(series)
+            metrics["Portfolio"] = perf_metrics_from_prices(port_history, risk_free_annual=rf)
+            for name, s in bench_data.items():
+                metrics[name] = perf_metrics_from_prices(s, risk_free_annual=rf)
 
-            st.write("📊 **Performance Metrics**")
-            st.dataframe(pd.DataFrame(metrics, index=["Annualized Return", "Annualized Volatility", "Sharpe Ratio", "Max Drawdown (%)"]).T)
+            metrics_df = (
+                pd.DataFrame(metrics, index=["Annualized Return", "Annualized Volatility",
+                                            "Sharpe Ratio", "Sortino Ratio", "Max Drawdown"])
+                .T
+            )
+            with st.expander("📊 Performance Metrics", expanded=True):
+                st.dataframe(metrics_df, use_container_width=True)
 
         except Exception as e:
             st.error(f"⚠️ Error fetching performance data: {e}")
