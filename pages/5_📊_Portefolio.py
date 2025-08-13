@@ -1,6 +1,9 @@
 import streamlit as st 
 import pandas as pd
 from datetime import datetime
+import yfinance as yf
+import matplotlib.pyplot as plt
+import numpy as np
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")
 st.title("📊 Portfolio Analysis & AI Suggestions")
@@ -25,6 +28,75 @@ if uploaded_file:
         df["Unrealized Gain (%)"] = (df["Unrealized Gain (€)"] / df["Investment"]) * 100
         df["Year"] = df["Date"].dt.year
 
+    # 📈 Fetch historical data for portfolio & benchmarks
+        st.subheader("📈 Portfolio vs S&P 500 (VUAA) & Nasdaq-100 (EQQQ)")
+
+        try:
+            # Convert purchase dates to dictionary {Symbol: purchase_date}
+            purchase_dates = df.groupby("Symbol")["Date"].min().to_dict()
+
+            # Download benchmark data
+            benchmarks = {
+                "S&P 500 EUR (VUAA)": "VUAA.AS",   # Vanguard S&P 500 UCITS ETF EUR
+                "Nasdaq-100 EUR (EQQQ)": "EQQQ.AS" # Invesco Nasdaq-100 UCITS ETF EUR
+            }
+            bench_data = {}
+            for name, ticker in benchmarks.items():
+                bench_data[name] = yf.download(ticker, start=min(purchase_dates.values()), progress=False)["Adj Close"]
+
+            # Calculate portfolio value history
+            all_dates = None
+            port_history = None
+            for symbol, start_date in purchase_dates.items():
+                hist = yf.download(symbol + ".AS", start=start_date, progress=False)["Adj Close"]  # Adjust ticker suffix for exchange
+                qty = df.loc[df["Symbol"] == symbol, "Quantity"].sum()
+                value = hist * qty
+                if port_history is None:
+                    port_history = value
+                else:
+                    port_history = port_history.add(value, fill_value=0)
+                if all_dates is None:
+                    all_dates = hist.index
+                else:
+                    all_dates = all_dates.union(hist.index)
+
+            port_history = port_history.reindex(all_dates).fillna(method="ffill")
+
+            # Normalize for comparison (start = 100)
+            port_norm = port_history / port_history.iloc[0] * 100
+            bench_norm = {name: data / data.iloc[0] * 100 for name, data in bench_data.items()}
+
+            # 📊 Plot
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(port_norm.index, port_norm, label="Portfolio", linewidth=2)
+            for name, series in bench_norm.items():
+                ax.plot(series.index, series, label=name, alpha=0.8)
+            ax.legend()
+            ax.set_title("Portfolio vs Benchmarks (Total Return, EUR)")
+            ax.set_ylabel("Value (Start = 100)")
+            st.pyplot(fig)
+
+            # 📏 Performance metrics
+            def perf_metrics(series):
+                returns = series.pct_change().dropna()
+                ann_return = (series.iloc[-1] / series.iloc[0]) ** (252/len(series)) - 1
+                ann_vol = returns.std() * np.sqrt(252)
+                sharpe = ann_return / ann_vol if ann_vol != 0 else np.nan
+                max_dd = ((series / series.cummax()) - 1).min()
+                return ann_return, ann_vol, sharpe, max_dd
+
+            metrics = {}
+            metrics["Portfolio"] = perf_metrics(port_history)
+            for name, series in bench_data.items():
+                metrics[name] = perf_metrics(series)
+
+            st.write("📊 **Performance Metrics**")
+            st.dataframe(pd.DataFrame(metrics, index=["Annualized Return", "Annualized Volatility", "Sharpe Ratio", "Max Drawdown (%)"]).T)
+
+        except Exception as e:
+            st.error(f"⚠️ Error fetching performance data: {e}")
+    
+        # Display the portfolio summary
         # 1. Transactions Table
         with st.expander("📄 Line-by-Line Transactions"):
             st.dataframe(
