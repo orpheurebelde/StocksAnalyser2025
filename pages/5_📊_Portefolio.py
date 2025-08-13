@@ -3,31 +3,28 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 from tradingview_ta import TA_Handler, Interval
+import requests
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")
 st.title("📊 Portfolio Analysis & AI Suggestions")
 
 uploaded_file = st.file_uploader("📁 Upload Portfolio CSV", type=["csv"])
 
-def map_ticker_to_tv(symbol: str):
-    """
-    Map a ticker symbol to TradingView exchange and screener.
-    Returns (exchange, screener) or (None, None) if unknown.
-    """
-    symbol = symbol.upper()
-    
-    # Europe suffixes
-    if symbol.endswith(".DE"):
-        return "XETRA", "europe"
-    elif symbol.endswith(".G"):   # GETTEX tickers
-        return "GETTEX", "europe"
-    # US tickers
-    elif symbol.isalpha():
-        return "NASDAQ", "america"
-    
-    # Add more exchange rules as needed
-    else:
-        return None, None
+def detect_exchange(symbol):
+    """Try GETTEX, NASDAQ, NYSE in order and return the matching one."""
+    exchanges = [
+        ("GETTEX", "europe"),
+        ("NASDAQ", "america"),
+        ("NYSE", "america")
+    ]
+    base_url = "https://www.tradingview.com/symbols/{exchange}-{symbol}/"
+
+    for exchange, screener in exchanges:
+        url = base_url.format(exchange=exchange, symbol=symbol.upper())
+        resp = requests.get(url)
+        if resp.status_code == 200 and "Page not found" not in resp.text:
+            return exchange, screener
+    return None, None
 
 
 if uploaded_file:
@@ -174,42 +171,47 @@ if uploaded_file:
                 price_history = {}
 
                 for t in tickers:
-                    # Adjust exchange as needed per ticker, here using NASDAQ/US as default
+                    exchange, screener = detect_exchange(t)
+                    if not exchange:
+                        st.warning(f"Symbol {t} not found on GETTEX, NASDAQ, or NYSE.")
+                        continue
+
                     handler = TA_Handler(
                         symbol=t,
-                        screener="europe",  # adjust to "europe" if needed
-                        exchange="GETTEX",   # change per stock/exchange
+                        screener=screener,
+                        exchange=exchange,
                         interval=Interval.INTERVAL_1_DAY
                     )
                     analysis = handler.get_analysis()
-                    
-                    # TradingView returns last close as 'close', but TA_Handler can also give historical candles
-                    # If full historical prices not available, we approximate with close
-                    current_price = analysis.indicators["close"]
-                    price_history[t] = pd.Series([current_price], index=[pd.Timestamp.today()])
+                    current_price = analysis.indicators.get("close", None)
 
-                # Build a simplified portfolio time series
-                portfolio_value = pd.Series(0, index=[pd.Timestamp.today()])
-                for _, row in df.iterrows():
-                    sym = row["Symbol"]
-                    qty = row["Quantity"]
-                    if sym in price_history:
-                        portfolio_value += price_history[sym] * qty
+                    if current_price:
+                        price_history[t] = pd.Series([current_price], index=[pd.Timestamp.today()])
 
-                # Calculate simple returns and metrics
-                # Note: with only one data point, this is just illustrative
-                port_return = (portfolio_value.iloc[-1] - portfolio_value.iloc[0]) / portfolio_value.iloc[0]
-                port_cagr = port_return  # approximation
-                port_vol = np.nan         # cannot calculate with one point
-                port_sharpe = np.nan
-                port_dd = np.nan
+                # Build simplified portfolio time series
+                if price_history:
+                    portfolio_value = pd.Series(0, index=[pd.Timestamp.today()])
+                    for _, row in df.iterrows():
+                        sym = row["Symbol"]
+                        qty = row["Quantity"]
+                        if sym in price_history:
+                            portfolio_value += price_history[sym] * qty
 
-                metrics_df = pd.DataFrame({
-                    "Metric": ["Approx. Return", "CAGR", "Volatility", "Sharpe Ratio", "Max Drawdown"],
-                    "Value": [port_return, port_cagr, port_vol, port_sharpe, port_dd]
-                })
+                    # Calculate metrics (note: with one data point, metrics are placeholders)
+                    port_return = (portfolio_value.iloc[-1] - portfolio_value.iloc[0]) / portfolio_value.iloc[0]
+                    port_cagr = port_return
+                    port_vol = np.nan
+                    port_sharpe = np.nan
+                    port_dd = np.nan
 
-                st.dataframe(metrics_df, use_container_width=True)
+                    metrics_df = pd.DataFrame({
+                        "Metric": ["Approx. Return", "CAGR", "Volatility", "Sharpe Ratio", "Max Drawdown"],
+                        "Value": [port_return, port_cagr, port_vol, port_sharpe, port_dd]
+                    })
+
+                    st.dataframe(metrics_df, use_container_width=True)
+                else:
+                    st.warning("No price data retrieved from TradingView.")
 
             except Exception as e:
                 st.error(f"⚠️ Error fetching TradingView data: {e}")
