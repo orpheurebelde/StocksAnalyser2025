@@ -597,7 +597,7 @@ if selected_display != "Select a stock...":
                     summary_of_news = "N/A"
 
                     # Prompt
-                    prompt = f"""
+                    analysis_prompt = f"""
                         You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
 
                         - Company: {company_name}
@@ -633,7 +633,7 @@ if selected_display != "Select a stock...":
 
                     if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
                         with st.spinner("Calling Mistral for analysis..."):
-                            raw = get_ai_analysis(prompt, MISTRAL_API_KEY)
+                            raw = get_ai_analysis(analysis_prompt, MISTRAL_API_KEY)
 
                         if raw.startswith("ERROR:"):
                             st.error("Failed to generate AI analysis.")
@@ -690,7 +690,7 @@ if selected_display != "Select a stock...":
                         # Sanity check: rarely are shares outstanding >100B
                         print(f"Warning: unusually large shares outstanding for {ticker}: {shares_outstanding}")
 
-                        prompt_dcf = f"""
+                        dcf_prompt = f"""
                         You are a professional equity analyst.Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for NVIDIA (NVDA), generate a realistic 5-year DCF valuation. Use the following rules:
 
                         - Company: {company_name}
@@ -725,7 +725,7 @@ if selected_display != "Select a stock...":
 
                     if st.button("🧠 Generate AI-Powered DCF Valuation"):
                         with st.spinner("Calling Mistral for DCF valuation..."):
-                            raw_dcf = get_ai_analysis(prompt_dcf, MISTRAL_API_KEY)
+                            raw_dcf = get_ai_analysis(dcf_prompt, MISTRAL_API_KEY)
 
                         if raw_dcf.startswith("ERROR:"):
                             st.error("Failed to generate AI DCF valuation.")
