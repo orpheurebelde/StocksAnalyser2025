@@ -592,8 +592,12 @@ if selected_display != "Select a stock...":
                     net_income = format_number(info.get("netIncomeToCommon", "N/A"))
                     eps_current = info.get("trailingEps", "N/A")
                     fcf = format_number(info.get("freeCashflow", "N/A"))
-                    dividend_yield_val = info.get("dividendYield", None)
-                    dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
+                    dividend_yield = info.get("dividendYield")
+                    if dividend_yield is not None:
+                        dividend_yield_percent = dividend_yield * 100 if dividend_yield < 0.01 else dividend_yield
+                        dividend_yield_str = f"{dividend_yield_percent:.2f}%"
+                    else:
+                        dividend_yield_str = "N/A"
                     shares_outstanding = info.get("sharesOutstanding", "N/A")
                     summary_of_news = "N/A"
 
