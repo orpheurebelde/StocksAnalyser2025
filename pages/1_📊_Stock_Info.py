@@ -575,15 +575,17 @@ if selected_display != "Select a stock...":
                     st.warning("No stock selected.")
 
             # AI Analysis Section
+            # --- Expander 1: AI Analysis & Forecast ---
             with st.expander("💡 AI Analysis & Forecast"):
                 if ticker:
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
 
-                    # Structured info
+                    # Extract basic info
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = info.get("sector", "N/A")
                     market_cap = format_number(info.get("marketCap", "N/A"))
+                    current_price = info.get("currentPrice", "N/A")
                     trail_pe = info.get("trailingPE", "N/A")
                     forward_pe = info.get("forwardPE", "N/A")
                     revenue = format_number(info.get("totalRevenue", "N/A"))
@@ -593,45 +595,39 @@ if selected_display != "Select a stock...":
                     dividend_yield_val = info.get("dividendYield", None)
                     dividend_yield = f"{dividend_yield_val * 100:.2f}%" if dividend_yield_val not in [None, "N/A"] else "N/A"
                     shares_outstanding = info.get("sharesOutstanding", "N/A")
-                    current_price = info.get("currentPrice", "N/A")
                     summary_of_news = "N/A"
 
-                    # Prompt
+                    # Independent prompt for Analysis
                     analysis_prompt = f"""
-                        You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
+                    You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
 
-                        - Company: {company_name}
-                        - Sector: {sector}
-                        - Market Cap: {market_cap}
-                        - Current Price: ${current_price}
-                        - P/E (TTM): {trail_pe}
-                        - Forward P/E: {forward_pe}
-                        - Revenue: {revenue}
-                        - Net Income: {net_income}
-                        - EPS: {eps_current}
-                        - Free Cash Flow: {fcf}
-                        - Dividend Yield: {dividend_yield}
-                        - Shares Outstanding: {shares_outstanding}
-                        - News: {summary_of_news}
+                    - Company: {company_name}
+                    - Sector: {sector}
+                    - Market Cap: {market_cap}
+                    - Current Price: ${current_price}
+                    - P/E (TTM): {trail_pe}
+                    - Forward P/E: {forward_pe}
+                    - Revenue: {revenue}
+                    - Net Income: {net_income}
+                    - EPS: {eps_current}
+                    - Free Cash Flow: {fcf}
+                    - Dividend Yield: {dividend_yield}
+                    - Shares Outstanding: {shares_outstanding}
+                    - News: {summary_of_news}
 
-                        Structure the analysis:
-                        1. **Executive Summary** - Max 3 sentences.
-                        2. **Valuation** - Use P/E & Fwd P/E to evaluate price fairness.
-                        3. **Financial Health** - Net Income, FCF, Cash vs Debt.
-                        4. **Growth Potential** - EPS, Sector outlook, revenue.
-                        5. **Risks** - Competitive, macro, financial, etc.
-                        6. **DCF Valuation** - Provide Base, Bull, Bear share price:
-                        - Base Case: $X.XX
-                        - Bull Case: $X.XX
-                        - Bear Case: $X.XX
-                        7. **Fair Value vs Current Price**
-                        8. **12-Month Target & Recommendation** - Buy, Hold or Sell.
-                        9. Provide actual Support and Resistance levels based on technical analysis.
+                    Structure the analysis:
+                    1. **Executive Summary**
+                    2. **Valuation**
+                    3. **Financial Health**
+                    4. **Growth Potential**
+                    5. **Risks**
+                    6. **DCF Valuation** - Base, Bull, Bear
+                    7. **Fair Value vs Current Price**
+                    8. **12-Month Target & Recommendation**
+                    9. **Support & Resistance**
+                    """
 
-                        ❗DO NOT invent data. Stick only to the provided inputs.
-                        """
-
-                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}"):
+                    if st.button(f"🧠 Generate AI Analysis for {ticker.upper()}", key="analysis_btn"):
                         with st.spinner("Calling Mistral for analysis..."):
                             raw = get_ai_analysis(analysis_prompt, MISTRAL_API_KEY)
 
@@ -647,83 +643,75 @@ if selected_display != "Select a stock...":
                 else:
                     st.info("Please select a ticker to view AI analysis.")
 
+
+            # --- Expander 2: AI DCF Valuation ---
             with st.expander("💰 AI DCF Valuation"):
                 if ticker:
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
 
+                    # Extract values safely
                     def clean_value(value, default="N/A"):
-                        """Ensure we return clean numbers or default for missing/bad data."""
                         return value if value not in [None, "N/A", float("nan")] else default
 
-                    # Extract raw values
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = clean_value(info.get("sector"))
                     market_cap = clean_value(info.get("marketCap"))
-                    trailing_pe = clean_value(info.get("trailingPE"))
+                    current_price = clean_value(info.get("currentPrice"))
+                    trail_pe = clean_value(info.get("trailingPE"))
                     forward_pe = clean_value(info.get("forwardPE"))
                     revenue = clean_value(info.get("totalRevenue"))
                     net_income = clean_value(info.get("netIncomeToCommon"))
                     eps_current = clean_value(info.get("trailingEps"))
                     fcf = clean_value(info.get("freeCashflow"))
                     shares_outstanding = clean_value(info.get("sharesOutstanding"))
-                    current_price = clean_value(info.get("currentPrice"))
                     debt_data = info.get("totalDebt", 0.0)
                     cash_data = info.get("totalCash", 0.0)
                     eps_growth = info.get("earningsQuarterlyGrowth", 0.0)
-                    dividend_yield = info.get("dividendYield")
 
+                    dividend_yield = info.get("dividendYield")
                     if dividend_yield is not None:
-                        # If it's a small number, it's likely a decimal (e.g., 0.0041 → 0.41%)
-                        if dividend_yield < 0.01:
-                            dividend_yield_percent = dividend_yield * 100
-                        else:
-                            dividend_yield_percent = dividend_yield
-                            dividend_yield_str = f"{dividend_yield_percent:.2f}%"
+                        dividend_yield_percent = dividend_yield * 100 if dividend_yield < 0.01 else dividend_yield
+                        dividend_yield_str = f"{dividend_yield_percent:.2f}%"
                     else:
                         dividend_yield_str = "N/A"
-                    
-                    # Validate shares outstanding
-                    # Many stocks like NVIDIA, Apple, etc., report this correctly
-                    # No need to divide arbitrarily unless specific tickers are misreporting.
+
+                    # Independent prompt for DCF
+                    dcf_prompt = f"""
+                    You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for {company_name} ({ticker.upper()}), generate a realistic 5-year DCF valuation.
+
+                    - Company: {company_name}
+                    - Sector: {sector}
+                    - Market Cap: {market_cap}
+                    - Current Price: ${current_price}
+                    - P/E (TTM): {trail_pe}
+                    - Forward P/E: {forward_pe}
+                    - Revenue: {revenue}
+                    - Net Income: {net_income}
+                    - EPS: {eps_current}
+                    - Free Cash Flow (TTM): {fcf}
+                    - Dividend Yield: {dividend_yield_str}
+                    - Shares Outstanding: {shares_outstanding}
+                    - Total Debt: {debt_data}
+                    - Total Cash: {cash_data}
+                    - EPS Growth: {eps_growth}
+
+                    1. Estimate base, bull, and bear revenue growth rates.
+                    2. Assume a discount rate between 8% and 12%.
+                    3. Run a 5-year DCF using Free Cash Flow.
+                    4. Output valuation estimates per share.
+                    5. Compare to current price and give upside/downside.
+                    6. Final fair value and recommendation (Buy, Hold, Sell).
+                    7. Provide Support and Resistance levels.
+
+                    ❗Emphasize realism and forward-looking assumptions.
+                    """
+
+                    # Warn if shares outstanding looks off
                     if isinstance(shares_outstanding, (float, int)) and shares_outstanding > 100_000_000_000:
-                        # Sanity check: rarely are shares outstanding >100B
-                        print(f"Warning: unusually large shares outstanding for {ticker}: {shares_outstanding}")
+                        st.warning(f"Unusually large shares outstanding reported for {ticker}: {shares_outstanding}")
 
-                        dcf_prompt = f"""
-                        You are a professional equity analyst.Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for NVIDIA (NVDA), generate a realistic 5-year DCF valuation. Use the following rules:
-
-                        - Company: {company_name}
-                        - Sector: {sector}
-                        - Market Cap: {market_cap}
-                        - Current Price: ${current_price}
-                        - P/E (TTM): {trail_pe}
-                        - Forward P/E: {forward_pe}
-                        - Revenue: {revenue}
-                        - Net Income: {net_income}
-                        - EPS: {eps_current}
-                        - Free Cash Flow (TTM): {fcf}
-                        - Dividend Yield: {dividend_yield_str}
-                        - Shares Outstanding: {shares_outstanding}
-                        - Total Debt: {debt_data}
-                        - Total Cash: {cash_data}
-                        - EPS Growth: {eps_growth}
-
-                        1. Estimate reasonable base, bull, and bear revenue growth rates based on sector, market cap, and fundamentals extracted from Yahoo Finance above.
-                        2. Assume a discount rate between 8% and 12% depending on risk.
-                        3. Run a 5-year DCF model using Free Cash Flow.
-                        4. Output valuation estimates per share:
-                        - Base Case: $X.XX
-                        - Bull Case: $X.XX
-                        - Bear Case: $X.XX
-                        5. Compare to current price and estimate upside/downside.
-                        6. Give a final fair value and investment recommendation (Buy, Hold, Sell) using the financial metrics retrieved from Yahoo Finance.
-                        7. Provide actual Support and Resistance levels based on technical analysis.
-
-                        ❗Emphasize realism and forward-looking assumptions over backward averages. Do not hallucinate share count or discount rates. If data is missing, infer it cautiously.
-                        """
-
-                    if st.button("🧠 Generate AI-Powered DCF Valuation"):
+                    if st.button("🧠 Generate AI-Powered DCF Valuation", key="dcf_btn"):
                         with st.spinner("Calling Mistral for DCF valuation..."):
                             raw_dcf = get_ai_analysis(dcf_prompt, MISTRAL_API_KEY)
 
@@ -737,5 +725,3 @@ if selected_display != "Select a stock...":
                                 st.markdown(section.strip().replace('\n', '  \n'))
                 else:
                     st.warning("Please select a stock ticker.")
-        
-        
