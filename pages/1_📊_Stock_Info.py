@@ -626,6 +626,7 @@ if selected_display != "Select a stock...":
                         - Bear Case: $X.XX
                         7. **Fair Value vs Current Price**
                         8. **12-Month Target & Recommendation** - Buy, Hold or Sell.
+                        9. Provide actual Support and Resistance levels based on technical analysis.
 
                         ❗DO NOT invent data. Stick only to the provided inputs.
                         """
