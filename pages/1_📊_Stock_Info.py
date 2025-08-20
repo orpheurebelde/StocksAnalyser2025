@@ -717,6 +717,7 @@ if selected_display != "Select a stock...":
                         - Bear Case: $X.XX
                         5. Compare to current price and estimate upside/downside.
                         6. Give a final fair value and investment recommendation (Buy, Hold, Sell) using the financial metrics retrieved from Yahoo Finance.
+                        7. Provide actual Support and Resistance levels based on technical analysis.
 
                         ❗Emphasize realism and forward-looking assumptions over backward averages. Do not hallucinate share count or discount rates. If data is missing, infer it cautiously.
                         """
