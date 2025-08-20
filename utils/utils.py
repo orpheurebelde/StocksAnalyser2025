@@ -182,8 +182,6 @@ def get_ai_analysis(prompt, api_key):
     except Exception:
         return f"ERROR: {traceback.format_exc()}"
 
-
-
 def format_number(num):
     if isinstance(num, (int, float)):
         if num > 1e12:
