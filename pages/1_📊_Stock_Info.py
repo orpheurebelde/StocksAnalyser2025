@@ -706,7 +706,7 @@ if selected_display != "Select a stock...":
                     4. Output valuation estimates per share.
                     5. Compare to current price and give upside/downside.
                     6. Final fair value and recommendation (Buy, Hold, Sell).
-                    7. Provide the best Support and Resistance levels based on the technical analysis.
+                    7. Provide the most accurate Weekly Support and Resistance levels based on the technical analysis.
 
                     ❗Emphasize realism and forward-looking assumptions.
                     """
