@@ -4,7 +4,6 @@ from utils.utils import interpret_dilution_extended, estimate_past_shares_outsta
 import re
 import time
 from datetime import datetime
-import json
 
 # Current year for DCF calculations
 current_year = datetime.now().year
@@ -656,71 +655,15 @@ if selected_display != "Select a stock...":
 
 
             # --- Expander 2: AI DCF Valuation ---
-            # --- Expander 2: AI DCF Valuation (Refactored & Automated) ---
             with st.expander("💰 AI DCF Valuation"):
                 if ticker:
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
-                    current_year = datetime.now().year  # anchor forecasts to the real current year
 
-                    # ---------- helpers ----------
+                    # Extract values safely
                     def clean_value(value, default="N/A"):
                         return value if value not in [None, "N/A", float("nan")] else default
 
-                    # Sector-aware default scenario ranges (tune as you like)
-                    SECTOR_DEFAULTS = {
-                        "Semiconductors": {
-                            "growth": {"bear": (0.15, 0.20), "base": (0.25, 0.30), "bull": (0.30, 0.40)},
-                            "fcf_margin": (0.10, 0.17),
-                            "discount": (0.08, 0.10),
-                            "terminal": (0.03, 0.05),
-                        },
-                        "Technology": {
-                            "growth": {"bear": (0.08, 0.12), "base": (0.12, 0.18), "bull": (0.20, 0.25)},
-                            "fcf_margin": (0.10, 0.15),
-                            "discount": (0.08, 0.10),
-                            "terminal": (0.03, 0.04),
-                        },
-                        "Consumer Staples": {
-                            "growth": {"bear": (0.02, 0.04), "base": (0.04, 0.06), "bull": (0.06, 0.08)},
-                            "fcf_margin": (0.07, 0.12),
-                            "discount": (0.07, 0.09),
-                            "terminal": (0.02, 0.03),
-                        },
-                    }
-
-                    def get_sector_profile(sector_name: str):
-                        # fuzzy map common sector names to our presets
-                        if not sector_name:
-                            return SECTOR_DEFAULTS["Technology"]
-                        name = sector_name.lower()
-                        if "semi" in name:
-                            return SECTOR_DEFAULTS["Semiconductors"]
-                        if "tech" in name or "information" in name:
-                            return SECTOR_DEFAULTS["Technology"]
-                        if "staple" in name:
-                            return SECTOR_DEFAULTS["Consumer Staples"]
-                        # fallback
-                        return {
-                            "growth": {"bear": (0.05, 0.10), "base": (0.08, 0.12), "bull": (0.12, 0.18)},
-                            "fcf_margin": (0.08, 0.14),
-                            "discount": (0.08, 0.10),
-                            "terminal": (0.02, 0.04),
-                        }
-
-                    def try_parse_json(text: str):
-                        """
-                        Try to parse JSON. Handles cases where the model wraps JSON in markdown code fences.
-                        """
-                        # grab first JSON-like block
-                        fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE)
-                        if fence:
-                            text = fence.group(1)
-                        # remove trailing commas that sometimes sneak in
-                        text = re.sub(r",\s*([\]}])", r"\1", text)
-                        return json.loads(text)
-
-                    # ---------- extract inputs safely ----------
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = clean_value(info.get("sector"))
                     market_cap = clean_value(info.get("marketCap"))
@@ -734,7 +677,7 @@ if selected_display != "Select a stock...":
                     shares_outstanding = clean_value(info.get("sharesOutstanding"))
                     debt_data = info.get("totalDebt", 0.0)
                     cash_data = info.get("totalCash", 0.0)
-                    eps_growth = info.get("earningsQuarterlyGrowth", 0.0)  # can be None/0
+                    eps_growth = info.get("earningsQuarterlyGrowth", 0.0)
 
                     dividend_yield = info.get("dividendYield")
                     if dividend_yield is not None:
@@ -743,153 +686,68 @@ if selected_display != "Select a stock...":
                     else:
                         dividend_yield_str = "N/A"
 
-                    # sanity check
-                    if isinstance(shares_outstanding, (float, int)) and shares_outstanding > 100_000_000_000:
-                        st.warning(f"Unusually large shares outstanding for {ticker}: {shares_outstanding}")
-
-                    # ---------- sector profile (drives constraints) ----------
-                    profile = get_sector_profile(sector)
-                    g = profile["growth"]
-                    fcf_low, fcf_high = profile["fcf_margin"]
-                    dr_low, dr_high = profile["discount"]
-                    tg_low, tg_high = profile["terminal"]
-
-                    # ---------- build the prompt (structured, constrained, year-anchored) ----------
+                    # Independent prompt for DCF
                     dcf_prompt = f"""
-                    You are a professional equity analyst. Perform a 5-year DCF valuation for {company_name} ({ticker.upper()}), 
-                    starting from fiscal year {current_year}. Use ONLY the inputs below; do not invent data.
+                    You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance 
+                    and current market expectations for {company_name} ({ticker.upper()}), generate a realistic 5-year DCF valuation 
+                    starting from fiscal year {current_year}.
 
-                    Inputs:
+                    Use the following data as a baseline:
+                    - Company: {company_name}
                     - Sector: {sector}
-                    - Current Price: {current_price}
+                    - Market Cap: {market_cap}
+                    - Current Price: ${current_price}
+                    - P/E (TTM): {trail_pe}
+                    - Forward P/E: {forward_pe}
                     - Revenue (TTM): {revenue}
-                    - Net Income (TTM): {net_income}
-                    - EPS (TTM): {eps_current}
+                    - Net Income: {net_income}
+                    - EPS: {eps_current}
                     - Free Cash Flow (TTM): {fcf}
+                    - Dividend Yield: {dividend_yield_str}
                     - Shares Outstanding: {shares_outstanding}
                     - Total Debt: {debt_data}
                     - Total Cash: {cash_data}
-                    - P/E (TTM): {trail_pe}
-                    - Forward P/E: {forward_pe}
-                    - Dividend Yield: {dividend_yield_str}
-                    - Analyst EPS Growth (1Y proxy): {eps_growth}
+                    - EPS Growth: {eps_growth}
 
-                    Scenario constraints (derived from sector profile and realism):
-                    - Bear CAGR: {int(g['bear'][0]*100)}%–{int(g['bear'][1]*100)}%
-                    - Base CAGR: {int(g['base'][0]*100)}%–{int(g['base'][1]*100)}%
-                    - Bull CAGR: {int(g['bull'][0]*100)}%–{int(g['bull'][1]*100)}%
-                    - FCF Margin range: {int(fcf_low*100)}%–{int(fcf_high*100)}%
-                    - Discount Rate (WACC): {int(dr_low*100)}%–{int(dr_high*100)}%
-                    - Terminal Growth: {int(tg_low*100)}%–{int(tg_high*100)}%
+                    DCF guidelines:
+                    1. Use the latest reported revenue as the starting point (do not inflate starting revenue), use **Sector Comparison**: 
+                       Analyze the sector where {ticker} operates, Use sector averages for margins such as Gross Margin, EBITDA Margin, 
+                       Net Margin, ROE, and Revenue Growth.
+                    2. Assume FCF margins based on **Sector Comparison**: 
+                       Analyze the sector where {ticker} operates, Use sector averages for margins such as Gross Margin, EBITDA Margin, 
+                       Net Margin, ROE, and Revenue Growth.
+                       **Stock Fundamentals**: Compare {ticker}'s current margins, EPS, ROE, and growth with sector peers. 
+                       Determine if the company is above, below, or in line with sector averages.
+                       **Future Growth Assumptions**: Project future growth based on:
+                        - Historical performance of {ticker}
+                        - Sector growth trends
+                        - Stock-specific competitive advantages or risks
+                    3. Estimate base, bull, and bear revenue growth rates aligned with analyst consensus and industry outlook.
+                    4. Use a discount rate between 8-10% (sector-adjusted WACC), not higher than 11%.
+                    5. Apply a realistic terminal growth rate between 3-5%, reflecting long-term semiconductor/AI industry potential.
+                    6. Run a 5-year DCF using Free Cash Flow and clearly show PV of cash flows and terminal value.
+                    7. Output per-share valuation for each scenario (bear, base, bull).
+                    8. Compare to current market price and provide % upside/downside.
+                    9. Give a final fair value estimate and recommendation (Buy, Hold, Sell).
+                    10. Provide the most accurate Weekly Support and Resistance levels based on technical analysis.
 
-                    Method:
-                    1) Start from latest TTM revenue and FCF. Forecast revenue for {current_year}–{current_year+4} using the scenario CAGR (declining slope allowed).
-                    2) Convert revenue to FCF using a margin within the allowed range (explain chosen margin per scenario). 
-                    3) Discount yearly FCFs at the chosen WACC and compute a terminal value with the Gordon Growth formula in year {current_year+4}.
-                    4) Sum PV(FCFs) + PV(TerminalValue) to get Enterprise Value. Add net cash (cash - debt) to get Equity Value.
-                    5) Divide by shares outstanding to get per-share value.
-
-                    Important rules:
-                    - Keep all assumptions within the specified ranges.
-                    - Do NOT use a start year earlier than {current_year}.
-                    - Explain chosen growth % and FCF margin % for each scenario in one short line.
-                    - Round money values to 2 decimals.
-
-                    Return output STRICTLY as JSON with this schema (no extra text):
-                    {{
-                    "Bear": {{
-                        "Assumptions": "CAGR %, FCF margin %, WACC %, Terminal %",
-                        "PV_FCFs": <number>,
-                        "PV_Terminal": <number>,
-                        "EnterpriseValue": <number>,
-                        "EquityValue": <number>,
-                        "PerShare": <number>
-                    }},
-                    "Base": {{
-                        "Assumptions": "CAGR %, FCF margin %, WACC %, Terminal %",
-                        "PV_FCFs": <number>,
-                        "PV_Terminal": <number>,
-                        "EnterpriseValue": <number>,
-                        "EquityValue": <number>,
-                        "PerShare": <number>
-                    }},
-                    "Bull": {{
-                        "Assumptions": "CAGR %, FCF margin %, WACC %, Terminal %",
-                        "PV_FCFs": <number>,
-                        "PV_Terminal": <number>,
-                        "EnterpriseValue": <number>,
-                        "EquityValue": <number>,
-                        "PerShare": <number>
-                    }},
-                    "FairValue": <number>, 
-                    "Recommendation": "<Buy|Hold|Sell>",
-                    "SupportResistance": {{"Support": [<numbers>], "Resistance": [<numbers>]}}
-                    }}
+                    ❗Emphasize realism, forward-looking assumptions, and avoid overly conservative or overly aggressive inputs.
                     """
+                    # Warn if shares outstanding looks off
+                    if isinstance(shares_outstanding, (float, int)) and shares_outstanding > 100_000_000_000:
+                        st.warning(f"Unusually large shares outstanding reported for {ticker}: {shares_outstanding}")
 
-                    # ---------- call Mistral and render ----------
-                    if st.button("🧠 Generate AI-Powered DCF Valuation", key="dcf_btn_v2"):
+                    if st.button("🧠 Generate AI-Powered DCF Valuation", key="dcf_btn"):
                         with st.spinner("Calling Mistral for DCF valuation..."):
                             raw_dcf = get_ai_analysis(dcf_prompt, MISTRAL_API_KEY)
 
-                        if isinstance(raw_dcf, str) and raw_dcf.startswith("ERROR:"):
+                        if raw_dcf.startswith("ERROR:"):
                             st.error("Failed to generate AI DCF valuation.")
                             st.code(raw_dcf)
                         else:
-                            # Try strict JSON parse, then fenced, then show raw if all else fails
-                            parsed = None
-                            try:
-                                parsed = json.loads(raw_dcf)
-                            except Exception:
-                                try:
-                                    parsed = try_parse_json(raw_dcf)
-                                except Exception:
-                                    parsed = None
-
-                            if parsed is None:
-                                st.warning("Model did not return valid JSON. Showing raw output:")
-                                st.markdown(raw_dcf)
-                            else:
-                                # Pretty summary
-                                st.subheader(f"📈 AI-Generated 5Y DCF for {ticker.upper()}")
-                                cols = st.columns(3)
-                                cols[0].metric("Bear (₋)", f"${parsed['Bear']['PerShare']:.2f}")
-                                cols[1].metric("Base (≈)", f"${parsed['Base']['PerShare']:.2f}")
-                                cols[2].metric("Bull (+)", f"${parsed['Bull']['PerShare']:.2f}")
-
-                                st.markdown("**Assumptions**")
-                                st.write(
-                                    {
-                                        "Bear": parsed["Bear"]["Assumptions"],
-                                        "Base": parsed["Base"]["Assumptions"],
-                                        "Bull": parsed["Bull"]["Assumptions"],
-                                    }
-                                )
-
-                                st.markdown("**Cash Flow PV & Terminal**")
-                                st.write(
-                                    {
-                                        "Bear": {
-                                            "PV_FCFs": parsed["Bear"]["PV_FCFs"],
-                                            "PV_Terminal": parsed["Bear"]["PV_Terminal"],
-                                        },
-                                        "Base": {
-                                            "PV_FCFs": parsed["Base"]["PV_FCFs"],
-                                            "PV_Terminal": parsed["Base"]["PV_Terminal"],
-                                        },
-                                        "Bull": {
-                                            "PV_FCFs": parsed["Bull"]["PV_FCFs"],
-                                            "PV_Terminal": parsed["Bull"]["PV_Terminal"],
-                                        },
-                                    }
-                                )
-
-                                st.markdown(f"**Fair Value:** ${parsed['FairValue']:.2f} — **Recommendation:** {parsed['Recommendation']}")
-                                sr = parsed.get("SupportResistance", {})
-                                if sr:
-                                    st.markdown(f"**Support:** {sr.get('Support', [])}  \n**Resistance:** {sr.get('Resistance', [])}")
-
-                                with st.expander("🔍 Debug: Raw Model Output"):
-                                    st.code(raw_dcf)
+                            st.markdown("**📈 AI-Generated DCF Valuation:**")
+                            sections = re.split(r'\n(?=\d+\.)', raw_dcf)
+                            for section in sections:
+                                st.markdown(section.strip().replace('\n', '  \n'))
                 else:
                     st.warning("Please select a stock ticker.")
