@@ -691,15 +691,15 @@ if selected_display != "Select a stock...":
                     You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance 
                     and current market expectations for {company_name} ({ticker.upper()}), generate a realistic 5-year DCF valuation 
                     starting from fiscal year {current_year}.
-                    
-                    Use the following data:
+
+                    Use the following data as a baseline:
                     - Company: {company_name}
                     - Sector: {sector}
                     - Market Cap: {market_cap}
                     - Current Price: ${current_price}
                     - P/E (TTM): {trail_pe}
                     - Forward P/E: {forward_pe}
-                    - Revenue: {revenue}
+                    - Revenue (TTM): {revenue}
                     - Net Income: {net_income}
                     - EPS: {eps_current}
                     - Free Cash Flow (TTM): {fcf}
@@ -709,17 +709,20 @@ if selected_display != "Select a stock...":
                     - Total Cash: {cash_data}
                     - EPS Growth: {eps_growth}
 
-                    1. Estimate base, bull, and bear revenue growth rates.
-                    2. Assume a discount rate between 8% and 12%.
-                    3. Run a 5-year DCF using Free Cash Flow.
-                    4. Output valuation estimates per share.
-                    5. Compare to current price and give upside/downside.
-                    6. Final fair value and recommendation (Buy, Hold, Sell).
-                    7. Provide the most accurate Weekly Support and Resistance levels based on the technical analysis.
+                    DCF guidelines:
+                    1. Use the latest reported revenue as the starting point (do not inflate starting revenue).
+                    2. Assume FCF margins between 10-15% unless the sector strongly suggests otherwise.
+                    3. Estimate base, bull, and bear revenue growth rates aligned with analyst consensus and industry outlook.
+                    4. Use a discount rate between 8-10% (sector-adjusted WACC), not higher than 11%.
+                    5. Apply a realistic terminal growth rate between 3-5%, reflecting long-term semiconductor/AI industry potential.
+                    6. Run a 5-year DCF using Free Cash Flow and clearly show PV of cash flows and terminal value.
+                    7. Output per-share valuation for each scenario (bear, base, bull).
+                    8. Compare to current market price and provide % upside/downside.
+                    9. Give a final fair value estimate and recommendation (Buy, Hold, Sell).
+                    10. Provide the most accurate Weekly Support and Resistance levels based on technical analysis.
 
-                    ❗Emphasize realism and forward-looking assumptions.
+                    ❗Emphasize realism, forward-looking assumptions, and avoid overly conservative or overly aggressive inputs.
                     """
-
                     # Warn if shares outstanding looks off
                     if isinstance(shares_outstanding, (float, int)) and shares_outstanding > 100_000_000_000:
                         st.warning(f"Unusually large shares outstanding reported for {ticker}: {shares_outstanding}")
