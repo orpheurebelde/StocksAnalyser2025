@@ -711,10 +711,9 @@ if selected_display != "Select a stock...":
 
                     DCF guidelines:
                     1. Use the latest reported revenue as the starting point (do not inflate starting revenue).
-                    2. Assume FCF margins based on Sector Comparison, Sector Average, Stock historical performance and 
-                       Stock Future Growth based on Future Guidance(Do not guess or invent data).
+                    2. Assume FCF margins based on Sector Comparison, Sector Average, Stock historical performance and Stock Future Growth based on Future Guidance(Do not guess or invent data).
                     3. Estimate base, bull, and bear revenue growth rates aligned with analyst consensus, Sector and Industry outlook.
-                    4. Use a discount rate between 8-10% (sector-adjusted WACC), not higher than 11%.
+                    4. Use a discount rate based on Sector Average and considering Company Actual Growth.
                     5. Apply a realistic terminal growth rate between 3-5%, reflecting long-term semiconductor/AI industry potential.
                     6. Run a 5-year DCF using Free Cash Flow and clearly show PV of cash flows and terminal value.
                     7. Output per-share valuation for each scenario (bear, base, bull).
