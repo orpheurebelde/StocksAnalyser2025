@@ -3,6 +3,10 @@ import pandas as pd
 from utils.utils import interpret_dilution_extended, estimate_past_shares_outstanding, calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
 import re
 import time
+from datetime import datetime
+
+# Current year for DCF calculations
+current_year = datetime.now().year
 
 # Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
@@ -581,6 +585,8 @@ if selected_display != "Select a stock...":
                     MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
                     info = get_stock_info(ticker)
 
+                    current_year = datetime.now().year
+
                     # Extract basic info
                     company_name = info.get("longName") or info.get("shortName") or ticker
                     sector = info.get("sector", "N/A")
@@ -682,8 +688,11 @@ if selected_display != "Select a stock...":
 
                     # Independent prompt for DCF
                     dcf_prompt = f"""
-                    You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for {company_name} ({ticker.upper()}), generate a realistic 5-year DCF valuation.
-
+                    You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance 
+                    and current market expectations for {company_name} ({ticker.upper()}), generate a realistic 5-year DCF valuation 
+                    starting from fiscal year {current_year}.
+                    
+                    Use the following data:
                     - Company: {company_name}
                     - Sector: {sector}
                     - Market Cap: {market_cap}
