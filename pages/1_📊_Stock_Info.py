@@ -712,7 +712,7 @@ if selected_display != "Select a stock...":
                     DCF guidelines:
                     1. Use the latest reported revenue as the starting point (do not inflate starting revenue).
                     2. Assume FCF margins based on Sector Comparison, Sector Average, Stock historical performance and 
-                       Stock Future Growth based on Future Guidance.
+                       Stock Future Growth based on Future Guidance(Do not guess or invent data).
                     3. Estimate base, bull, and bear revenue growth rates aligned with analyst consensus and industry outlook.
                     4. Use a discount rate between 8-10% (sector-adjusted WACC), not higher than 11%.
                     5. Apply a realistic terminal growth rate between 3-5%, reflecting long-term semiconductor/AI industry potential.
