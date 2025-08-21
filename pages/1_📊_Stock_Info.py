@@ -710,18 +710,9 @@ if selected_display != "Select a stock...":
                     - EPS Growth: {eps_growth}
 
                     DCF guidelines:
-                    1. Use the latest reported revenue as the starting point (do not inflate starting revenue), use **Sector Comparison**: 
-                       Analyze the sector where {ticker} operates, Use sector averages for margins such as Gross Margin, EBITDA Margin, 
-                       Net Margin, ROE, and Revenue Growth.
-                    2. Assume FCF margins based on **Sector Comparison**: 
-                       Analyze the sector where {ticker} operates, Use sector averages for margins such as Gross Margin, EBITDA Margin, 
-                       Net Margin, ROE, and Revenue Growth;
-                       **Stock Fundamentals**: Compare {ticker}'s current margins, EPS, ROE, and growth with sector peers: 
-                        - Determine if the company is above, below, or in line with sector averages.
-                       **Future Growth Assumptions**: Project future growth based on:
-                        - Historical performance of {ticker}
-                        - Sector growth trends
-                        - Stock-specific competitive advantages or risks
+                    1. Use the latest reported revenue as the starting point (do not inflate starting revenue).
+                    2. Assume FCF margins based on Sector Comparison, Sector Average, Stock historical performance and 
+                       Stock Future Growth based on Future Guidance.
                     3. Estimate base, bull, and bear revenue growth rates aligned with analyst consensus and industry outlook.
                     4. Use a discount rate between 8-10% (sector-adjusted WACC), not higher than 11%.
                     5. Apply a realistic terminal growth rate between 3-5%, reflecting long-term semiconductor/AI industry potential.
