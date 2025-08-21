@@ -715,9 +715,9 @@ if selected_display != "Select a stock...":
                        Net Margin, ROE, and Revenue Growth.
                     2. Assume FCF margins based on **Sector Comparison**: 
                        Analyze the sector where {ticker} operates, Use sector averages for margins such as Gross Margin, EBITDA Margin, 
-                       Net Margin, ROE, and Revenue Growth.
-                       **Stock Fundamentals**: Compare {ticker}'s current margins, EPS, ROE, and growth with sector peers. 
-                       Determine if the company is above, below, or in line with sector averages.
+                       Net Margin, ROE, and Revenue Growth;
+                       **Stock Fundamentals**: Compare {ticker}'s current margins, EPS, ROE, and growth with sector peers: 
+                        - Determine if the company is above, below, or in line with sector averages.
                        **Future Growth Assumptions**: Project future growth based on:
                         - Historical performance of {ticker}
                         - Sector growth trends
