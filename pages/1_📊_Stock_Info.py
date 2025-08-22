@@ -713,15 +713,14 @@ if selected_display != "Select a stock...":
 
                     DCF guidelines:
                     1. Use the latest reported revenue as the starting point (do not inflate starting revenue).
-                    2. Assume FCF margins based on Sector Comparison, Sector Average, Stock historical performance and Stock Future Growth based on Future Guidance(Do not guess or invent data).
-                    3. Estimate base, bull, and bear revenue growth rates based essentially on current {revenue_growth} and apply majoration for each scenario.
-                    4. Use a discount rate based on Sector Average allways considering Company Actual Growth, especially if Company is growing at a faster pace than Average.
-                    5. Based essencially on {revenue_growth} apply a realistic terminal growth rate
-                    6. Run a 5-year DCF using {revenue_growth}, {fcf} and clearly show PV of cash flows and terminal value.
+                    2. Assume FCF margins, Stock historical performance and Stock Future Growth based on Future Guidance(Do not guess use the baseline data).
+                    3. Estimate base, bull, and bear revenue growth rates considering revenue growth and sector averages.
+                    4. Use a discount rate between 6-10% considering company sector.
+                    5. Apply a realistic terminal growth rate between 2-3%.
+                    6. Run a 5-year DCF and clearly show PV of cash flows and terminal value(Use custom aproach for this calculations).
                     7. Output per-share valuation for each scenario (bear, base, bull).
                     8. Compare to current market price and provide % upside/downside.
                     9. Give a final fair value estimate and recommendation (Buy, Hold, Sell).
-                    10. Provide the most accurate Weekly Support and Resistance levels based on technical analysis.
 
                     ❗Emphasize realism, forward-looking assumptions, and avoid overly conservative or overly aggressive inputs.
                     """
