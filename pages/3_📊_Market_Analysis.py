@@ -38,38 +38,28 @@ if not st.session_state["authenticated"]:
 # --- 2. Custom CSS for the refresh button ---
 st.markdown("""
 <style>
-    /* Position the button absolutely within the app's header for consistent placement */
     .stApp > header {
-        position: relative; /* Ensure header is positioned for absolute children */
+        position: relative;
         display: flex;
         align-items: center;
-        justify-content: space-between; /* This will push button to the right if title is also in header */
-        padding-top: 20px; /* Adjust as needed */
-        padding-bottom: 20px;
+        justify-content: space-between;
+        padding: 20px;
     }
     .stButton button {
-        position: absolute;
-        top: 10px; /* Adjust top position */
-        right: 10px; /* Adjust right position */
-        background-color: #4CAF50; /* Green */
+        background-color: #4CAF50;
         color: white;
         border: none;
         padding: 10px 20px;
-        text-align: center;
-        text-decoration: none;
-        display: inline-block;
         font-size: 16px;
-        margin: 4px 2px;
         cursor: pointer;
         border-radius: 4px;
-        z-index: 1000; /* Ensure button is above other content */
+        margin-left: auto; /* Pushes button to the right in flex */
     }
     .stButton button:hover {
-        background-color: #45a049; /* Darker green on hover */
+        background-color: #45a049;
     }
-    /* Add some general padding to the main content area if elements are overlapping */
     .block-container {
-        padding-top: 3rem; /* Adjust if your title/button are too close to content */
+        padding-top: 3rem;
     }
 </style>
 """, unsafe_allow_html=True)
