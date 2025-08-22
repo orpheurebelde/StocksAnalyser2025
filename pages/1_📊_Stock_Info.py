@@ -675,10 +675,10 @@ if selected_display != "Select a stock...":
                     eps_current = clean_value(info.get("trailingEps"))
                     fcf = clean_value(info.get("freeCashflow"))
                     shares_outstanding = clean_value(info.get("sharesOutstanding"))
-                    debt_data = info.get("totalDebt", 0.0)
-                    cash_data = info.get("totalCash", 0.0)
-                    eps_growth = info.get("earningsQuarterlyGrowth", 0.0)
-                    earnings_growth = info.get("earningsGrowth", 0.0)
+                    debt_data = clean_value("totalDebt")
+                    cash_data = clean_value("totalCash")
+                    eps_growth = clean_value("earningsQuarterlyGrowth")
+                    earnings_growth = clean_value("earningsGrowth")
 
                     dividend_yield = info.get("dividendYield")
                     if dividend_yield is not None:
