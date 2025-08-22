@@ -714,7 +714,7 @@ if selected_display != "Select a stock...":
                     DCF guidelines:
                     1. Use the latest reported revenue as the starting point (do not inflate starting revenue).
                     2. Assume FCF margins based on Sector Comparison, Sector Average, Stock historical performance and Stock Future Growth based on Future Guidance(Do not guess or invent data).
-                    3. Estimate base, bull, and bear revenue growth rates aligned with current {earnings_growth} and analist consensus.
+                    3. Estimate base, bull, and bear revenue growth rates aligned with current {earnings_growth} and analist consensus and apply majoration for each scenario.
                     4. Use a discount rate based on Sector Average allways considering Company Actual Growth, especially if Company is growing at a faster pace than Average.
                     5. Based essencially on {earnings_growth} apply a realistic terminal growth rate
                     6. Run a 5-year DCF using {earnings_growth}, {fcf} and clearly show PV of cash flows and terminal value.
