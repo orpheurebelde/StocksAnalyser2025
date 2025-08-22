@@ -713,7 +713,7 @@ if selected_display != "Select a stock...":
 
                     DCF guidelines:
                     1. Use the latest reported revenue as the starting point (do not inflate starting revenue).
-                    2. Run a 5-year DCF and clearly show PV of cash flows and terminal value(Use current metrics for projections).
+                    2. Run a 5-year DCF and clearly show PV of cash flows and terminal value(Use sector projections growth for this).
 
                     ❗Emphasize realism, forward-looking assumptions, and avoid overly conservative or overly aggressive inputs.
                     """
