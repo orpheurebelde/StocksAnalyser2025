@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
-
 st.title("5-Year DCF Calculator — Streamlit")
 
 # --- Load stock list and prepare selector ---
@@ -16,7 +15,7 @@ stock_df = stock_df.sort_values(by="Display")
 options = ["Select a stock..."] + stock_df["Display"].tolist()
 selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, index=0)
 
-# Formatting helpers
+# --- Formatting helpers ---
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
 def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
 def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
@@ -79,27 +78,30 @@ if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     ticker_yf = yf.Ticker(ticker_symbol)
     info = ticker_yf.info
-    shares_outstanding = info.get('sharesOutstanding', None)
-    long_name = info.get('longName', ticker_symbol)
+
+    # --- Use fast_info to avoid rate limits ---
+    try:
+        shares_outstanding = ticker_yf.fast_info.get("shares_outstanding", None)
+        market_price = ticker_yf.fast_info.get("last_price", None)
+        market_cap = ticker_yf.fast_info.get("market_cap", None)
+    except Exception:
+        st.warning("⚠️ Could not load fast info. Please input manually.")
+        shares_outstanding, market_price, market_cap = None, None, None
+
+    # --- Manual fallback if any info missing ---
+    if shares_outstanding is None:
+        shares_outstanding = st.number_input("Enter Shares Outstanding:", min_value=0, value=0)
+    if market_price is None:
+        market_price = st.number_input("Enter Current Market Price:", min_value=0.0, value=0.0, format="%.2f")
+    if market_cap is None:
+        market_cap = st.number_input("Enter Market Cap:", min_value=0.0, value=0.0, format="%.2f")
+
     fcf_ttm = safe_get_cashflow(ticker_yf)
-    if fcf_ttm is None:
-        for k in ['freeCashflow','freeCashFlow']:
-            if k in info:
-                try:
-                    fcf_ttm = float(info[k])
-                except Exception:
-                    pass
     bal = safe_get_balance_items(ticker_yf)
     cash_guess = bal['cash']
     debt_guess = bal['totalDebt']
-    try:
-        hist = ticker_yf.history(period='1d')
-        market_price = hist['Close'].iloc[-1]
-    except Exception:
-        market_price = info.get('previousClose', None)
-    market_cap = info.get('marketCap', None)
 
-    st.subheader(f"{ticker_symbol} — {long_name}")
+    st.subheader(f"{ticker_symbol}")
     col3, col4, col5 = st.columns(3)
     with col3:
         st.metric('Shares outstanding', format_number(shares_outstanding))
@@ -116,10 +118,8 @@ if selected_display != "Select a stock...":
     else:
         starting_fcf = st.number_input('Starting FCF (TTM) in USD', value=float(fcf_ttm), format="%.0f")
 
-    # --- Input validation for negative FCF ---
     if starting_fcf < 0:
-        st.warning(f"⚠️ Warning: The Free Cash Flow (FCF) for {ticker_symbol} is negative ({starting_fcf:,.0f}). "
-                   "DCF valuation results may not be reliable.")
+        st.warning(f"⚠️ Warning: The Free Cash Flow (FCF) for {ticker_symbol} is negative ({starting_fcf:,.0f}). DCF results may not be reliable.")
 
     st.markdown('### Growth rate assumptions')
     default_growths = [50.0, 30.0, 20.0, 15.0, 10.0]
