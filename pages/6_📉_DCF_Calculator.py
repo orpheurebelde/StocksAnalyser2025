@@ -77,7 +77,6 @@ def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth):
 if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     ticker_yf = yf.Ticker(ticker_symbol)
-    info = ticker_yf.info
 
     # --- Use fast_info to avoid rate limits ---
     try:
