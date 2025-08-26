@@ -116,11 +116,17 @@ if selected_display != "Select a stock...":
     else:
         starting_fcf = st.number_input('Starting FCF (TTM) in USD', value=float(fcf_ttm), format="%.0f")
 
+    # --- Input validation for negative FCF ---
+    if starting_fcf < 0:
+        st.warning(f"⚠️ Warning: The Free Cash Flow (FCF) for {ticker_symbol} is negative ({starting_fcf:,.0f}). "
+                   "DCF valuation results may not be reliable.")
+
     st.markdown('### Growth rate assumptions')
+    default_growths = [50.0, 30.0, 20.0, 15.0, 10.0]
     user_growth_rates = []
     cols = st.columns(5)
     for i in range(5):
-        user_growth_rates.append(cols[i].number_input(f'Year {i+1} Growth %', value=[50,30,20,15,10][i], step=1.0, format="%.1f", key=f'growth{i}'))
+        user_growth_rates.append(cols[i].number_input(f'Year {i+1} Growth %', value=default_growths[i], step=1.0, format="%.1f", key=f'growth{i}'))
 
     st.markdown('### 5-Year FCF projections')
     projected_fcfs = [starting_fcf * (1 + g/100) for g in user_growth_rates]
