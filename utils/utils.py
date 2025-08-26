@@ -34,48 +34,44 @@ def is_cache_valid():
     )
 
 def fetch_and_cache_stock_info(ticker):
-    """Fetch info from yfinance and save to CSV cache."""
+    """Fetch info from yfinance and save to CSV cache safely."""
     ticker = ticker.upper()
     try:
         stock = yf.Ticker(ticker)
 
-        # --- Try to use fast_info first to avoid rate limits ---
+        # --- Try fast_info first ---
         try:
             fast = stock.fast_info
-            info = {
-                "Ticker": ticker,
-                "shares_outstanding": fast.get("shares_outstanding"),
-                "market_price": fast.get("last_price"),
-                "market_cap": fast.get("market_cap")
-            }
+            shares = fast.get("shares_outstanding") or 0
+            price = fast.get("last_price") or 0.0
+            cap   = fast.get("market_cap") or 0.0
         except Exception:
-            # fallback to regular info
             yf_info = stock.info
-            info = {
-                "Ticker": ticker,
-                "shares_outstanding": yf_info.get("sharesOutstanding"),
-                "market_price": yf_info.get("previousClose"),
-                "market_cap": yf_info.get("marketCap")
-            }
+            shares = yf_info.get("sharesOutstanding") or 0
+            price  = yf_info.get("previousClose") or 0.0
+            cap    = yf_info.get("marketCap") or 0.0
 
-        df_new = pd.DataFrame([info])
-        df_new.set_index("Ticker", inplace=True)
+        info = {
+            "Ticker": ticker,
+            "shares_outstanding": shares,
+            "market_price": price,
+            "market_cap": cap,
+            "longName": stock.info.get("longName") or ticker
+        }
+
+        df_new = pd.DataFrame([info]).set_index("Ticker")
 
         # --- Load or create cache ---
         if os.path.exists(CSV_PATH):
             try:
-                df_existing = pd.read_csv(CSV_PATH)
-                if "Ticker" not in df_existing.columns:
-                    raise ValueError("Missing 'Ticker' column")
-                df_existing.set_index("Ticker", inplace=True)
-            except Exception as e:
-                print(f"⚠️ Corrupted cache. Removing: {e}")
+                df_existing = pd.read_csv(CSV_PATH).set_index("Ticker")
+            except:
                 os.remove(CSV_PATH)
                 df_existing = pd.DataFrame()
         else:
             df_existing = pd.DataFrame()
 
-        # --- Check if info changed ---
+        # --- Update cache if changed ---
         new_hash = md5(json.dumps(info, sort_keys=True).encode()).hexdigest()
         existing_hash = None
         if ticker in df_existing.index:
@@ -85,15 +81,12 @@ def fetch_and_cache_stock_info(ticker):
         if new_hash != existing_hash:
             df_combined = pd.concat([df_existing.drop(index=ticker, errors="ignore"), df_new])
             df_combined.to_csv(CSV_PATH)
-            print(f"✅ Cache updated for {ticker}")
-        else:
-            print(f"ℹ️ No change for {ticker}")
 
         return info
 
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-        return {"Ticker": ticker, "shares_outstanding": None, "market_price": None, "market_cap": None, "error": str(e)}
+        print(f"❌ Unexpected error fetching {ticker}: {e}")
+        return {"Ticker": ticker, "shares_outstanding": 0, "market_price": 0.0, "market_cap": 0.0, "longName": ticker, "error": str(e)}
 
 # Load stock list
 @st.cache_data
@@ -103,31 +96,22 @@ def load_stock_list():
     return df
 
 def get_stock_info(ticker):
-    """Get stock info from cache or fetch if needed."""
+    """Return stock info from cache or fetch fresh if missing."""
     ticker = ticker.upper()
     if os.path.exists(CSV_PATH):
         try:
-            df = pd.read_csv(CSV_PATH)
-            if "Ticker" not in df.columns:
-                print("⚠️ CSV missing Ticker column. Deleting.")
-                os.remove(CSV_PATH)
-                return fetch_and_cache_stock_info(ticker)
-            df.set_index("Ticker", inplace=True)
+            df = pd.read_csv(CSV_PATH).set_index("Ticker")
             if ticker in df.index:
                 data = df.loc[ticker].to_dict()
-                # Ensure keys exist even if some are missing
-                for key in ["shares_outstanding", "market_price", "market_cap"]:
-                    if key not in data:
-                        data[key] = None
+                # Ensure all keys exist
+                data["shares_outstanding"] = data.get("shares_outstanding") or 0
+                data["market_price"] = data.get("market_price") or 0.0
+                data["market_cap"] = data.get("market_cap") or 0.0
+                data["longName"] = data.get("longName") or ticker
                 return data
-        except Exception as e:
-            print(f"⚠️ Read error: {e}")
-            try:
-                os.remove(CSV_PATH)
-            except:
-                pass
+        except:
+            os.remove(CSV_PATH)
             return fetch_and_cache_stock_info(ticker)
-
     return fetch_and_cache_stock_info(ticker)
 
 @st.cache_data(ttl=CACHE_DURATION_HOURS * 3600, show_spinner=False)
