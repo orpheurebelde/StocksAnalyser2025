@@ -34,19 +34,34 @@ def is_cache_valid():
     )
 
 def fetch_and_cache_stock_info(ticker):
-    """Fetch info and save to CSV cache."""
+    """Fetch info from yfinance and save to CSV cache."""
     ticker = ticker.upper()
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info
-        if not info:
-            raise ValueError("Empty info returned.")
 
-        info["Ticker"] = ticker  # ✅ Ensure Ticker is always added
+        # --- Try to use fast_info first to avoid rate limits ---
+        try:
+            fast = stock.fast_info
+            info = {
+                "Ticker": ticker,
+                "shares_outstanding": fast.get("shares_outstanding"),
+                "market_price": fast.get("last_price"),
+                "market_cap": fast.get("market_cap")
+            }
+        except Exception:
+            # fallback to regular info
+            yf_info = stock.info
+            info = {
+                "Ticker": ticker,
+                "shares_outstanding": yf_info.get("sharesOutstanding"),
+                "market_price": yf_info.get("previousClose"),
+                "market_cap": yf_info.get("marketCap")
+            }
+
         df_new = pd.DataFrame([info])
         df_new.set_index("Ticker", inplace=True)
 
-        # Load or create cache
+        # --- Load or create cache ---
         if os.path.exists(CSV_PATH):
             try:
                 df_existing = pd.read_csv(CSV_PATH)
@@ -60,7 +75,7 @@ def fetch_and_cache_stock_info(ticker):
         else:
             df_existing = pd.DataFrame()
 
-        # Check if info changed
+        # --- Check if info changed ---
         new_hash = md5(json.dumps(info, sort_keys=True).encode()).hexdigest()
         existing_hash = None
         if ticker in df_existing.index:
@@ -78,7 +93,7 @@ def fetch_and_cache_stock_info(ticker):
 
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
-        return {"error": f"An unexpected error occurred: {e}"}
+        return {"Ticker": ticker, "shares_outstanding": None, "market_price": None, "market_cap": None, "error": str(e)}
 
 # Load stock list
 @st.cache_data
@@ -99,7 +114,12 @@ def get_stock_info(ticker):
                 return fetch_and_cache_stock_info(ticker)
             df.set_index("Ticker", inplace=True)
             if ticker in df.index:
-                return df.loc[ticker].to_dict()
+                data = df.loc[ticker].to_dict()
+                # Ensure keys exist even if some are missing
+                for key in ["shares_outstanding", "market_price", "market_cap"]:
+                    if key not in data:
+                        data[key] = None
+                return data
         except Exception as e:
             print(f"⚠️ Read error: {e}")
             try:
