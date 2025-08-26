@@ -5,12 +5,28 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
 from utils.utils import load_stock_list, get_stock_info
-import os
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
 st.title("5-Year DCF Calculator — Streamlit")
 
-# --- Load stock list and prepare selector ---
+# --- Safe numeric helpers ---
+def safe_int(val, default=0):
+    try:
+        if val is None or (isinstance(val, float) and np.isnan(val)):
+            return default
+        return int(val)
+    except:
+        return default
+
+def safe_float(val, default=0.0):
+    try:
+        if val is None or (isinstance(val, float) and np.isnan(val)):
+            return default
+        return float(val)
+    except:
+        return default
+
+# --- Load stock list ---
 stock_df = load_stock_list()
 stock_df = stock_df.sort_values(by="Display")
 options = ["Select a stock..."] + stock_df["Display"].tolist()
@@ -19,10 +35,9 @@ selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, 
 # --- Formatting helpers ---
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
 def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
-def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
 def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
 
-# --- Helper functions ---
+# --- DCF helpers ---
 def discounted_cash_flows(cashflows, discount_rate):
     return sum(cf / ((1 + discount_rate) ** (i + 1)) for i, cf in enumerate(cashflows))
 
@@ -32,169 +47,111 @@ def safe_get_cashflow(ticker):
         candidates = ['Free Cash Flow','FreeCashFlow','Free Cash Flow (USD)']
         for c in candidates:
             if c in cf.index:
-                val = cf.loc[c].iloc[0]
-                return float(val)
+                return safe_float(cf.loc[c].iloc[0])
         if 'Operating Cash Flow' in cf.index and 'Capital Expenditures' in cf.index:
-            val = cf.loc['Operating Cash Flow'].iloc[0] + cf.loc['Capital Expenditures'].iloc[0]
-            return float(val)
-    except Exception:
-        pass
-    return None
+            return safe_float(cf.loc['Operating Cash Flow'].iloc[0] + cf.loc['Capital Expenditures'].iloc[0])
+    except:
+        return None
 
 def safe_get_balance_items(ticker):
     bs = ticker.balance_sheet
-    result = {'cash': None, 'totalDebt': None}
+    cash = None
+    debt = None
     try:
-        if 'Cash' in bs.index:
-            result['cash'] = float(bs.loc['Cash'].iloc[0])
-        elif 'Cash And Cash Equivalents' in bs.index:
-            result['cash'] = float(bs.loc['Cash And Cash Equivalents'].iloc[0])
-        elif 'Cash and cash equivalents' in bs.index:
-            result['cash'] = float(bs.loc['Cash and cash equivalents'].iloc[0])
+        for c in ['Cash', 'Cash And Cash Equivalents', 'Cash and cash equivalents']:
+            if c in bs.index:
+                cash = safe_float(bs.loc[c].iloc[0])
+                break
         vals = []
-        for k in ['Long Term Debt','Short Long Term Debt','Short Term Debt']:
+        for k in ['Long Term Debt','Short Long Term Debt','Short Term Debt','Total Debt']:
             if k in bs.index:
                 vals.append(bs.loc[k].iloc[0])
         if vals:
-            result['totalDebt'] = float(np.nansum(vals))
-        if result['totalDebt'] is None and 'Total Debt' in bs.index:
-            result['totalDebt'] = float(bs.loc['Total Debt'].iloc[0])
-    except Exception:
+            debt = safe_float(np.nansum(vals))
+    except:
         pass
-    return result
+    return {'cash': cash, 'totalDebt': debt}
 
 def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth):
     pv_years = []
     for i, fcf in enumerate(fcf_list, start=1):
-        pv = fcf / ((1 + discount_rate) ** i)
-        pv_years.append(pv)
+        pv_years.append(fcf / ((1 + discount_rate) ** i))
     terminal = fcf_list[-1] * (1 + terminal_growth) / (discount_rate - terminal_growth)
     pv_terminal = terminal / ((1 + discount_rate) ** 5)
     ev = np.nansum(pv_years) + pv_terminal
     return {'pv_years': pv_years,'pv_terminal': pv_terminal,'ev': ev,'terminal': terminal}
 
-# --- Safe numeric helpers ---
-def safe_int(val, default=0):
-    if val is None or (isinstance(val, float) and np.isnan(val)):
-        return default
-    try:
-        return int(val)
-    except Exception:
-        return default
-
-def safe_float(val, default=0.0):
-    if val is None or (isinstance(val, float) and np.isnan(val)):
-        return default
-    try:
-        return float(val)
-    except Exception:
-        return default
-
 # --- Main Flow ---
 if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
-    
-    # Get cached or fresh info
     info = get_stock_info(ticker_symbol)
-    
-    # --- Safe numeric values ---
+
     shares_outstanding = safe_int(info.get("sharesOutstanding"))
     market_price = safe_float(info.get("previousClose"))
     market_cap = safe_float(info.get("marketCap"))
-    
-    # Try getting fast info from yfinance Ticker
+    long_name = info.get("longName", ticker_symbol)
+
     ticker_yf = yf.Ticker(ticker_symbol)
-    try:
-        shares_outstanding_fast = safe_int(ticker_yf.fast_info.get("shares_outstanding"))
-        market_price_fast = safe_float(ticker_yf.fast_info.get("last_price"))
-        market_cap_fast = safe_float(ticker_yf.fast_info.get("market_cap"))
-        shares_outstanding = shares_outstanding_fast or shares_outstanding
-        market_price = market_price_fast or market_price
-        market_cap = market_cap_fast or market_cap
-    except Exception:
-        st.warning("⚠️ Could not load fast info; using cached info.")
-
-    # --- Display metrics safely ---
-    st.subheader(f"{ticker_symbol} — {info.get('longName', ticker_symbol)}")
-    col3, col4, col5 = st.columns(3)
-    with col3:
-        st.metric("Shares Outstanding", format_number(shares_outstanding))
-    with col4:
-        st.metric("Market Price", format_currency_dec(market_price))
-    with col5:
-        st.metric("Market Cap", format_currency(market_cap))
-
-    st.markdown('---')
-
-    # --- Number Inputs with safe defaults ---
-    shares_outstanding_input = st.number_input(
-        "Shares Outstanding:", min_value=0, value=shares_outstanding, step=1
-    )
-    market_price_input = st.number_input(
-        "Market Price (USD):", min_value=0.0, value=market_price, step=0.01, format="%.2f"
-    )
-    market_cap_input = st.number_input(
-        "Market Cap (USD):", min_value=0.0, value=market_cap, step=1.0, format="%.0f"
-    )
-
     fcf_ttm = safe_get_cashflow(ticker_yf)
-    cash_guess = safe_float(safe_get_balance_items(ticker_yf).get("cash"))
-    debt_guess = safe_float(safe_get_balance_items(ticker_yf).get("totalDebt"))
+    bal = safe_get_balance_items(ticker_yf)
+    cash_guess = safe_float(bal.get('cash'))
+    debt_guess = safe_float(bal.get('totalDebt'))
 
-    if fcf_ttm is None:
-        st.warning("Could not find Free Cash Flow (TTM). Enter manually:")
-        starting_fcf = st.number_input("Starting FCF (TTM) USD:", min_value=0.0, value=1_300_000_000.0, step=1_000_000.0, format="%.0f")
-    else:
-        starting_fcf = st.number_input("Starting FCF (TTM) USD:", min_value=0.0, value=safe_float(fcf_ttm), step=1_000_000.0, format="%.0f")
+    # --- Display metrics ---
+    st.subheader(f"{ticker_symbol} — {long_name}")
+    col3, col4, col5 = st.columns(3)
+    with col3: st.metric("Shares Outstanding", format_number(shares_outstanding))
+    with col4: st.metric("Market Price", format_currency_dec(market_price))
+    with col5: st.metric("Market Cap", format_currency(market_cap))
 
-    # --- Growth rate inputs ---
-    st.markdown("### Growth rate assumptions")
+    # --- Number Inputs / Sliders ---
+    shares_outstanding_input = st.number_input("Shares Outstanding:", min_value=0, value=shares_outstanding, step=1)
+    market_price_input = st.number_input("Market Price (USD):", min_value=0.0, value=market_price, step=0.01, format="%.2f")
+    market_cap_input = st.number_input("Market Cap (USD):", min_value=0.0, value=market_cap, step=1.0, format="%.0f")
+
+    starting_fcf = fcf_ttm if fcf_ttm else 1_300_000_000
+    starting_fcf_input = st.number_input("Starting FCF (TTM) USD:", min_value=0.0, value=starting_fcf, step=1_000_000.0, format="%.0f")
+
+    # --- Growth rate sliders ---
+    st.markdown("### 5-Year Growth Rate Assumptions")
     default_growths = [50.0, 30.0, 20.0, 15.0, 10.0]
     user_growth_rates = []
     cols = st.columns(5)
     for i in range(5):
         user_growth_rates.append(
-            st.number_input(
-                f"Year {i+1} Growth %", min_value=0.0, value=safe_float(default_growths[i]), step=1.0, format="%.1f", key=f"growth{i}"
-            )
+            cols[i].slider(f"Year {i+1} Growth %", min_value=0.0, max_value=100.0, value=safe_float(default_growths[i]), step=1.0)
         )
 
-    # --- 5-Year FCF projections ---
-    st.markdown("### 5-Year FCF projections")
-    projected_fcfs = [starting_fcf * (1 + g/100) for g in user_growth_rates]
+    # --- FCF projections ---
+    st.markdown("### 5-Year FCF Projections")
+    projected_fcfs = [starting_fcf_input * (1 + g/100) for g in user_growth_rates]
     fcfs = []
     cols = st.columns(5)
     for i in range(5):
         fcfs.append(
-            st.number_input(
-                f"Year {i+1} FCF USD", min_value=0.0, value=safe_float(projected_fcfs[i]), step=1_000_000.0, format="%.0f", key=f"fcf{i}"
-            )
+            cols[i].number_input(f"Year {i+1} FCF USD", min_value=0.0, value=projected_fcfs[i], step=1_000_000.0, format="%.0f")
         )
 
-    # --- Discount rate scenarios ---
-    st.markdown("---")
-    st.subheader("Discount rate scenarios")
+    # --- Discount rate sliders ---
+    st.markdown("### Discount Rate Scenarios")
     col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        disc_bull = st.number_input("Bull Discount Rate %", min_value=0.0, max_value=50.0, value=8.0, step=0.1)
-    with col_b:
-        disc_base = st.number_input("Base Discount Rate %", min_value=0.0, max_value=50.0, value=9.0, step=0.1)
-    with col_c:
-        disc_bear = st.number_input("Bear Discount Rate %", min_value=0.0, max_value=50.0, value=10.0, step=0.1)
+    disc_bull = col_a.slider("Bull Discount Rate %", min_value=0.0, max_value=50.0, value=8.0, step=0.1)
+    disc_base = col_b.slider("Base Discount Rate %", min_value=0.0, max_value=50.0, value=9.0, step=0.1)
+    disc_bear = col_c.slider("Bear Discount Rate %", min_value=0.0, max_value=50.0, value=10.0, step=0.1)
 
     # --- Net cash ---
-    net_cash_default = cash_guess - debt_guess if cash_guess is not None and debt_guess is not None else cash_guess or 0.0
-    net_cash = st.number_input("Net Cash (Cash - Debt) USD (override)", min_value=-1e12, value=net_cash_default, step=1_000_000.0, format="%.0f")
+    net_cash_default = cash_guess - debt_guess if cash_guess and debt_guess else cash_guess or 0.0
+    net_cash_input = st.number_input("Net Cash (Cash - Debt) USD (override)", min_value=-1e12, value=net_cash_default, step=1_000_000.0, format="%.0f")
 
-    # --- DCF Calculations ---
-    scenarios = {"Bull": disc_bull/100.0, "Base": disc_base/100.0, "Bear": disc_bear/100.0}
-    def compute_for_scenario(d_rate):
+    # --- DCF computation ---
+    scenarios = {"Bull": disc_bull/100, "Base": disc_base/100, "Bear": disc_bear/100}
+    def compute_scenario(d_rate):
         res = dcf_from_fcf_list(fcfs, d_rate, 0.03)
-        equity = res['ev'] + net_cash
+        equity = res['ev'] + net_cash_input
         per_share = equity / shares_outstanding_input if shares_outstanding_input else None
         return res, equity, per_share
 
-    results = {name: compute_for_scenario(dr) for name, dr in scenarios.items()}
+    results = {name: compute_scenario(dr) for name, dr in scenarios.items()}
 
     # --- Results table ---
     st.subheader("Results")
@@ -208,9 +165,8 @@ if selected_display != "Select a stock...":
             "PV Terminal (USD)": res['pv_terminal'],
             "Terminal Value (undiscounted)": res['terminal'],
             "Equity Value (USD)": equity,
-            "Implied Value / Share (USD)": per_share if per_share is not None else np.nan
+            "Implied Value / Share (USD)": per_share if per_share else np.nan
         })
-
     df_results = pd.DataFrame(rows)
     for col in ["Enterprise Value (USD)","PV Terminal (USD)","Terminal Value (undiscounted)","Equity Value (USD)"]:
         df_results[col] = df_results[col].map(lambda x: f"{x:,.0f}")
@@ -218,10 +174,9 @@ if selected_display != "Select a stock...":
         df_results['Implied Value / Share (USD)'] = df_results['Implied Value / Share (USD)'].map(lambda x: f"{x:,.2f}")
     else:
         df_results['Implied Value / Share (USD)'] = 'n/a'
-
     st.table(df_results.set_index("Scenario"))
 
-    # --- PV breakdown chart ---
+    # --- PV chart ---
     st.subheader("PV breakdown (Base scenario)")
     base_pv_years = results['Base'][0]['pv_years']
     base_pv_terminal = results['Base'][0]['pv_terminal']
@@ -234,9 +189,9 @@ if selected_display != "Select a stock...":
     ax.ticklabel_format(axis='y', style='plain')
     st.pyplot(fig)
 
-    # --- Download CSV ---
+    # --- CSV Download ---
     csv_buffer = BytesIO()
-    out_df = pd.DataFrame({'Year':[f'Year {i}' for i in range(1,6)]+['Terminal'],'Base PV USD':list(base_pv_years)+[base_pv_terminal]})
+    out_df = pd.DataFrame({'Year':[f'Year {i}' for i in range(1,6)]+['Terminal'],'Base PV USD':base_pv_years+[base_pv_terminal]})
     out_df.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
     st.download_button('Download base PV CSV', data=csv_buffer, file_name=f'{ticker_symbol}_dcf_base_pv.csv', mime='text/csv')
