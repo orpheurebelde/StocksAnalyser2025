@@ -86,11 +86,13 @@ if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     info = get_stock_info(ticker_symbol)
 
-    shares_outstanding = safe_int(info.get("sharesOutstanding"))
-    market_price = safe_float(info.get("previousClose"))
-    market_cap = safe_float(info.get("marketCap"))
+    # --- Safe numeric defaults ---
+    shares_outstanding_safe = safe_int(info.get("sharesOutstanding"), 0)
+    market_price_safe = safe_float(info.get("previousClose"), 0.0)
+    market_cap_safe = safe_float(info.get("marketCap"), 0.0)
     long_name = info.get("longName", ticker_symbol)
 
+    # --- Get yfinance ticker for balance sheet and cashflow ---
     ticker_yf = yf.Ticker(ticker_symbol)
     fcf_ttm = safe_get_cashflow(ticker_yf)
     bal = safe_get_balance_items(ticker_yf)
@@ -100,17 +102,25 @@ if selected_display != "Select a stock...":
     # --- Display metrics ---
     st.subheader(f"{ticker_symbol} — {long_name}")
     col3, col4, col5 = st.columns(3)
-    with col3: st.metric("Shares Outstanding", format_number(shares_outstanding))
-    with col4: st.metric("Market Price", format_currency_dec(market_price))
-    with col5: st.metric("Market Cap", format_currency(market_cap))
+    with col3: st.metric("Shares Outstanding", format_number(shares_outstanding_safe))
+    with col4: st.metric("Market Price", format_currency_dec(market_price_safe))
+    with col5: st.metric("Market Cap", format_currency(market_cap_safe))
 
     # --- Number Inputs / Sliders ---
-    shares_outstanding_input = st.number_input("Shares Outstanding:", min_value=0, value=shares_outstanding, step=1)
-    market_price_input = st.number_input("Market Price (USD):", min_value=0.0, value=market_price, step=0.01, format="%.2f")
-    market_cap_input = st.number_input("Market Cap (USD):", min_value=0.0, value=market_cap, step=1.0, format="%.0f")
+    shares_outstanding_input = st.number_input(
+        "Shares Outstanding:", min_value=0, value=shares_outstanding_safe, step=1
+    )
+    market_price_input = st.number_input(
+        "Market Price (USD):", min_value=0.0, value=market_price_safe, step=0.01, format="%.2f"
+    )
+    market_cap_input = st.number_input(
+        "Market Cap (USD):", min_value=0.0, value=market_cap_safe, step=1.0, format="%.0f"
+    )
 
-    starting_fcf = fcf_ttm if fcf_ttm else 1_300_000_000
-    starting_fcf_input = st.number_input("Starting FCF (TTM) USD:", min_value=0.0, value=starting_fcf, step=1_000_000.0, format="%.0f")
+    starting_fcf_default = fcf_ttm if fcf_ttm else 1_300_000_000
+    starting_fcf_input = st.number_input(
+        "Starting FCF (TTM) USD:", min_value=0.0, value=starting_fcf_default, step=1_000_000.0, format="%.0f"
+    )
 
     # --- Growth rate sliders ---
     st.markdown("### 5-Year Growth Rate Assumptions")
@@ -119,7 +129,13 @@ if selected_display != "Select a stock...":
     cols = st.columns(5)
     for i in range(5):
         user_growth_rates.append(
-            cols[i].slider(f"Year {i+1} Growth %", min_value=0.0, max_value=100.0, value=safe_float(default_growths[i]), step=1.0)
+            cols[i].slider(
+                f"Year {i+1} Growth %",
+                min_value=0.0,
+                max_value=100.0,
+                value=safe_float(default_growths[i]),
+                step=1.0
+            )
         )
 
     # --- FCF projections ---
@@ -129,7 +145,13 @@ if selected_display != "Select a stock...":
     cols = st.columns(5)
     for i in range(5):
         fcfs.append(
-            cols[i].number_input(f"Year {i+1} FCF USD", min_value=0.0, value=projected_fcfs[i], step=1_000_000.0, format="%.0f")
+            cols[i].number_input(
+                f"Year {i+1} FCF USD",
+                min_value=0.0,
+                value=projected_fcfs[i],
+                step=1_000_000.0,
+                format="%.0f"
+            )
         )
 
     # --- Discount rate sliders ---
@@ -141,7 +163,13 @@ if selected_display != "Select a stock...":
 
     # --- Net cash ---
     net_cash_default = cash_guess - debt_guess if cash_guess and debt_guess else cash_guess or 0.0
-    net_cash_input = st.number_input("Net Cash (Cash - Debt) USD (override)", min_value=-1e12, value=net_cash_default, step=1_000_000.0, format="%.0f")
+    net_cash_input = st.number_input(
+        "Net Cash (Cash - Debt) USD (override)",
+        min_value=-1e12,
+        value=net_cash_default,
+        step=1_000_000.0,
+        format="%.0f"
+    )
 
     # --- DCF computation ---
     scenarios = {"Bull": disc_bull/100, "Base": disc_base/100, "Bear": disc_bear/100}
@@ -167,6 +195,7 @@ if selected_display != "Select a stock...":
             "Equity Value (USD)": equity,
             "Implied Value / Share (USD)": per_share if per_share else np.nan
         })
+
     df_results = pd.DataFrame(rows)
     for col in ["Enterprise Value (USD)","PV Terminal (USD)","Terminal Value (undiscounted)","Equity Value (USD)"]:
         df_results[col] = df_results[col].map(lambda x: f"{x:,.0f}")
@@ -191,7 +220,8 @@ if selected_display != "Select a stock...":
 
     # --- CSV Download ---
     csv_buffer = BytesIO()
-    out_df = pd.DataFrame({'Year':[f'Year {i}' for i in range(1,6)]+['Terminal'],'Base PV USD':base_pv_years+[base_pv_terminal]})
+    out_df = pd.DataFrame({'Year':[f'Year {i}' for i in range(1,6)]+['Terminal'],
+                           'Base PV USD':base_pv_years+[base_pv_terminal]})
     out_df.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
     st.download_button('Download base PV CSV', data=csv_buffer, file_name=f'{ticker_symbol}_dcf_base_pv.csv', mime='text/csv')
