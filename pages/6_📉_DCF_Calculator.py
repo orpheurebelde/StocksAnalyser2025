@@ -1,14 +1,16 @@
 import streamlit as st
 import yfinance as yf
 import numpy as np
-from utils.utils import load_stock_list, get_stock_info
-import time
-import datetime
+from utils.utils import load_stock_list
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
-st.title("Discounted Cash Flow (DCF) Calculator")
 
-# Load stock list and prepare selector
+st.title("5-Year DCF Calculator — Streamlit")
+
+# --- Load stock list and prepare selector ---
 stock_df = load_stock_list()
 stock_df = stock_df.sort_values(by="Display")
 options = ["Select a stock..."] + stock_df["Display"].tolist()
@@ -22,224 +24,187 @@ def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else 
 def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
 
 def discounted_cash_flows(cashflows, discount_rate):
-    """Discount each cash flow individually and sum."""
     return sum(cf / ((1 + discount_rate) ** (i + 1)) for i, cf in enumerate(cashflows))
 
-if selected_display != "Select a stock...":
-    ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
-    info = get_stock_info(ticker)
-
+# --- Helper functions ---
+def safe_get_cashflow(ticker):
     try:
-        market_cap = info.get("marketCap")
-        shares_outstanding = info.get("sharesOutstanding")
-        current_price = info.get("currentPrice")
-        eps_ttm = info.get("trailingEps")
-        pe_ratio = info.get("trailingPE")
-        total_debt = info.get("totalDebt") or 0
-        cash = info.get("totalCash") or 0
-        net_debt = total_debt - cash
+        cf = ticker.cashflow
+        candidates = ['Free Cash Flow','FreeCashFlow','Free Cash Flow (USD)']
+        for c in candidates:
+            if c in cf.index:
+                val = cf.loc[c].iloc[0]
+                return float(val)
+        if 'Operating Cash Flow' in cf.index and 'Capital Expenditures' in cf.index:
+            val = cf.loc['Operating Cash Flow'].iloc[0] + cf.loc['Capital Expenditures'].iloc[0]
+            return float(val)
+    except Exception:
+        pass
+    return None
 
-        col1, col2 = st.columns(2)
-        with col1:
-            base_growth_rate = st.number_input(
-                "📈 Estimated Annual Company Growth (%)",
-                value=10.0,
-                step=0.5,
-                min_value=0.1,
-                max_value=100.0
-            ) / 100
-        with col2:
-            base_discount_rate = st.number_input(
-                "💸 Discount Rate (%)",
-                value=10.0,
-                step=0.5,
-                min_value=6.0,
-                max_value=15.0,
-                help=(
-                    "Suggested Discount Rates by Company Risk:\n"
-                    "• Low-risk (e.g., Apple, MSFT): 6% – 8%\n"
-                    "• Medium-risk (e.g., large growth companies): 8% – 10%\n"
-                    "• High-risk (e.g., small-cap, tech startups): 10% – 15%"
-                )
-            ) / 100
+def safe_get_balance_items(ticker):
+    bs = ticker.balance_sheet
+    result = {'cash': None, 'totalDebt': None}
+    try:
+        if 'Cash' in bs.index:
+            result['cash'] = float(bs.loc['Cash'].iloc[0])
+        elif 'Cash And Cash Equivalents' in bs.index:
+            result['cash'] = float(bs.loc['Cash And Cash Equivalents'].iloc[0])
+        elif 'Cash and cash equivalents' in bs.index:
+            result['cash'] = float(bs.loc['Cash and cash equivalents'].iloc[0])
+        vals = []
+        for k in ['Long Term Debt','Short Long Term Debt','Short Term Debt']:
+            if k in bs.index:
+                vals.append(bs.loc[k].iloc[0])
+        if vals:
+            result['totalDebt'] = float(np.nansum(vals))
+        if result['totalDebt'] is None and 'Total Debt' in bs.index:
+            result['totalDebt'] = float(bs.loc['Total Debt'].iloc[0])
+    except Exception:
+        pass
+    return result
 
-        years = 5
-        terminal_growth_rate = 0.025  # Conservative perpetual growth rate
+def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth):
+    pv_years = []
+    for i, fcf in enumerate(fcf_list, start=1):
+        pv = fcf / ((1 + discount_rate) ** i)
+        pv_years.append(pv)
+    terminal = fcf_list[-1] * (1 + terminal_growth) / (discount_rate - terminal_growth)
+    pv_terminal = terminal / ((1 + discount_rate) ** 5)
+    ev = np.nansum(pv_years) + pv_terminal
+    return {'pv_years': pv_years,'pv_terminal': pv_terminal,'ev': ev,'terminal': terminal}
 
-        scenario = st.selectbox(
-            "Choose Projection Scenario",
-            ["Base", "Bull", "Bear"],
-            index=0,
-            help="Select different projection scenarios."
-        )
+# --- Main Flow ---
+if selected_display != "Select a stock...":
+    ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
+    ticker_yf = yf.Ticker(ticker_symbol)
+    info = ticker_yf.info
+    shares_outstanding = info.get('sharesOutstanding', None)
+    long_name = info.get('longName', ticker_symbol)
+    fcf_ttm = safe_get_cashflow(ticker_yf)
+    if fcf_ttm is None:
+        for k in ['freeCashflow','freeCashFlow']:
+            if k in info:
+                try:
+                    fcf_ttm = float(info[k])
+                except Exception:
+                    pass
+    bal = safe_get_balance_items(ticker_yf)
+    cash_guess = bal['cash']
+    debt_guess = bal['totalDebt']
+    try:
+        hist = ticker_yf.history(period='1d')
+        market_price = hist['Close'].iloc[-1]
+    except Exception:
+        market_price = info.get('previousClose', None)
+    market_cap = info.get('marketCap', None)
 
-        # Scenario multipliers for growth and discount rate
-        growth_multipliers = {"Base": 1.0, "Bull": 1.5, "Bear": 0.5}
-        discount_multipliers = {"Base": 1.0, "Bull": 0.85, "Bear": 1.2}
+    st.subheader(f"{ticker_symbol} — {long_name}")
+    col3, col4, col5 = st.columns(3)
+    with col3:
+        st.metric('Shares outstanding', format_number(shares_outstanding))
+    with col4:
+        st.metric('Market price (latest)', format_currency_dec(market_price))
+    with col5:
+        st.metric('Market Cap', format_currency(market_cap))
 
-        growth_rate = base_growth_rate * growth_multipliers[scenario]
-        discount_rate = base_discount_rate * discount_multipliers[scenario]
+    st.markdown('---')
 
-        # Function to calculate terminal value
-        def calc_terminal_value(last_cashflow, discount_rate, terminal_growth_rate):
-            if terminal_growth_rate >= discount_rate:
-                raise ValueError("Terminal growth rate must be less than discount rate.")
-            return last_cashflow * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
+    if fcf_ttm is None:
+        st.warning('Could not find a reliable Free Cash Flow (TTM). Enter manually:')
+        starting_fcf = st.number_input('Starting FCF (TTM) in USD', value=1_300_000_000.0, step=1_000_000.0, format="%.0f")
+    else:
+        starting_fcf = st.number_input('Starting FCF (TTM) in USD', value=float(fcf_ttm), format="%.0f")
 
-        if not eps_ttm or eps_ttm <= 0 or not pe_ratio or pe_ratio <= 0:
-            st.warning("⚠️ EPS or PE ratio is invalid. Using revenue-based fallback DCF model.")
+    st.markdown('### Growth rate assumptions')
+    user_growth_rates = []
+    cols = st.columns(5)
+    for i in range(5):
+        user_growth_rates.append(cols[i].number_input(f'Year {i+1} Growth %', value=[50,30,20,15,10][i], step=1.0, format="%.1f", key=f'growth{i}'))
 
-            revenue_ttm = info.get("totalRevenue")
+    st.markdown('### 5-Year FCF projections')
+    projected_fcfs = [starting_fcf * (1 + g/100) for g in user_growth_rates]
+    fcfs = []
+    cols = st.columns(5)
+    for i in range(5):
+        fcfs.append(cols[i].number_input(f'Year {i+1} FCF (USD)', value=float(projected_fcfs[i]), format="%.0f", key=f'fcf{i}'))
 
-            if not revenue_ttm or revenue_ttm <= 0:
-                st.error("❌ Revenue data not available to perform fallback DCF.")
-            else:
-                with st.expander("⚙️ Adjust Free Cash Flow Margin (%)"):
-                    fcf_margin = st.slider("Estimated FCF Margin (%)", min_value=1.0, max_value=50.0, value=10.0, step=0.5) / 100
+    st.markdown('---')
+    st.subheader('Discount rate scenarios')
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        disc_bull = st.number_input('Bull Discount Rate (WACC) %', value=8.0, min_value=0.0, max_value=50.0, step=0.1)
+    with col_b:
+        disc_base = st.number_input('Base Discount Rate (WACC) %', value=9.0, min_value=0.0, max_value=50.0, step=0.1)
+    with col_c:
+        disc_bear = st.number_input('Bear Discount Rate (WACC) %', value=10.0, min_value=0.0, max_value=50.0, step=0.1)
 
-                estimated_fcf = revenue_ttm * fcf_margin
-                st.markdown(f"🔢 Estimated Free Cash Flow based on margin: **{format_currency_dec(estimated_fcf)}**")
-
-                projected_cashflows = []
-                for i in range(1, years + 1):
-                    yearly_growth = max(growth_rate - (i * 0.01), 0.01)  # Example: decaying growth
-                    yearly_fcf = estimated_fcf * ((1 + yearly_growth) ** i)
-                    projected_cashflows.append(yearly_fcf)
-
-                discounted_sum = discounted_cash_flows(projected_cashflows, discount_rate)
-
-                terminal_value = calc_terminal_value(projected_cashflows[-1], discount_rate, terminal_growth_rate)
-                discounted_terminal = terminal_value / ((1 + discount_rate) ** years)
-
-                if terminal_value > 2 * discounted_sum:
-                    st.warning("⚠️ Terminal value contributes more than 2x the projected FCFs. This could indicate overvaluation.")
-
-                enterprise_value = discounted_sum + discounted_terminal
-                equity_value = enterprise_value - net_debt
-
-                enterprise_vs_market = enterprise_value / market_cap
-                if enterprise_vs_market > 2:
-                    st.warning(f"⚠️ Enterprise value is {enterprise_vs_market:.2f}x current market cap. Recheck growth assumptions.")
-
-                shares_outstanding = info.get("sharesOutstanding")
-                if not shares_outstanding or shares_outstanding <= 0:
-                    st.error("❌ Invalid or missing shares outstanding.")
-                    st.stop()
-
-                fair_value_per_share = equity_value / shares_outstanding
-
-                if fair_value_per_share > current_price * 3:
-                    st.warning("⚠️ Fair value per share seems unreasonably high. Please review growth and margin assumptions.")
-
-                pv_color = "green" if equity_value > market_cap else "red"
-                valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
-
-                with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
-                    st.markdown(f"""
-                        <div style='padding: 10px; background-color: transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
-                            <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
-                            <p><strong>Enterprise Value (Discounted):</strong> {format_currency_dec(enterprise_value)}</p>
-                            <p><strong>Net Debt (Debt - Cash):</strong> {format_currency(net_debt)}</p>
-                            <p><strong>Equity Value (Enterprise Value - Net Debt):</strong> {format_currency_dec(equity_value)}</p>
-                            <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
-                            <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown("<div style='margin-bottom: 10px;'>&nbsp;</div>", unsafe_allow_html=True)
-
+    st.markdown('---')
+    net_cash_default = None
+    if cash_guess is not None:
+        if debt_guess is not None:
+            net_cash_default = float(cash_guess - debt_guess)
         else:
-            # EPS-based model (realistic): EPS → Net Income → FCF
+            net_cash_default = float(cash_guess)
+    net_cash = st.number_input('Net Cash (Cash - Debt) USD (override)', value=float(net_cash_default) if net_cash_default is not None else 0.0, format="%.0f")
 
-            projected_eps = [eps_ttm * ((1 + growth_rate) ** i) for i in range(1, years + 1)]
-            projected_pe = [pe_ratio * (0.95 ** i) for i in range(years)]
-            projected_stock_price = [eps * pe for eps, pe in zip(projected_eps, projected_pe)]
+    st.markdown('---')
+    scenarios = {
+        'Bull': float(disc_bull) / 100.0,
+        'Base': float(disc_base) / 100.0,
+        'Bear': float(disc_bear) / 100.0
+    }
 
-            # Estimar lucro líquido: EPS × ações
-            projected_net_income = [eps * shares_outstanding for eps in projected_eps]
+    def compute_for_scenario(d_rate):
+        res = dcf_from_fcf_list(fcfs, d_rate, 0.03)
+        ev = res['ev']
+        equity = ev + float(net_cash)
+        per_share = equity / float(shares_outstanding) if shares_outstanding else None
+        return res, equity, per_share
 
-            # Slider para definir margem de FCF sobre lucro líquido (ex: 60%)
-            with st.expander("⚙️ Ajustar Margem de FCF sobre Lucro Líquido (%)"):
-                fcf_margin_from_net_income = st.slider(
-                    "Margem de FCF (%)", min_value=10.0, max_value=100.0, value=60.0, step=1.0
-                ) / 100
+    results = {name: compute_for_scenario(dr) for name, dr in scenarios.items()}
 
-            # Calcular FCF realista
-            projected_cashflows = [net_income * fcf_margin_from_net_income for net_income in projected_net_income]
+    st.subheader('Results')
+    rows = []
+    for name in ['Bull','Base','Bear']:
+        res, equity, per_share = results[name]
+        rows.append({
+            'Scenario': name,
+            'Discount Rate %': scenarios[name]*100,
+            'Enterprise Value (USD)': res['ev'],
+            'PV Terminal (USD)': res['pv_terminal'],
+            'Terminal Value (undiscounted)': res['terminal'],
+            'Equity Value (USD)': equity,
+            'Implied Value / Share (USD)': per_share if per_share is not None else np.nan
+        })
 
-            discounted_sum = discounted_cash_flows(projected_cashflows, discount_rate)
+    df_results = pd.DataFrame(rows)
+    for col in ['Enterprise Value (USD)','PV Terminal (USD)','Terminal Value (undiscounted)','Equity Value (USD)']:
+        df_results[col] = df_results[col].map(lambda x: f"{x:,.0f}")
+    if shares_outstanding:
+        df_results['Implied Value / Share (USD)'] = df_results['Implied Value / Share (USD)'].map(lambda x: f"{x:,.2f}")
+    else:
+        df_results['Implied Value / Share (USD)'] = 'n/a'
 
-            terminal_value = calc_terminal_value(projected_cashflows[-1], discount_rate, terminal_growth_rate)
-            discounted_terminal = terminal_value / ((1 + discount_rate) ** years)
+    st.table(df_results.set_index('Scenario'))
 
-            enterprise_value = discounted_sum + discounted_terminal
-            equity_value = enterprise_value - net_debt
+    st.subheader('PV breakdown (Base scenario)')
+    base_pv_years = results['Base'][0]['pv_years']
+    base_pv_terminal = results['Base'][0]['pv_terminal']
+    labels = [f'Year {i}' for i in range(1,6)] + ['Terminal']
+    values = base_pv_years + [base_pv_terminal]
+    fig, ax = plt.subplots(figsize=(9,4))
+    ax.bar(labels, values)
+    ax.set_ylabel('Present Value (USD)')
+    ax.set_title('PV of projected FCFs and terminal (Base)')
+    ax.ticklabel_format(axis='y', style='plain')
+    st.pyplot(fig)
 
-            fair_value_per_share = equity_value / shares_outstanding
+    csv_buffer = BytesIO()
+    out_df = pd.DataFrame({'Year':[f'Year {i}' for i in range(1,6)]+['Terminal'],'Base PV USD':list(base_pv_years)+[base_pv_terminal]})
+    out_df.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
+    st.download_button('Download base PV CSV', data=csv_buffer, file_name=f'{ticker_symbol}_dcf_base_pv.csv', mime='text/csv')
 
-            pv_color = "green" if equity_value > market_cap else "red"
-            valuation_vs_price = "🟢 Undervalued" if fair_value_per_share > current_price else "🔴 Overvalued"
-
-            with st.expander("📈 Company Valuation Projection (5 Years)", expanded=True):
-                st.markdown(f"""
-                <div style='padding: 10px; background-color: transparent; font-size: 18px; border-radius: 10px; border: 1px solid #ccc;'>
-                    <p><strong>Current Market Cap:</strong> {format_currency(market_cap)}</p>
-                    <p><strong>Enterprise Value (Discounted):</strong> {format_currency_dec(enterprise_value)}</p>
-                    <p><strong>Net Debt (Debt - Cash):</strong> {format_currency(net_debt)}</p>
-                    <p><strong>Equity Value (Enterprise Value - Net Debt):</strong> {format_currency_dec(equity_value)}</p>
-                    <p><strong>Fair Value Per Share (Today):</strong> {format_currency_dec(fair_value_per_share)}</p>
-                    <p><strong>Compared to Current Price ({format_currency_dec(current_price)}):</strong> {valuation_vs_price}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown("<div style='margin-bottom: 10px;'>&nbsp;</div>", unsafe_allow_html=True)
-
-            # Mostrar projeções detalhadas
-            header_style = "text-align: center;font-weight: bold;font-size: 18px;color: white;margin-bottom: 10px;"
-            projection_box_style = (
-                "border: 2px solid #FFA500;padding: 12px;border-radius: 12px;"
-                "text-align: center;margin-bottom: 12px;color: white;font-size: 18px;"
-                "font-weight: 600;background-color: rgba(255,165,0,0.15);"
-            )
-            metric_box_style = (
-                "border: 2px solid #28a745;padding: 12px;border-radius: 15px;text-align: center;"
-                "margin-bottom: 12px;color: white;font-size: 18px;font-weight: bold;"
-                "background-color: rgba(40, 167, 69, 0.85);display: flex;align-items: center;"
-                "justify-content: center;height: 48px;"
-            )
-
-            with st.expander("🔮 5-Year Stock Metrics Projection", expanded=True):
-                start_year = datetime.datetime.now().year + 1
-                years_labels = [str(start_year + i) for i in range(5)]
-                header_cols = st.columns(6)
-                header_cols[0].markdown(f"<div style='{header_style}'>Métrica</div>", unsafe_allow_html=True)
-                for i, year in enumerate(years_labels):
-                    header_cols[i + 1].markdown(f"<div style='{header_style}'>{year}</div>", unsafe_allow_html=True)
-
-                metrics = ["EPS", "PE Ratio", "Stock Price", "Net Income", "FCF"]
-                rows = {
-                    "EPS": projected_eps,
-                    "PE Ratio": projected_pe,
-                    "Stock Price": projected_stock_price,
-                    "Net Income": projected_net_income,
-                    "FCF": projected_cashflows
-                }
-
-                for metric in metrics:
-                    row_cols = st.columns(6)
-                    row_cols[0].markdown(f"<div style='{metric_box_style}'>{metric}</div>", unsafe_allow_html=True)
-                    for i in range(years):
-                        val = rows[metric][i]
-                        if metric in ["PE Ratio"]:
-                            fmt = f"{val:.2f}"
-                        elif metric in ["EPS", "Stock Price"]:
-                            fmt = f"${val:,.2f}"
-                        else:
-                            fmt = f"${val:,.0f}"
-                        row_cols[i + 1].markdown(f"<div style='{projection_box_style}'>{fmt}</div>", unsafe_allow_html=True)
-
-
-        with st.spinner("Updating projections based on scenario..."):
-            time.sleep(0.5)
-
-    except Exception as e:
-        st.error("⚠️ Error while calculating DCF.")
-        st.exception(e)
+    st.markdown('---')
+    st.caption('Built with yfinance — results depend on inputs. Not investment advice.')
