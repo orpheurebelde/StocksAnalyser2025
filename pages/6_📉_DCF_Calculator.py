@@ -1,10 +1,10 @@
 import streamlit as st
 import yfinance as yf
 import numpy as np
-from utils.utils import load_stock_list, get_stock_info
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
+from utils.utils import load_stock_list, get_stock_info
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
 st.title("5-Year DCF Calculator — Streamlit")
@@ -18,6 +18,7 @@ selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, 
 # --- Formatting helpers ---
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
 def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
+def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
 def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
 
 def discounted_cash_flows(cashflows, discount_rate):
@@ -76,9 +77,8 @@ if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     ticker_yf = yf.Ticker(ticker_symbol)
 
-    # --- Use get_stock_info() to avoid rate limits ---
+    # --- Fetch info from cache or yfinance ---
     info = get_stock_info(ticker_symbol)
-
     shares_outstanding = info.get("shares_outstanding")
     market_price = info.get("market_price")
     market_cap = info.get("market_cap")
@@ -107,6 +107,7 @@ if selected_display != "Select a stock...":
 
     st.markdown('---')
 
+    # --- Starting FCF input ---
     if fcf_ttm is None:
         st.warning('Could not find a reliable Free Cash Flow (TTM). Enter manually:')
         starting_fcf = st.number_input('Starting FCF (TTM) in USD', value=1_300_000_000.0, step=1_000_000.0, format="%.0f")
@@ -202,7 +203,8 @@ if selected_display != "Select a stock...":
     st.pyplot(fig)
 
     csv_buffer = BytesIO()
-    out_df = pd.DataFrame({'Year':[f'Year {i}' for i in range(1,6)]+['Terminal'],'Base PV USD':list(base_pv_years)+[base_pv_terminal]})
+    out_df = pd.DataFrame({'Year':[f'Year {i}' for i in range(1,6)]+['Terminal'],
+                           'Base PV USD':list(base_pv_years)+[base_pv_terminal]})
     out_df.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
     st.download_button('Download base PV CSV', data=csv_buffer, file_name=f'{ticker_symbol}_dcf_base_pv.csv', mime='text/csv')
