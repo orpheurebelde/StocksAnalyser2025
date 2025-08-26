@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import numpy as np
-from utils.utils import load_stock_list
+from utils.utils import load_stock_list, get_stock_info
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
@@ -18,9 +18,7 @@ selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, 
 # --- Formatting helpers ---
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
 def format_currency_dec(val): return f"${val:,.2f}" if isinstance(val, (int, float)) else "N/A"
-def format_percent(val): return f"{val * 100:.2f}%" if isinstance(val, (int, float)) else "N/A"
 def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else "N/A"
-def format_ratio(val): return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
 
 def discounted_cash_flows(cashflows, discount_rate):
     return sum(cf / ((1 + discount_rate) ** (i + 1)) for i, cf in enumerate(cashflows))
@@ -78,14 +76,12 @@ if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     ticker_yf = yf.Ticker(ticker_symbol)
 
-    # --- Use fast_info to avoid rate limits ---
-    try:
-        shares_outstanding = ticker_yf.fast_info.get("shares_outstanding", None)
-        market_price = ticker_yf.fast_info.get("last_price", None)
-        market_cap = ticker_yf.fast_info.get("market_cap", None)
-    except Exception:
-        st.warning("⚠️ Could not load fast info. Please input manually.")
-        shares_outstanding, market_price, market_cap = None, None, None
+    # --- Use get_stock_info() to avoid rate limits ---
+    info = get_stock_info(ticker_symbol)
+
+    shares_outstanding = info.get("shares_outstanding")
+    market_price = info.get("market_price")
+    market_cap = info.get("market_cap")
 
     # --- Manual fallback if any info missing ---
     if shares_outstanding is None:
