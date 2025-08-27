@@ -41,21 +41,7 @@ def format_number(val): return f"{val:,}" if isinstance(val, (int, float)) else 
 def discounted_cash_flows(cashflows, discount_rate):
     return sum(cf / ((1 + discount_rate) ** (i + 1)) for i, cf in enumerate(cashflows))
 
-def safe_get_cashflow(ticker):
-    """Get latest FCF from yfinance ticker"""
-    try:
-        cf = ticker.cashflow
-        candidates = ['Free Cash Flow','FreeCashFlow','Free Cash Flow (USD)']
-        for c in candidates:
-            if c in cf.index:
-                return safe_float(cf.loc[c].iloc[0])
-        if 'Operating Cash Flow' in cf.index and 'Capital Expenditures' in cf.index:
-            return safe_float(cf.loc['Operating Cash Flow'].iloc[0] + cf.loc['Capital Expenditures'].iloc[0])
-    except:
-        return None
-
 def safe_get_cashflow_avg(ticker, years=3):
-    """Compute average FCF over last `years`"""
     try:
         cf = ticker.cashflow
         candidates = ['Free Cash Flow','FreeCashFlow','Free Cash Flow (USD)']
@@ -63,7 +49,6 @@ def safe_get_cashflow_avg(ticker, years=3):
             if c in cf.index:
                 vals = cf.loc[c].dropna().values[:years]
                 return safe_float(np.mean(vals)) if len(vals) > 0 else None
-        # fallback if no Free Cash Flow row
         if 'Operating Cash Flow' in cf.index and 'Capital Expenditures' in cf.index:
             vals = (cf.loc['Operating Cash Flow'] + cf.loc['Capital Expenditures']).dropna().values[:years]
             return safe_float(np.mean(vals)) if len(vals) > 0 else None
@@ -94,7 +79,7 @@ def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth):
     for i, fcf in enumerate(fcf_list, start=1):
         pv_years.append(fcf / ((1 + discount_rate) ** i))
     terminal = fcf_list[-1] * (1 + terminal_growth) / (discount_rate - terminal_growth)
-    pv_terminal = terminal / ((1 + discount_rate) ** 5)
+    pv_terminal = terminal / ((1 + discount_rate) ** len(fcf_list))
     ev = np.nansum(pv_years) + pv_terminal
     return {'pv_years': pv_years,'pv_terminal': pv_terminal,'ev': ev,'terminal': terminal}
 
@@ -102,17 +87,14 @@ def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth):
 if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     info = get_stock_info(ticker_symbol)
-    
-    # --- Get yfinance ticker object ---
     ticker_yf = yf.Ticker(ticker_symbol)
-    
+
     # --- Safe numeric defaults ---
     shares_outstanding_safe = safe_int(info.get("sharesOutstanding"), 0)
     market_price_safe = safe_float(info.get("previousClose"), 0.0)
     market_cap_safe = safe_float(info.get("marketCap"), 0.0)
     long_name = info.get("longName", ticker_symbol)
-    
-    # --- Historical FCF average ---
+
     fcf_ttm = safe_get_cashflow_avg(ticker_yf, years=3)
     bal = safe_get_balance_items(ticker_yf)
     cash_guess = safe_float(bal.get('cash'))
@@ -133,51 +115,35 @@ if selected_display != "Select a stock...":
         "Starting FCF (TTM) USD:", min_value=0.0, value=fcf_ttm or 1_300_000_000, step=1_000_000.0, format="%.0f"
     )
 
-    # --- 5-Year Growth Sliders (side by side) ---
+    # --- 5-Year Growth Sliders ---
     st.markdown("### 5-Year Growth Rate Assumptions")
     default_growths = [50.0, 30.0, 20.0, 15.0, 10.0]
     growth_cols = st.columns(5)
-    user_growth_rates = []
-    for i in range(5):
-        user_growth_rates.append(
-            growth_cols[i].slider(
-                f"Year {i+1} Growth %",
-                min_value=0.0,
-                max_value=100.0,
-                value=default_growths[i],
-                step=1.0,
-                key=f"growth_{i}"  # unique key for each slider
-            )
-        )
+    user_growth_rates = [growth_cols[i].slider(f"Year {i+1} Growth %", 0.0, 100.0, default_growths[i], 1.0, key=f"growth_{i}") for i in range(5)]
 
-    # --- 5-Year FCF projections ---
-    fcfs = [starting_fcf_input * (1 + g/100) for g in user_growth_rates]
+    # --- Compounded 5-Year FCF projections ---
+    fcfs = []
+    fcf = starting_fcf_input
+    for g in user_growth_rates:
+        fcf = fcf * (1 + g / 100)
+        fcfs.append(fcf)
 
-    # --- Terminal growth slider (centered in 5 columns) ---
+    # --- Terminal Growth ---
     st.markdown("### Terminal Growth Assumption")
     term_cols = st.columns(5)
-    terminal_growth = term_cols[2].slider(
-        "Terminal Growth Rate %",
-        min_value=0.0,
-        max_value=10.0,
-        value=3.0,
-        step=0.1,
-        key="terminal_growth"
-    ) / 100
+    terminal_growth = term_cols[2].slider("Terminal Growth Rate %", 0.0, 10.0, 3.0, 0.1, key="terminal_growth") / 100
 
-    # --- Discount rate sliders (side by side) ---
+    # --- Discount Rates ---
     st.markdown("### Discount Rate Scenarios")
     disc_cols = st.columns(3)
     disc_bull = disc_cols[0].slider("Bull Discount Rate %", 0.0, 50.0, 8.0, 0.1, key="disc_bull")
     disc_base = disc_cols[1].slider("Base Discount Rate %", 0.0, 50.0, 9.0, 0.1, key="disc_base")
     disc_bear = disc_cols[2].slider("Bear Discount Rate %", 0.0, 50.0, 10.0, 0.1, key="disc_bear")
 
-    # --- Net cash ---
-    net_cash_input = st.number_input(
-        "Net Cash (Cash - Debt) USD (override)", min_value=-1e12, value=(cash_guess - debt_guess) or cash_guess or 0.0, step=1_000_000.0
-    )
+    # --- Net Cash ---
+    net_cash_input = st.number_input("Net Cash (Cash - Debt) USD (override)", min_value=-1e12, value=(cash_guess - debt_guess) or cash_guess or 0.0, step=1_000_000.0)
 
-    # --- Compute scenarios ---
+    # --- Compute Scenarios ---
     scenarios = {"Bull": disc_bull/100, "Base": disc_base/100, "Bear": disc_bear/100}
     def compute_scenario(d_rate):
         res = dcf_from_fcf_list(fcfs, d_rate, terminal_growth)
@@ -187,7 +153,7 @@ if selected_display != "Select a stock...":
 
     results = {name: compute_scenario(dr) for name, dr in scenarios.items()}
 
-    # --- Display results ---
+    # --- Display Results ---
     st.subheader("Results")
     rows = []
     for name in ["Bull","Base","Bear"]:
@@ -208,7 +174,7 @@ if selected_display != "Select a stock...":
     df_results['Implied Value / Share (USD)'] = df_results['Implied Value / Share (USD)'].map(lambda x: f"{x:,.2f}" if x else 'n/a')
     st.table(df_results.set_index("Scenario"))
 
-    # --- PV chart ---
+    # --- PV Chart ---
     st.subheader("PV breakdown (Base scenario)")
     base_pv_years = results['Base'][0]['pv_years']
     base_pv_terminal = results['Base'][0]['pv_terminal']
