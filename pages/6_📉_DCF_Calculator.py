@@ -145,27 +145,32 @@ if selected_display != "Select a stock...":
                 min_value=0.0,
                 max_value=100.0,
                 value=default_growths[i],
-                step=1.0
+                step=1.0,
+                key=f"growth_{i}"  # unique key for each slider
             )
         )
 
-    # --- Terminal growth slider in its own column for alignment ---
+    # --- 5-Year FCF projections ---
+    fcfs = [starting_fcf_input * (1 + g/100) for g in user_growth_rates]
+
+    # --- Terminal growth slider (centered in 5 columns) ---
     st.markdown("### Terminal Growth Assumption")
-    term_col1, term_col2, term_col3, term_col4, term_col5 = st.columns(5)
-    terminal_growth = term_col3.slider(
+    term_cols = st.columns(5)
+    terminal_growth = term_cols[2].slider(
         "Terminal Growth Rate %",
         min_value=0.0,
         max_value=10.0,
         value=3.0,
-        step=0.1
+        step=0.1,
+        key="terminal_growth"
     ) / 100
 
     # --- Discount rate sliders (side by side) ---
     st.markdown("### Discount Rate Scenarios")
     disc_cols = st.columns(3)
-    disc_bull = disc_cols[0].slider("Bull Discount Rate %", 0.0, 50.0, 8.0, 0.1)
-    disc_base = disc_cols[1].slider("Base Discount Rate %", 0.0, 50.0, 9.0, 0.1)
-    disc_bear = disc_cols[2].slider("Bear Discount Rate %", 0.0, 50.0, 10.0, 0.1)
+    disc_bull = disc_cols[0].slider("Bull Discount Rate %", 0.0, 50.0, 8.0, 0.1, key="disc_bull")
+    disc_base = disc_cols[1].slider("Base Discount Rate %", 0.0, 50.0, 9.0, 0.1, key="disc_base")
+    disc_bear = disc_cols[2].slider("Bear Discount Rate %", 0.0, 50.0, 10.0, 0.1, key="disc_bear")
 
     # --- Net cash ---
     net_cash_input = st.number_input(
