@@ -285,13 +285,22 @@ if selected_display != "Select a stock...":
 
     st.markdown("### Starting Cash Flow")
     sc1, sc2 = st.columns(2)
+    if fcff_ttm <= 0:
+        st.warning(
+            f"⚠️ Warning: {ticker_symbol} has negative or zero FCF (TTM = {fcff_ttm:,.0f}). "
+            "DCF projections may be meaningless unless you override with a normalized value."
+        )
+        start_default = 10_000_000.0  # suggest a baseline for user input
+    else:
+        start_default = fcff_ttm
+
     starting_cf = sc1.number_input(
-    f"Starting {flow_label} (TTM) USD",
-    min_value=0.0,
-    value=max(0.0, fcff_ttm),
-    step=1_000_000.0,
-    format="%.0f",
-    help="We use FCFF by default. If unavailable we fall back to FCF."
+        f"Starting {flow_label} (TTM) USD",
+        min_value=0.0,
+        value=start_default,
+        step=1_000_000.0,
+        format="%.0f",
+        help="Default uses TTM FCF/FCFF. Override if unusual one-time effects distort cash flow."
     )
     use_fcff = sc2.selectbox("Cash Flow Type", ["FCFF (enterprise)", "FCF (levered)"], index=0,
                              help="FCFF is preferred for DCF to EV. Choose FCF if you intentionally want levered FCF.")
