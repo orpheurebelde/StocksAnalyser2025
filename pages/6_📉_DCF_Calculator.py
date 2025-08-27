@@ -305,44 +305,45 @@ if selected_display != "Select a stock...":
     use_fcff = sc2.selectbox("Cash Flow Type", ["FCFF (enterprise)", "FCF (levered)"], index=0,
                              help="FCFF is preferred for DCF to EV. Choose FCF if you intentionally want levered FCF.")
 
-    # --- 5-Year Growth (side-by-side)
-    st.markdown("### 5-Year Growth Rate Assumptions")
-    default_growths = [40.0, 25.0, 18.0, 12.0, 8.0]
-    gcols = st.columns(5)
-    user_growth_rates = []
-    for i in range(5):
-        user_growth_rates.append(
-            gcols[i].slider(f"Year {i+1} Growth %", 0.0, 150.0, default_growths[i], 1.0, key=f"g_{i}")
-        )
+    with st.expander("🔧 Adjust DCF Assumptions", expanded=False):
+        # --- 5-Year Growth (side-by-side)
+        st.markdown("### 5-Year Growth Rate Assumptions")
+        default_growths = [40.0, 25.0, 18.0, 12.0, 8.0]
+        gcols = st.columns(5)
+        user_growth_rates = []
+        for i in range(5):
+            user_growth_rates.append(
+                gcols[i].slider(f"Year {i+1} Growth %", 0.0, 150.0, default_growths[i], 1.0, key=f"g_{i}")
+            )
 
-    # Build explicit CFs from the starting CF
-    fcf_list = []
-    prev = starting_cf
-    for g in user_growth_rates:
-        nxt = prev * (1.0 + g / 100.0)
-        fcf_list.append(nxt)
-        prev = nxt
+        # Build explicit CFs from the starting CF
+        fcf_list = []
+        prev = starting_cf
+        for g in user_growth_rates:
+            nxt = prev * (1.0 + g / 100.0)
+            fcf_list.append(nxt)
+            prev = nxt
 
-    # --- Terminal assumption
-    st.markdown("### Terminal Value Assumption")
-    tcols = st.columns(5)
-    method = tcols[0].selectbox("Method", ["Gordon Growth", "Exit EV/CF Multiple"], index=0)
-    if method == "Gordon Growth":
-        terminal_growth = tcols[1].slider("Terminal Growth Rate %", 0.0, 6.0, 3.0, 0.1) / 100.0
-        exit_multiple = None
-    else:
-        terminal_growth = None
-        exit_multiple = tcols[1].number_input("Exit EV/CF Multiple (x)", min_value=1.0, value=22.0, step=0.5,
-                                              help="Enterprise multiple on final-year cash flow")
+        # --- Terminal assumption
+        st.markdown("### Terminal Value Assumption")
+        tcols = st.columns(5)
+        method = tcols[0].selectbox("Method", ["Gordon Growth", "Exit EV/CF Multiple"], index=0)
+        if method == "Gordon Growth":
+            terminal_growth = tcols[1].slider("Terminal Growth Rate %", 0.0, 6.0, 3.0, 0.1) / 100.0
+            exit_multiple = None
+        else:
+            terminal_growth = None
+            exit_multiple = tcols[1].number_input("Exit EV/CF Multiple (x)", min_value=1.0, value=22.0, step=0.5,
+                                                help="Enterprise multiple on final-year cash flow")
 
-    # --- Discount rates (side-by-side)
-    st.markdown("### Discount Rate Scenarios")
-    dcols = st.columns(3)
-    disc_bull = dcols[0].slider("Bull Discount Rate %", 0.0, 30.0, 8.0, 0.1)
-    disc_base = dcols[1].slider("Base Discount Rate %", 0.0, 30.0, 9.0, 0.1)
-    disc_bear = dcols[2].slider("Bear Discount Rate %", 0.0, 30.0, 10.0, 0.1)
+        # --- Discount rates (side-by-side)
+        st.markdown("### Discount Rate Scenarios")
+        dcols = st.columns(3)
+        disc_bull = dcols[0].slider("Bull Discount Rate %", 0.0, 30.0, 8.0, 0.1)
+        disc_base = dcols[1].slider("Base Discount Rate %", 0.0, 30.0, 9.0, 0.1)
+        disc_bear = dcols[2].slider("Bear Discount Rate %", 0.0, 30.0, 10.0, 0.1)
 
-    scenarios = {"Bull": disc_bull/100.0, "Base": disc_base/100.0, "Bear": disc_bear/100.0}
+        scenarios = {"Bull": disc_bull/100.0, "Base": disc_base/100.0, "Bear": disc_bear/100.0}
 
     # --- Compute scenarios
     def run_scenario(rate):
