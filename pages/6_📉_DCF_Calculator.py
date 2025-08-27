@@ -285,8 +285,14 @@ if selected_display != "Select a stock...":
 
     st.markdown("### Starting Cash Flow")
     sc1, sc2 = st.columns(2)
-    starting_cf = sc1.number_input(f"Starting {flow_label} (TTM) USD", min_value=0.0, value=fcff_ttm, step=1_000_000.0, format="%.0f",
-                                   help="We use FCFF by default. If unavailable we fall back to FCF.")
+    starting_cf = sc1.number_input(
+    f"Starting {flow_label} (TTM) USD",
+    min_value=0.0,
+    value=max(0.0, fcff_ttm),
+    step=1_000_000.0,
+    format="%.0f",
+    help="We use FCFF by default. If unavailable we fall back to FCF."
+    )
     use_fcff = sc2.selectbox("Cash Flow Type", ["FCFF (enterprise)", "FCF (levered)"], index=0,
                              help="FCFF is preferred for DCF to EV. Choose FCF if you intentionally want levered FCF.")
 
