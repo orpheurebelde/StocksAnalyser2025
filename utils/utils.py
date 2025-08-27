@@ -33,66 +33,52 @@ def is_cache_valid():
         < timedelta(hours=CACHE_DURATION_HOURS)
     )
 
-def fetch_and_cache_stock_info(ticker: str) -> dict:
-    """
-    Fetch full yfinance info for a ticker and cache entire dict.
-    Returns the full info dict with guaranteed 'Ticker' key.
-    """
+def fetch_and_cache_stock_info(ticker):
+    """Fetch info and save to CSV cache."""
     ticker = ticker.upper()
     try:
         stock = yf.Ticker(ticker)
-        info_full = {}
+        info = stock.info
+        if not info:
+            raise ValueError("Empty info returned.")
 
-        # Try fast_info first
-        try:
-            fast_data = stock.fast_info or {}
-        except Exception:
-            fast_data = {}
+        info["Ticker"] = ticker  # ✅ Ensure Ticker is always added
+        df_new = pd.DataFrame([info])
+        df_new.set_index("Ticker", inplace=True)
 
-        # Full info fallback
-        try:
-            info_full = stock.info or {}
-        except Exception:
-            info_full = {}
+        # Load or create cache
+        if os.path.exists(CSV_PATH):
+            try:
+                df_existing = pd.read_csv(CSV_PATH)
+                if "Ticker" not in df_existing.columns:
+                    raise ValueError("Missing 'Ticker' column")
+                df_existing.set_index("Ticker", inplace=True)
+            except Exception as e:
+                print(f"⚠️ Corrupted cache. Removing: {e}")
+                os.remove(CSV_PATH)
+                df_existing = pd.DataFrame()
+        else:
+            df_existing = pd.DataFrame()
 
-        # Merge fast_info into info_full (fast_info overrides)
-        for k, v in fast_data.items():
-            if v is not None:
-                info_full[k] = v
+        # Check if info changed
+        new_hash = md5(json.dumps(info, sort_keys=True).encode()).hexdigest()
+        existing_hash = None
+        if ticker in df_existing.index:
+            existing_info = df_existing.loc[ticker].dropna().to_dict()
+            existing_hash = md5(json.dumps(existing_info, sort_keys=True).encode()).hexdigest()
 
-        # Always include Ticker key
-        info_full["Ticker"] = ticker
+        if new_hash != existing_hash:
+            df_combined = pd.concat([df_existing.drop(index=ticker, errors="ignore"), df_new])
+            df_combined.to_csv(CSV_PATH)
+            print(f"✅ Cache updated for {ticker}")
+        else:
+            print(f"ℹ️ No change for {ticker}")
 
-        # Only cache if we got any data
-        if info_full:
-            df_new = pd.DataFrame([info_full]).set_index("Ticker")
-
-            # Load existing cache
-            if os.path.exists(CSV_PATH):
-                try:
-                    df_existing = pd.read_csv(CSV_PATH).set_index("Ticker")
-                except Exception:
-                    os.remove(CSV_PATH)
-                    df_existing = pd.DataFrame().set_index("Ticker")
-            else:
-                df_existing = pd.DataFrame().set_index("Ticker")
-
-            # Check if hash changed
-            new_hash = md5(json.dumps(info_full, sort_keys=True).encode()).hexdigest()
-            existing_hash = None
-            if ticker in df_existing.index:
-                existing_info = df_existing.loc[ticker].dropna().to_dict()
-                existing_hash = md5(json.dumps(existing_info, sort_keys=True).encode()).hexdigest()
-
-            if new_hash != existing_hash:
-                df_combined = pd.concat([df_existing.drop(index=ticker, errors="ignore"), df_new])
-                df_combined.to_csv(CSV_PATH)
-
-        return info_full
+        return info
 
     except Exception as e:
-        print(f"❌ Error fetching {ticker}: {e}")
-        return {"Ticker": ticker}
+        print(f"❌ Unexpected error: {e}")
+        return {"error": f"An unexpected error occurred: {e}"}
 
 # Load stock list
 @st.cache_data
@@ -101,23 +87,26 @@ def load_stock_list():
     df["Display"] = df["Ticker"] + " - " + df["Name"]
     return df
 
-@st.cache_data
-def get_stock_info(ticker: str) -> dict:
-    """
-    Return full stock info from cache or fetch fresh.
-    Guarantees at least the 'Ticker' key exists.
-    """
+def get_stock_info(ticker):
+    """Get stock info from cache or fetch if needed."""
     ticker = ticker.upper()
-
     if os.path.exists(CSV_PATH):
         try:
-            df = pd.read_csv(CSV_PATH).set_index("Ticker")
+            df = pd.read_csv(CSV_PATH)
+            if "Ticker" not in df.columns:
+                print("⚠️ CSV missing Ticker column. Deleting.")
+                os.remove(CSV_PATH)
+                return fetch_and_cache_stock_info(ticker)
+            df.set_index("Ticker", inplace=True)
             if ticker in df.index:
-                data = df.loc[ticker].to_dict()
-                data["Ticker"] = ticker
-                return data
-        except Exception:
-            os.remove(CSV_PATH)
+                return df.loc[ticker].to_dict()
+        except Exception as e:
+            print(f"⚠️ Read error: {e}")
+            try:
+                os.remove(CSV_PATH)
+            except:
+                pass
+            return fetch_and_cache_stock_info(ticker)
 
     return fetch_and_cache_stock_info(ticker)
 
@@ -685,5 +674,3 @@ def interpret_dilution_extended(dilution_pct, revenue_growth=None, eps_current=N
             comments.append("💰 No major financing activity noted.")
 
     return "\n\n".join(comments)
-
-
