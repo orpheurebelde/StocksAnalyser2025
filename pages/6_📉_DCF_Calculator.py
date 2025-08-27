@@ -7,7 +7,7 @@ from io import BytesIO
 from utils.utils import load_stock_list, get_stock_info
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
-st.title("5-Year DCF Calculator — Streamlit (Upgraded)")
+st.title("5-Year DCF Calculator — Streamlit")
 
 # --- Safe numeric helpers ---
 def safe_int(val, default=0):
@@ -26,6 +26,18 @@ def safe_float(val, default=0.0):
     except:
         return default
 
+# --- Shares correction helper ---
+def correct_shares_outstanding(shares, price, market_cap):
+    """Correct obvious yfinance misreads"""
+    if not shares or shares <= 0:
+        return 1  # fallback
+    implied_price = market_cap / shares
+    if price and implied_price > 10*price:
+        return shares / 10
+    elif price and implied_price < 0.1*price:
+        return shares * 10
+    return shares
+
 # --- Load stock list ---
 stock_df = load_stock_list()
 stock_df = stock_df.sort_values(by="Display")
@@ -42,7 +54,6 @@ def discounted_cash_flows(cashflows, discount_rate):
     return sum(cf / ((1 + discount_rate) ** (i + 1)) for i, cf in enumerate(cashflows))
 
 def safe_get_cashflow_avg(ticker, years=3):
-    """Compute average FCF over last `years`"""
     try:
         cf = ticker.cashflow
         candidates = ['Free Cash Flow','FreeCashFlow','Free Cash Flow (USD)']
@@ -50,56 +61,69 @@ def safe_get_cashflow_avg(ticker, years=3):
             if c in cf.index:
                 vals = cf.loc[c].dropna().values[:years]
                 return safe_float(np.mean(vals)) if len(vals) > 0 else None
-        # fallback if no Free Cash Flow row
+        # fallback if no FCF
         if 'Operating Cash Flow' in cf.index and 'Capital Expenditures' in cf.index:
             vals = (cf.loc['Operating Cash Flow'] + cf.loc['Capital Expenditures']).dropna().values[:years]
             return safe_float(np.mean(vals)) if len(vals) > 0 else None
     except:
         return None
 
-def get_adjusted_net_cash(ticker):
-    """Calculate net cash automatically (cash - debt)"""
-    cash, debt = 0.0, 0.0
+def safe_get_balance_items(ticker):
+    bs = ticker.balance_sheet
+    cash, debt = None, None
     try:
-        bs = ticker.balance_sheet
         for c in ['Cash', 'Cash And Cash Equivalents', 'Cash and cash equivalents']:
             if c in bs.index:
                 cash = safe_float(bs.loc[c].iloc[0])
                 break
         vals = []
-        for k in ['Long Term Debt','Short Term Debt','Total Debt']:
+        for k in ['Long Term Debt','Short Long Term Debt','Short Term Debt','Total Debt']:
             if k in bs.index:
                 vals.append(bs.loc[k].iloc[0])
         if vals:
             debt = safe_float(np.nansum(vals))
     except:
         pass
-    return cash - debt
+    return {'cash': cash, 'totalDebt': debt}
 
-def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth):
-    pv_years = [cf / ((1 + discount_rate) ** (i+1)) for i, cf in enumerate(fcf_list)]
-    terminal = fcf_list[-1] * (1 + terminal_growth) / (discount_rate - terminal_growth)
+def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth, method="gordon"):
+    """
+    method: 'gordon' for Gordon growth, 'ev/fcf' for EV/FCF terminal
+    """
+    pv_years = []
+    for i, fcf in enumerate(fcf_list, start=1):
+        pv_years.append(fcf / ((1 + discount_rate) ** i))
+    last_fcf = fcf_list[-1]
+    
+    if method == "gordon":
+        terminal = last_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
+    else:  # EV/FCF multiple
+        ev_multiple = method if isinstance(method, (int,float)) else 20
+        terminal = last_fcf * ev_multiple
+    
     pv_terminal = terminal / ((1 + discount_rate) ** len(fcf_list))
     ev = np.nansum(pv_years) + pv_terminal
-    return {'pv_years': pv_years,'pv_terminal': pv_terminal,'ev': ev,'terminal': terminal}
+    return {'pv_years': pv_years, 'pv_terminal': pv_terminal, 'ev': ev, 'terminal': terminal}
 
 # --- Main Flow ---
 if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     info = get_stock_info(ticker_symbol)
-    
-    # --- yfinance ticker ---
     ticker_yf = yf.Ticker(ticker_symbol)
     
-    # --- Defaults ---
-    shares_outstanding_safe = safe_int(info.get("sharesOutstanding"), 0)
+    # --- Safe numeric defaults ---
+    shares_outstanding_safe = correct_shares_outstanding(
+        safe_int(info.get("sharesOutstanding"), 0),
+        safe_float(info.get("previousClose"), 0),
+        safe_float(info.get("marketCap"), 0)
+    )
     market_price_safe = safe_float(info.get("previousClose"), 0.0)
     market_cap_safe = safe_float(info.get("marketCap"), 0.0)
     long_name = info.get("longName", ticker_symbol)
     
-    # --- FCF & Net Cash ---
-    fcf_avg = safe_get_cashflow_avg(ticker_yf, years=3) or 1_000_000_000
-    net_cash = get_adjusted_net_cash(ticker_yf)
+    fcf_ttm = safe_get_cashflow_avg(ticker_yf, years=3) or 1_000_000_000
+    bal = safe_get_balance_items(ticker_yf)
+    cash_guess, debt_guess = safe_float(bal.get('cash')), safe_float(bal.get('totalDebt'))
     
     # --- Display metrics ---
     st.subheader(f"{ticker_symbol} — {long_name}")
@@ -108,72 +132,84 @@ if selected_display != "Select a stock...":
     with col4: st.metric("Market Price", format_currency_dec(market_price_safe))
     with col5: st.metric("Market Cap", format_currency(market_cap_safe))
     
-    # --- Inputs ---
-    shares_outstanding_input = st.number_input("Shares Outstanding:", min_value=0, value=shares_outstanding_safe, step=1)
-    starting_fcf_input = st.number_input("Starting FCF (TTM) USD:", min_value=0.0, value=fcf_avg, step=1_000_000.0, format="%.0f")
+    # --- User inputs ---
+    shares_outstanding_input = st.number_input("Shares Outstanding:", min_value=0, value=int(shares_outstanding_safe), step=1)
+    starting_fcf_input = st.number_input(
+        "Starting FCF (TTM) USD:", min_value=0.0, value=fcf_ttm, step=1_000_000.0, format="%.0f"
+    )
     
     # --- Growth sliders ---
     st.markdown("### 5-Year Growth Rate Assumptions")
-    default_growths = [50.0,30.0,20.0,15.0,10.0]
     growth_cols = st.columns(5)
-    user_growth_rates = [growth_cols[i].slider(f"Year {i+1} Growth %", 0.0, 100.0, default_growths[i], step=1.0) for i in range(5)]
+    user_growth_rates = [growth_cols[i].slider(f"Year {i+1} Growth %", 0.0, 100.0, 20.0, step=1.0) for i in range(5)]
+    
     fcfs = [starting_fcf_input * (1 + g/100) for g in user_growth_rates]
     
-    # --- Terminal growth ---
-    st.markdown("### Terminal Growth Assumption")
+    # --- Terminal assumption ---
+    st.markdown("### Terminal Value Assumption")
     term_cols = st.columns(5)
-    terminal_growth = term_cols[2].slider("Terminal Growth Rate %", min_value=0.0, max_value=5.0, value=3.0, step=0.1)/100
+    terminal_method = term_cols[1].selectbox("Method", ["Gordon Growth", "EV/FCF Multiple"])
+    if terminal_method == "Gordon Growth":
+        terminal_growth = term_cols[2].slider("Terminal Growth Rate %", 0.0, 10.0, 3.0, step=0.1)/100
+        term_value_method = "gordon"
+    else:
+        ev_multiple = term_cols[2].slider("EV/FCF Multiple", 5, 40, 20)
+        terminal_growth = 0.0
+        term_value_method = ev_multiple
     
-    # --- Discount rates (dynamic base) ---
+    # --- Discount rates ---
     st.markdown("### Discount Rate Scenarios")
-    rf_rate = st.number_input("Risk-Free Rate %", 0.0, 10.0, 5.0, 0.1)/100
-    beta = st.number_input("Beta", 0.0, 3.0, 1.1, 0.01)
-    market_premium = st.number_input("Market Risk Premium %", 0.0, 20.0, 6.0, 0.1)/100
-    disc_base = rf_rate + beta*market_premium
     disc_cols = st.columns(3)
-    disc_bull = disc_cols[0].slider("Bull Discount Rate %", 0.0, 50.0, max(disc_base-0.02,0.05)*100)
-    disc_base = disc_cols[1].slider("Base Discount Rate %", 0.0, 50.0, disc_base*100)
-    disc_bear = disc_cols[2].slider("Bear Discount Rate %", 0.0, 50.0, min(disc_base+0.02,0.25)*100)
+    disc_bull = disc_cols[0].slider("Bull Discount Rate %", 0.0, 50.0, 8.0, 0.1)/100
+    disc_base = disc_cols[1].slider("Base Discount Rate %", 0.0, 50.0, 9.0, 0.1)/100
+    disc_bear = disc_cols[2].slider("Bear Discount Rate %", 0.0, 50.0, 10.0, 0.1)/100
     
-    # --- Compute scenarios ---
-    scenarios = {"Bull": disc_bull/100, "Base": disc_base/100, "Bear": disc_bear/100}
-    results = {}
-    for name, dr in scenarios.items():
-        res = dcf_from_fcf_list(fcfs, dr, terminal_growth)
-        equity = res['ev'] + net_cash
+    # --- Net Cash ---
+    net_cash_input = st.number_input(
+        "Net Cash (Cash - Debt) USD (override)", min_value=-1e12, value=(cash_guess - debt_guess) or 0.0, step=1_000_000.0
+    )
+    
+    # --- Compute DCF ---
+    scenarios = {"Bull": disc_bull, "Base": disc_base, "Bear": disc_bear}
+    def compute_scenario(rate):
+        res = dcf_from_fcf_list(fcfs, rate, terminal_growth, method=term_value_method)
+        equity = res['ev'] + net_cash_input
         per_share = equity / shares_outstanding_input if shares_outstanding_input else None
-        results[name] = {'res': res,'equity': equity,'per_share': per_share}
+        return res, equity, per_share
+    
+    results = {name: compute_scenario(r) for name, r in scenarios.items()}
     
     # --- Display results ---
     st.subheader("DCF Results")
     rows = []
     for name in ["Bull","Base","Bear"]:
-        r = results[name]
+        res, equity, per_share = results[name]
         rows.append({
             "Scenario": name,
             "Discount Rate %": scenarios[name]*100,
-            "Enterprise Value (USD)": r['res']['ev'],
-            "PV Terminal (USD)": r['res']['pv_terminal'],
-            "Terminal Value (undiscounted)": r['res']['terminal'],
-            "Equity Value (USD)": r['equity'],
-            "Implied Value / Share (USD)": r['per_share']
+            "Enterprise Value (USD)": res['ev'],
+            "PV Terminal (USD)": res['pv_terminal'],
+            "Terminal Value (undiscounted)": res['terminal'],
+            "Equity Value (USD)": equity,
+            "Implied Value / Share (USD)": per_share
         })
+    
     df_results = pd.DataFrame(rows)
     for col in ["Enterprise Value (USD)","PV Terminal (USD)","Terminal Value (undiscounted)","Equity Value (USD)"]:
         df_results[col] = df_results[col].map(lambda x: f"{x:,.0f}")
     df_results['Implied Value / Share (USD)'] = df_results['Implied Value / Share (USD)'].map(lambda x: f"{x:,.2f}" if x else 'n/a')
     st.table(df_results.set_index("Scenario"))
     
-    # --- PV chart ---
-    st.subheader("PV Breakdown (Base scenario)")
-    base_pv_years = results['Base']['res']['pv_years']
-    base_pv_terminal = results['Base']['res']['pv_terminal']
+    # --- PV Chart ---
+    st.subheader("PV Breakdown (Base Scenario)")
+    base_pv_years = results['Base'][0]['pv_years']
+    base_pv_terminal = results['Base'][0]['pv_terminal']
     labels = [f"Year {i}" for i in range(1,6)] + ["Terminal"]
     values = base_pv_years + [base_pv_terminal]
     fig, ax = plt.subplots(figsize=(9,4))
     ax.bar(labels, values)
     ax.set_ylabel("Present Value (USD)")
-    ax.set_title("PV of projected FCFs and terminal (Base)")
+    ax.set_title("PV of Projected FCFs and Terminal (Base)")
     ax.ticklabel_format(axis='y', style='plain')
     st.pyplot(fig)
     
