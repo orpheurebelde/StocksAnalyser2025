@@ -117,7 +117,7 @@ if selected_display != "Select a stock...":
 
     # --- 5-Year Growth Sliders ---
     st.markdown("### 5-Year Growth Rate Assumptions")
-    default_growths = [50.0, 30.0, 20.0, 15.0, 10.0]
+    default_growths = [20.0, 20.0, 15.0, 15.0, 10.0]
     growth_cols = st.columns(5)
     user_growth_rates = [growth_cols[i].slider(f"Year {i+1} Growth %", 0.0, 100.0, default_growths[i], 1.0, key=f"growth_{i}") for i in range(5)]
 
