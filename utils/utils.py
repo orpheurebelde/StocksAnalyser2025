@@ -35,46 +35,37 @@ def is_cache_valid():
 
 def fetch_and_cache_stock_info(ticker: str) -> dict:
     """
-    Fetch full info from yfinance and cache in CSV safely.
-    Returns a dict with all available fields. Guarantees no empty cache.
+    Fetch full yfinance info for a ticker and cache entire dict.
+    Returns the full info dict with guaranteed 'Ticker' key.
     """
     ticker = ticker.upper()
     try:
         stock = yf.Ticker(ticker)
-
-        # Fetch info (fast_info preferred if available)
         info_full = {}
+
+        # Try fast_info first
         try:
             fast_data = stock.fast_info or {}
         except Exception:
             fast_data = {}
 
+        # Full info fallback
         try:
             info_full = stock.info or {}
         except Exception:
             info_full = {}
 
-        # Merge, fast_info overrides info
-        combined = info_full.copy()
+        # Merge fast_info into info_full (fast_info overrides)
         for k, v in fast_data.items():
             if v is not None:
-                combined[k] = v
+                info_full[k] = v
 
-        # Ensure at least these keys exist
-        defaults = {
-            "Ticker": ticker,
-            "longName": ticker,
-            "regularMarketPrice": 0.0,
-            "sharesOutstanding": 0,
-            "marketCap": 0.0
-        }
-        for key, val in defaults.items():
-            combined[key] = combined.get(key, val)
+        # Always include Ticker key
+        info_full["Ticker"] = ticker
 
-        # Only cache if we got meaningful data (at least price > 0)
-        if combined.get("regularMarketPrice", 0) > 0:
-
-            df_new = pd.DataFrame([combined]).set_index("Ticker")
+        # Only cache if we got any data
+        if info_full:
+            df_new = pd.DataFrame([info_full]).set_index("Ticker")
 
             # Load existing cache
             if os.path.exists(CSV_PATH):
@@ -86,8 +77,8 @@ def fetch_and_cache_stock_info(ticker: str) -> dict:
             else:
                 df_existing = pd.DataFrame().set_index("Ticker")
 
-            # Update cache if changed
-            new_hash = md5(json.dumps(combined, sort_keys=True).encode()).hexdigest()
+            # Check if hash changed
+            new_hash = md5(json.dumps(info_full, sort_keys=True).encode()).hexdigest()
             existing_hash = None
             if ticker in df_existing.index:
                 existing_info = df_existing.loc[ticker].dropna().to_dict()
@@ -97,11 +88,11 @@ def fetch_and_cache_stock_info(ticker: str) -> dict:
                 df_combined = pd.concat([df_existing.drop(index=ticker, errors="ignore"), df_new])
                 df_combined.to_csv(CSV_PATH)
 
-        return combined
+        return info_full
 
     except Exception as e:
-        print(f"❌ Unexpected error fetching {ticker}: {e}")
-        return {"Ticker": ticker, "longName": ticker, "regularMarketPrice": 0.0, "sharesOutstanding": 0, "marketCap": 0.0}
+        print(f"❌ Error fetching {ticker}: {e}")
+        return {"Ticker": ticker}
 
 # Load stock list
 @st.cache_data
@@ -110,30 +101,24 @@ def load_stock_list():
     df["Display"] = df["Ticker"] + " - " + df["Name"]
     return df
 
-@st.cache_data(ttl=CACHE_DURATION_HOURS * 3600, show_spinner=False)
+@st.cache_data
 def get_stock_info(ticker: str) -> dict:
     """
     Return full stock info from cache or fetch fresh.
-    Guarantees no missing keys for Streamlit pages.
+    Guarantees at least the 'Ticker' key exists.
     """
     ticker = ticker.upper()
 
-    # Try reading from cache first
     if os.path.exists(CSV_PATH):
         try:
             df = pd.read_csv(CSV_PATH).set_index("Ticker")
             if ticker in df.index:
                 data = df.loc[ticker].to_dict()
-                # Ensure fallback keys
-                fallback_keys = ["Ticker", "longName", "regularMarketPrice", "sharesOutstanding", "marketCap"]
-                for key in fallback_keys:
-                    if key not in data or pd.isna(data[key]):
-                        data[key] = ticker if key == "longName" else 0.0
+                data["Ticker"] = ticker
                 return data
         except Exception:
             os.remove(CSV_PATH)
 
-    # Fallback: fetch live
     return fetch_and_cache_stock_info(ticker)
 
 @st.cache_data(ttl=CACHE_DURATION_HOURS * 3600, show_spinner=False)
