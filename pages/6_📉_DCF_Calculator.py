@@ -133,21 +133,39 @@ if selected_display != "Select a stock...":
         "Starting FCF (TTM) USD:", min_value=0.0, value=fcf_ttm or 1_300_000_000, step=1_000_000.0, format="%.0f"
     )
 
-    # --- 5-Year Growth ---
+    # --- 5-Year Growth Sliders (side by side) ---
     st.markdown("### 5-Year Growth Rate Assumptions")
-    default_growths = [50.0,30.0,20.0,15.0,10.0]
-    user_growth_rates = [st.slider(f"Year {i+1} Growth %", 0.0, 100.0, default_growths[i], 1.0) for i in range(5)]
-    fcfs = [starting_fcf_input * (1 + g/100) for g in user_growth_rates]
+    default_growths = [50.0, 30.0, 20.0, 15.0, 10.0]
+    growth_cols = st.columns(5)
+    user_growth_rates = []
+    for i in range(5):
+        user_growth_rates.append(
+            growth_cols[i].slider(
+                f"Year {i+1} Growth %",
+                min_value=0.0,
+                max_value=100.0,
+                value=default_growths[i],
+                step=1.0
+            )
+        )
 
-    # --- Terminal growth ---
+    # --- Terminal growth slider in its own column for alignment ---
     st.markdown("### Terminal Growth Assumption")
-    terminal_growth = st.slider("Terminal Growth Rate %", 0.0, 10.0, 3.0, 0.1) / 100
+    term_col1, term_col2, term_col3, term_col4, term_col5 = st.columns(5)
+    terminal_growth = term_col3.slider(
+        "Terminal Growth Rate %",
+        min_value=0.0,
+        max_value=10.0,
+        value=3.0,
+        step=0.1
+    ) / 100
 
-    # --- Discount rates ---
+    # --- Discount rate sliders (side by side) ---
     st.markdown("### Discount Rate Scenarios")
-    disc_bull = st.slider("Bull Discount Rate %", 0.0, 50.0, 8.0, 0.1)
-    disc_base = st.slider("Base Discount Rate %", 0.0, 50.0, 9.0, 0.1)
-    disc_bear = st.slider("Bear Discount Rate %", 0.0, 50.0, 10.0, 0.1)
+    disc_cols = st.columns(3)
+    disc_bull = disc_cols[0].slider("Bull Discount Rate %", 0.0, 50.0, 8.0, 0.1)
+    disc_base = disc_cols[1].slider("Base Discount Rate %", 0.0, 50.0, 9.0, 0.1)
+    disc_bear = disc_cols[2].slider("Bear Discount Rate %", 0.0, 50.0, 10.0, 0.1)
 
     # --- Net cash ---
     net_cash_input = st.number_input(
