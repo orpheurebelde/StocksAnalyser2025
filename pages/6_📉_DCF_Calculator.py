@@ -28,15 +28,20 @@ def safe_float(val, default=0.0):
 
 # --- Shares correction helper ---
 def correct_shares_outstanding(shares, price, market_cap):
-    """Correct obvious yfinance misreads"""
+    """
+    Correct shares outstanding if yfinance misreads the units.
+    """
     if not shares or shares <= 0:
         return 1  # fallback
-    implied_price = market_cap / shares
-    if price and implied_price > 10*price:
-        return shares / 10
-    elif price and implied_price < 0.1*price:
-        return shares * 10
-    return shares
+    if price and market_cap:
+        implied_shares = market_cap / price
+        # If yfinance shares off by factor > 5, correct
+        factor = implied_shares / shares
+        if factor > 5:  # overestimated shares
+            shares = implied_shares
+        elif factor < 0.2:  # underestimated shares
+            shares = implied_shares
+    return int(shares)
 
 # --- Load stock list ---
 stock_df = load_stock_list()
