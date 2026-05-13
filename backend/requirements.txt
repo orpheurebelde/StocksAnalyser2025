@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+pandas
+yfinance
+ta
+requests-cache
+slowapi
+requests
+numpy
+openpyxl
