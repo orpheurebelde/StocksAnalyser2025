@@ -1,5 +1,7 @@
 import pandas as pd
 import streamlit as st
+from utils.theme import apply_theme
+apply_theme()
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.utils import get_stock_info, monte_carlo_simulation, fetch_data

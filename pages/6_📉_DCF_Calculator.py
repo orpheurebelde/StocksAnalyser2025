@@ -7,6 +7,8 @@ from io import BytesIO
 from utils.utils import load_stock_list, get_stock_info
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
+from utils.theme import apply_theme
+apply_theme()
 st.title("5-Year DCF Calculator — Streamlit (FCFF / EV-Exit Ready)")
 
 # -----------------------------

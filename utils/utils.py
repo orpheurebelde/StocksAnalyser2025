@@ -2,6 +2,13 @@ import os
 import json
 import yfinance as yf
 import pandas as pd
+import requests_cache
+
+# Set up cached session to avoid yfinance rate limits globally
+yf_session = requests_cache.CachedSession('yfinance_cache', expire_after=3600)
+yf_session.headers['User-agent'] = 'StocksAnalyser/1.0'
+# Override yfinance base session
+yf.Session = yf_session
 from datetime import datetime, timedelta
 import requests
 import traceback

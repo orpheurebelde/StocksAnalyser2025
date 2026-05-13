@@ -6,6 +6,9 @@ from utils.utils import get_stock_info
 # Page config
 st.set_page_config(page_title="Stock Comparison", layout="wide")
 
+from utils.theme import apply_theme
+apply_theme()
+
 # Session management
 SESSION_TIMEOUT_SECONDS = 3600
 if "authenticated" not in st.session_state:

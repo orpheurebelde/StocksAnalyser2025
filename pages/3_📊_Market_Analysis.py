@@ -15,6 +15,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+from utils.theme import apply_theme
+apply_theme()
+
 # Session management
 SESSION_TIMEOUT_SECONDS = 3600
 if "authenticated" not in st.session_state:

@@ -7,6 +7,9 @@ import yfinance as yf
 import requests
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")
+
+from utils.theme import apply_theme
+apply_theme()
 st.title("📊 Portfolio Analysis & AI Suggestions")
 
 uploaded_file = st.file_uploader("📁 Upload Portfolio CSV", type=["csv"])

@@ -6,6 +6,9 @@ import plotly.graph_objects as go
 # Page setup
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
 
+from utils.theme import apply_theme
+apply_theme()
+
 # Constants
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
 

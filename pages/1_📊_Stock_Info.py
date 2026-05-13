@@ -10,6 +10,9 @@ current_year = datetime.now().year
 
 # Page config
 st.set_page_config(page_title="Finance Dashboard", layout="wide")
+from utils.theme import apply_theme
+apply_theme()
+
 
 # Session management
 SESSION_TIMEOUT_SECONDS = 3600
