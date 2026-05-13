@@ -27,7 +27,12 @@ def get_ticker_info(symbol: str):
     if symbol in cache:
         cached_data = cache[symbol]
         fetch_time = datetime.fromisoformat(cached_data.get("_timestamp", "2000-01-01T00:00:00"))
-        if datetime.now() - fetch_time < timedelta(hours=CACHE_HOURS):
+        
+        # If the cached data is a fallback (missing grossMargins), only keep it for 5 minutes
+        is_fallback = "grossMargins" not in cached_data["info"]
+        cache_duration = timedelta(minutes=5) if is_fallback else timedelta(hours=CACHE_HOURS)
+        
+        if datetime.now() - fetch_time < cache_duration:
             return cached_data["info"]
 
     # 3. Fetch Fresh Data (Naked yfinance to avoid curl_cffi issues)

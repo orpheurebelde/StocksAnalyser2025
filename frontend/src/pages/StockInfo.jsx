@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import api from '../api';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function StockInfo() {
   const [ticker, setTicker] = useState('AAPL');
@@ -377,8 +378,8 @@ export default function StockInfo() {
             </details>
 
             {aiAnalysis && (
-              <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>
-                <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
+              <div className="markdown-content" style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysis}</ReactMarkdown>
               </div>
             )}
           </div>
