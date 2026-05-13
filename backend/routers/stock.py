@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import get_ticker, download_data
+from core.yfinance_client import get_ticker_info, get_ticker, download_data
 import os
 import requests
 from dotenv import load_dotenv
@@ -19,8 +19,7 @@ class AIPrompt(BaseModel):
 @limiter.limit("20/minute")
 def get_info(request: Request, ticker: str):
     try:
-        t = get_ticker(ticker)
-        info = t.info
+        info = get_ticker_info(ticker)
         if not info:
             raise HTTPException(status_code=404, detail="No info found.")
         return info

@@ -5,6 +5,7 @@ export default function DCFCalculator() {
   const [ticker, setTicker] = useState('AAPL');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
   const [inputs, setInputs] = useState({
     starting_cf: 100000000,
@@ -12,6 +13,31 @@ export default function DCFCalculator() {
     shares_outstanding: 15000000,
     terminal_growth: 0.025,
   });
+
+  const fetchStockData = async () => {
+    if (!ticker.trim()) return;
+    setFetching(true);
+    try {
+      const res = await api.get(`/api/stock/${ticker.toUpperCase()}/info`);
+      const info = res.data;
+      
+      const fcf = info.freeCashflow || 0;
+      const tCash = info.totalCash || 0;
+      const tDebt = info.totalDebt || 0;
+      const shares = info.sharesOutstanding || info.impliedSharesOutstanding || 0;
+      
+      setInputs({
+        ...inputs,
+        starting_cf: fcf,
+        net_cash: tCash - tDebt,
+        shares_outstanding: shares
+      });
+    } catch (err) {
+      console.error("Failed to preload:", err);
+      alert("Failed to preload stock data. Ensure the ticker is valid.");
+    }
+    setFetching(false);
+  };
 
   const handleCalculate = async () => {
     setLoading(true);
@@ -39,9 +65,14 @@ export default function DCFCalculator() {
       <h2 style={{ marginBottom: '2rem' }}>Advanced DCF Calculator</h2>
       
       <div className="grid-3" style={{ marginBottom: '2rem' }}>
-        <div className="glass-panel">
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <label className="metric-label">Ticker</label>
-          <input type="text" value={ticker} onChange={e => setTicker(e.target.value)} style={{ marginTop: '0.5rem' }} />
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input type="text" value={ticker} onChange={e => setTicker(e.target.value)} style={{ flex: 1, marginTop: 0 }} />
+            <button className="btn-primary" onClick={fetchStockData} disabled={fetching} style={{ padding: '0.5rem' }}>
+              {fetching ? '...' : 'Preload'}
+            </button>
+          </div>
         </div>
         <div className="glass-panel">
           <label className="metric-label">Starting FCF (USD)</label>
