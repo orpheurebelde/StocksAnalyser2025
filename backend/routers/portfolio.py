@@ -46,10 +46,58 @@ async def analyze_portfolio(request: Request, file: UploadFile = File(...)):
         }).reset_index()
         annual["Unrealized Gain (%)"] = (annual["Unrealized Gain (€)"] / annual["Investment"]) * 100
         
+        # Calculate True Risk Metrics via YFinance
+        tickers = df["Symbol"].unique()
+        price_history = {}
+        import yfinance as yf
+        import numpy as np
+        
+        for t in tickers:
+            try:
+                hist = yf.download(t, period="1y", interval="1d", progress=False)
+                if not hist.empty:
+                    if isinstance(hist.columns, pd.MultiIndex):
+                        hist.columns = hist.columns.get_level_values(0)
+                    price_history[t] = hist["Close"]
+            except:
+                pass
+                
+        metrics = []
+        if price_history:
+            all_dates = pd.Index(sorted(set().union(*[s.index for s in price_history.values()])))
+            portfolio_df = pd.DataFrame(index=all_dates)
+
+            for _, row in df.iterrows():
+                sym = row["Symbol"]
+                qty = row["Quantity"]
+                if sym in price_history:
+                    # forward fill missing days
+                    s = price_history[sym].reindex(all_dates).ffill() * qty
+                    portfolio_df[sym] = s
+
+            portfolio_df["Total"] = portfolio_df.sum(axis=1)
+
+            rets = portfolio_df["Total"].pct_change().dropna()
+            if len(rets) > 0:
+                total_return = portfolio_df["Total"].iloc[-1] / portfolio_df["Total"].iloc[0]
+                port_cagr = (total_return) ** (252 / len(rets)) - 1
+                port_vol = rets.std() * np.sqrt(252)
+                rf = 0.04 # Assume 4% risk-free rate
+                port_sharpe = (port_cagr - rf) / port_vol if port_vol != 0 else np.nan
+                port_dd = (portfolio_df["Total"] / portfolio_df["Total"].cummax() - 1).min()
+                
+                metrics = [
+                    {"Metric": "CAGR (1Y)", "Value": f"{port_cagr*100:.2f}%"},
+                    {"Metric": "Annualized Volatility", "Value": f"{port_vol*100:.2f}%"},
+                    {"Metric": "Sharpe Ratio", "Value": f"{port_sharpe:.2f}"},
+                    {"Metric": "Max Drawdown", "Value": f"{port_dd*100:.2f}%"}
+                ]
+
         return {
             "transactions": df.to_dict(orient="records"),
             "summary": summary.to_dict(orient="records"),
-            "annual": annual.to_dict(orient="records")
+            "annual": annual.to_dict(orient="records"),
+            "metrics": metrics
         }
     except Exception as e:
         raise HTTPException(500, str(e))

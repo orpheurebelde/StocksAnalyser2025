@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function DCFCalculator() {
   const [ticker, setTicker] = useState('AAPL');
@@ -60,9 +61,20 @@ export default function DCFCalculator() {
     setLoading(false);
   };
 
+  const getChartData = () => {
+    if (!results || !results.Base) return [];
+    const base = results.Base;
+    const data = base.pv_years.map((val, idx) => ({
+      name: `Year ${idx + 1}`,
+      PV: val
+    }));
+    data.push({ name: 'Terminal', PV: base.pv_terminal });
+    return data;
+  };
+
   return (
     <div>
-      <h2 style={{ marginBottom: '2rem' }}>Advanced DCF Calculator</h2>
+      <h2 style={{ marginBottom: '2rem' }}>📉 Advanced DCF Calculator</h2>
       
       <div className="grid-3" style={{ marginBottom: '2rem' }}>
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -79,8 +91,16 @@ export default function DCFCalculator() {
           <input type="number" value={inputs.starting_cf} onChange={e => setInputs({...inputs, starting_cf: e.target.value})} style={{ marginTop: '0.5rem' }} />
         </div>
         <div className="glass-panel">
+          <label className="metric-label">Net Cash (USD)</label>
+          <input type="number" value={inputs.net_cash} onChange={e => setInputs({...inputs, net_cash: e.target.value})} style={{ marginTop: '0.5rem' }} />
+        </div>
+        <div className="glass-panel">
           <label className="metric-label">Shares Outstanding</label>
           <input type="number" value={inputs.shares_outstanding} onChange={e => setInputs({...inputs, shares_outstanding: e.target.value})} style={{ marginTop: '0.5rem' }} />
+        </div>
+        <div className="glass-panel">
+          <label className="metric-label">Terminal Growth Rate (e.g. 0.025)</label>
+          <input type="number" step="0.001" value={inputs.terminal_growth} onChange={e => setInputs({...inputs, terminal_growth: e.target.value})} style={{ marginTop: '0.5rem' }} />
         </div>
       </div>
 
@@ -89,17 +109,47 @@ export default function DCFCalculator() {
       </button>
 
       {results && (
-        <div className="grid-3">
-          {Object.entries(results).map(([scenario, data]) => (
-            <div key={scenario} className="glass-panel">
-              <h3 className="metric-label">{scenario} Scenario</h3>
-              <div className="metric-value" style={{ color: 'var(--accent-cyan)' }}>
-                ${data.per_share?.toFixed(2) || 'N/A'}
+        <>
+          <div className="grid-3" style={{ marginBottom: '2rem' }}>
+            {Object.entries(results).map(([scenario, data]) => (
+              <div key={scenario} className="glass-panel">
+                <h3 className="metric-label">{scenario} Scenario</h3>
+                <div className="metric-value" style={{ color: 'var(--accent-cyan)' }}>
+                  ${data.per_share?.toFixed(2) || 'N/A'}
+                </div>
+                <p className="metric-label" style={{ marginTop: '0.5rem' }}>Implied Share Price</p>
+                <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                    <span>Enterprise Value:</span>
+                    <span>${(data.ev / 1e9).toFixed(2)}B</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                    <span>Equity Value:</span>
+                    <span>${(data.equity / 1e9).toFixed(2)}B</span>
+                  </div>
+                </div>
               </div>
-              <p className="metric-label" style={{ marginTop: '0.5rem' }}>Implied Share Price</p>
+            ))}
+          </div>
+
+          <div className="glass-panel">
+            <h3 className="metric-label" style={{ marginBottom: '1rem' }}>Present Value Breakdown (Base Scenario)</h3>
+            <div style={{ height: '400px', width: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={getChartData()} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.5)" />
+                  <YAxis stroke="rgba(255,255,255,0.5)" tickFormatter={(val) => `$${(val/1e9).toFixed(1)}B`} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+                    formatter={(val) => [`$${(val/1e9).toFixed(2)}B`, 'Present Value']}
+                  />
+                  <Bar dataKey="PV" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          ))}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
