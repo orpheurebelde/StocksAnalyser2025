@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import pandas as pd
@@ -10,7 +10,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 @router.post("/analyze")
 @limiter.limit("5/minute")
-async def analyze_portfolio(file: UploadFile = File(...)):
+async def analyze_portfolio(request: Request, file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(400, "Only CSV files are allowed.")
         

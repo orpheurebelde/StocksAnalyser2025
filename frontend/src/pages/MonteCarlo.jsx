@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function MonteCarlo() {
@@ -26,7 +26,7 @@ export default function MonteCarlo() {
         volatility: inputs.volatility ? Number(inputs.volatility) / 100 : null
       };
 
-      const res = await axios.post('http://localhost:8000/api/monte-carlo/simulate', payload);
+      const res = await api.post(`/api/monte-carlo/simulate`, payload);
       setData(res.data);
     } catch (err) {
       console.error(err);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api';
 
 export default function StockComparison() {
   const [tickers, setTickers] = useState('');
@@ -12,7 +12,7 @@ export default function StockComparison() {
     
     const tickerList = tickers.split(',').map(t => t.trim().toUpperCase());
     try {
-      const res = await axios.post('http://localhost:8000/api/comparison/compare', { tickers: tickerList });
+      const res = await api.post(`/api/comparison/compare`, { tickers: tickerList });
       setData(res.data);
     } catch (err) {
       console.error(err);

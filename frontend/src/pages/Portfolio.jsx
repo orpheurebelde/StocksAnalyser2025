@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api';
 
 export default function Portfolio() {
   const [file, setFile] = useState(null);
@@ -16,7 +16,7 @@ export default function Portfolio() {
     formData.append('file', file);
     
     try {
-      const res = await axios.post('http://localhost:8000/api/portfolio/analyze', formData, {
+      const res = await api.post(`/api/portfolio/analyze`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setData(res.data);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api';
 
 export default function DCFCalculator() {
   const [ticker, setTicker] = useState('AAPL');
@@ -26,7 +26,7 @@ export default function DCFCalculator() {
         terminal_growth: Number(inputs.terminal_growth)
       };
 
-      const res = await axios.post(`http://localhost:8000/api/dcf/calculate`, payload);
+      const res = await api.post(`/api/dcf/calculate`, payload);
       setResults(res.data);
     } catch (err) {
       console.error(err);
