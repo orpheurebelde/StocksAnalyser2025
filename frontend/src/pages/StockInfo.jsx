@@ -10,7 +10,7 @@ export default function StockInfo() {
   
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('Analyze the fundamentals of this stock and give me a buy/sell/hold recommendation.');
+  const [aiPrompt, setAiPrompt] = useState('');
   const [error, setError] = useState('');
 
   const fetchStock = async () => {
@@ -32,10 +32,75 @@ export default function StockInfo() {
     setLoading(false);
   };
 
-  const fetchAiAnalysis = async () => {
+  const cleanAiOutput = (text, currentPrice) => {
+    if (!currentPrice) return text;
+    // Basic regex to replace hallucinated prices with the real current price
+    return text.replace(/(\$?)\d+(?:\.\d{1,2})?/g, (match, sign) => {
+      // If it looks like a stock price and is near the current price, or if it's explicitly labeled "Current Price"
+      return match; // simplified, just return the text for now
+    });
+  };
+
+  const handleAiGeneral = async () => {
+    if (!info) return;
+    const prompt = `You are a professional equity analyst. Write a deep analysis using ONLY the following structured data:
+    
+    - Company: ${info.shortName || ticker}
+    - Sector: ${info.sector}
+    - Market Cap: $${(info.marketCap / 1e9).toFixed(2)}B
+    - Current Price: $${info.currentPrice}
+    - P/E (TTM): ${info.trailingPE}
+    - Forward P/E: ${info.forwardPE}
+    - Revenue: $${(info.totalRevenue / 1e9).toFixed(2)}B
+    - Net Income: $${(info.netIncomeToCommon / 1e9).toFixed(2)}B
+    - Free Cash Flow: $${(info.freeCashflow / 1e9).toFixed(2)}B
+    - Shares Outstanding: ${info.sharesOutstanding}
+    
+    Structure the analysis:
+    1. **Executive Summary**
+    2. **Valuation**
+    3. **Financial Health**
+    4. **Growth Potential**
+    5. **Risks**
+    6. **Fair Value vs Current Price**
+    7. **12-Month Target & Recommendation**`;
+    
+    setAiPrompt(prompt);
+    await fetchAiAnalysis(prompt);
+  };
+
+  const handleAiDCF = async () => {
+    if (!info) return;
+    const prompt = `You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for ${info.shortName || ticker} (${ticker.toUpperCase()}), generate a realistic 5-year DCF valuation.
+
+    Use the following data as a baseline:
+    - Company: ${info.shortName || ticker}
+    - Sector: ${info.sector}
+    - Market Cap: $${(info.marketCap / 1e9).toFixed(2)}B
+    - Current Price: $${info.currentPrice}
+    - Revenue (TTM): $${(info.totalRevenue / 1e9).toFixed(2)}B
+    - Free Cash Flow (TTM): $${(info.freeCashflow / 1e9).toFixed(2)}B
+    - Shares Outstanding: ${info.sharesOutstanding}
+    - Total Debt: $${(info.totalDebt / 1e9).toFixed(2)}B
+    - Total Cash: $${(info.totalCash / 1e9).toFixed(2)}B
+    - EPS Growth: ${info.earningsQuarterlyGrowth}
+    - Revenue Growth: ${info.revenueGrowth}
+
+    DCF guidelines:
+    1. Use the latest reported revenue as the starting point.
+    2. Run a 5-year DCF and clearly show PV of cash flows and terminal value.
+    3. Calculate the implied share price.
+    
+    Emphasize realism, forward-looking assumptions, and avoid overly conservative or overly aggressive inputs.`;
+    
+    setAiPrompt(prompt);
+    await fetchAiAnalysis(prompt);
+  };
+
+  const fetchAiAnalysis = async (promptToSend) => {
     setAiLoading(true);
     try {
-      const res = await api.post(`/api/stock/${ticker.toUpperCase()}/ai-analysis`, { prompt: aiPrompt });
+      const res = await api.post(`/api/stock/${ticker.toUpperCase()}/ai-analysis`, { prompt: promptToSend });
       setAiAnalysis(res.data.analysis);
     } catch (err) {
       setAiAnalysis(`Error fetching AI analysis: ${err.response?.data?.detail || err.message}`);
@@ -149,14 +214,27 @@ export default function StockInfo() {
 
           <div className="glass-panel" style={{ marginBottom: '2rem' }}>
             <h3 className="metric-label" style={{ marginBottom: '1rem', fontSize: '1.2rem', color: 'var(--accent-blue)' }}>🤖 Ask Mistral AI</h3>
-            <textarea 
-              value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              style={{ width: '100%', height: '80px', background: 'rgba(0,0,0,0.3)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem', fontFamily: 'var(--font-body)' }}
-            />
-            <button className="btn-primary" onClick={fetchAiAnalysis} disabled={aiLoading}>
-              {aiLoading ? 'Mistral is analyzing...' : 'Generate AI Report'}
-            </button>
+            
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+              <button className="btn-primary" onClick={handleAiGeneral} disabled={aiLoading}>
+                {aiLoading ? 'Mistral is analyzing...' : '🧠 Generate General AI Report'}
+              </button>
+              <button className="btn-primary" onClick={handleAiDCF} disabled={aiLoading} style={{ background: 'var(--accent-purple)' }}>
+                {aiLoading ? 'Mistral is analyzing...' : '💰 Generate AI DCF Valuation'}
+              </button>
+            </div>
+
+            <details style={{ marginBottom: '1rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              <summary>View / Edit Prompt</summary>
+              <textarea 
+                value={aiPrompt}
+                onChange={e => setAiPrompt(e.target.value)}
+                style={{ width: '100%', height: '150px', background: 'rgba(0,0,0,0.3)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginTop: '0.5rem', fontFamily: 'var(--font-body)' }}
+              />
+              <button className="btn-primary" onClick={() => fetchAiAnalysis(aiPrompt)} disabled={aiLoading} style={{ marginTop: '0.5rem' }}>
+                Resubmit Custom Prompt
+              </button>
+            </details>
 
             {aiAnalysis && (
               <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>

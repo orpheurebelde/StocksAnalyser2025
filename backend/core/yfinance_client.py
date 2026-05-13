@@ -31,8 +31,26 @@ def get_ticker_info(symbol: str):
             return cached_data["info"]
 
     # 3. Fetch Fresh Data (Naked yfinance to avoid curl_cffi issues)
-    t = yf.Ticker(symbol)
-    info = t.info
+    try:
+        t = yf.Ticker(symbol)
+        info = t.info
+        
+        # Fallback to fast_info if info is empty or broken
+        if not info or 'regularMarketPrice' not in info and 'currentPrice' not in info:
+            fast = t.fast_info
+            if fast and len(fast) > 0:
+                info = {
+                    "currentPrice": fast.last_price,
+                    "marketCap": fast.market_cap,
+                    "fiftyTwoWeekLow": fast.year_low,
+                    "fiftyTwoWeekHigh": fast.year_high,
+                    "shortName": symbol,
+                    "symbol": symbol
+                }
+    except Exception as e:
+        print(f"Error fetching info for {symbol}: {e}")
+        return None
+
     if not info:
         return None
 
