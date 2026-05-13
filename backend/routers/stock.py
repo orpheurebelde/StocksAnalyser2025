@@ -43,6 +43,43 @@ def get_price_action(request: Request, ticker: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/{ticker}/dilution")
+@limiter.limit("20/minute")
+def get_dilution(request: Request, ticker: str):
+    from core.technical import estimate_past_shares_outstanding, interpret_dilution_extended
+    try:
+        info = get_ticker_info(ticker)
+        if not info:
+            raise HTTPException(status_code=404, detail="No info found.")
+            
+        hist = download_data(ticker, period="1y", interval="1mo")
+        current_shares, past_shares, dilution = estimate_past_shares_outstanding(info, hist)
+        
+        if not past_shares:
+            return {"dilution_pct": 0, "comments": ["Could not calculate past shares."]}
+            
+        dilution_pct = (dilution / past_shares) * 100
+        
+        comments = interpret_dilution_extended(
+            dilution_pct,
+            revenue_growth=info.get("revenueGrowth"),
+            eps_current=info.get("trailingEps"),
+            eps_forward=info.get("forwardEps"),
+            sbc_expense=info.get("shareBasedCompensation"),
+            total_revenue=info.get("totalRevenue"),
+            cash_from_financing=info.get("totalCashFromFinancingActivities")
+        )
+        
+        return {
+            "current_shares": current_shares,
+            "past_shares": past_shares,
+            "dilution_amount": dilution,
+            "dilution_pct": dilution_pct,
+            "comments": comments
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{ticker}/history")
 @limiter.limit("20/minute")
 def get_history(request: Request, ticker: str, period: str = "6mo", interval: str = "1d"):

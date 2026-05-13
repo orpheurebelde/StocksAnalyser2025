@@ -137,3 +137,66 @@ def compute_fibonacci_level(series):
     if max_price == min_price:
         return 100.0
     return ((current_price - min_price) / (max_price - min_price)) * 100
+
+def estimate_past_shares_outstanding(current_info, hist_data):
+    current_market_cap = current_info.get("marketCap")
+    current_shares = current_info.get("sharesOutstanding")
+
+    if not current_market_cap or not current_shares or hist_data.empty:
+        return None, None, None
+
+    past_price = hist_data['Close'].iloc[0]
+    
+    past_market_cap = current_market_cap * 0.85
+    estimated_past_shares = past_market_cap / past_price if past_price else None
+
+    if estimated_past_shares:
+        return current_shares, estimated_past_shares, (current_shares - estimated_past_shares)
+    return current_shares, None, None
+
+def interpret_dilution_extended(dilution_pct, revenue_growth=None, eps_current=None,
+                                 eps_forward=None, sbc_expense=None, total_revenue=None,
+                                 cash_from_financing=None):    
+    comments = []
+
+    if dilution_pct > 10:
+        comments.append("🔴 **High dilution** – potentially negative.")
+    elif 3 < dilution_pct <= 10:
+        comments.append("🟠 **Moderate dilution** – acceptable if supporting growth.")
+    elif 0 < dilution_pct <= 3:
+        comments.append("🟢 **Low dilution** – likely manageable.")
+    elif dilution_pct == 0:
+        comments.append("✅ **No dilution** – good for shareholders.")
+    elif dilution_pct < 0:
+        comments.append("🟢 **Share reduction** – likely due to buybacks.")
+
+    if revenue_growth is not None:
+        if revenue_growth > 0.1:
+            comments.append("📈 Revenue is growing strongly (>10%), indicating dilution may be growth-driven.")
+        elif revenue_growth > 0:
+            comments.append("📈 Revenue is growing slightly, a mild positive.")
+        else:
+            comments.append("⚠️ Revenue is not growing – dilution could be risky.")
+
+    if eps_current and eps_forward:
+        if eps_forward > eps_current:
+            comments.append("📊 EPS is expected to **increase**, which may offset dilution.")
+        else:
+            comments.append("📉 EPS is not improving – dilution may harm shareholders.")
+
+    if sbc_expense and total_revenue:
+        sbc_ratio = sbc_expense / total_revenue
+        if sbc_ratio > 0.1:
+            comments.append(f"💸 **High SBC**: {sbc_ratio*100:.1f}% of revenue – potential red flag.")
+        elif sbc_ratio > 0.03:
+            comments.append(f"💸 **Moderate SBC**: {sbc_ratio*100:.1f}% of revenue.")
+        else:
+            comments.append(f"💸 **Low SBC**: {sbc_ratio*100:.1f}% of revenue – good control of compensation.")
+
+    if cash_from_financing:
+        if cash_from_financing > 0:
+            comments.append("🏦 Company raised capital via financing – dilution may be for funding.")
+        else:
+            comments.append("💰 No major financing activity noted.")
+
+    return comments
