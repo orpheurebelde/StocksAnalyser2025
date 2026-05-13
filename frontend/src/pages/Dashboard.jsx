@@ -4,6 +4,7 @@ import api from '../api';
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     api.get('/api/market/analysis')
@@ -13,6 +14,7 @@ export default function Dashboard() {
       })
       .catch(err => {
         console.error(err);
+        setError(err.response?.data?.detail || err.message);
         setLoading(false);
       });
   }, []);
@@ -21,7 +23,7 @@ export default function Dashboard() {
     <div>
       <h2 style={{ marginBottom: '2rem' }}>Market Analysis & Dashboard</h2>
       
-      {loading ? <p>Loading Market Data...</p> : data && (
+      {loading ? <p>Loading Market Data...</p> : error ? <p style={{ color: 'var(--status-red)' }}>Error: {error}</p> : data && (
         <>
           <div className="grid-3" style={{ marginBottom: '2rem' }}>
             <div className="glass-panel">
