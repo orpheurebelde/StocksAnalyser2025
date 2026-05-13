@@ -4,8 +4,9 @@ pydantic
 pandas
 yfinance
 ta
-requests-cache
 slowapi
 requests
 numpy
 openpyxl
+python-dotenv
+python-multipart
