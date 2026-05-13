@@ -422,6 +422,10 @@ def fetch_price_data(ticker: str) -> pd.DataFrame:
     return df
 
 def analyze_price_action(df):
+    # Handle multi-index columns from yfinance
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
     # Required columns
     required_cols = ['Close', 'High', 'Low', 'Volume']
     for col in required_cols:
@@ -433,16 +437,6 @@ def analyze_price_action(df):
     high = df['High']
     low = df['Low']
     volume = df['Volume']
-
-    # Handle multi-columns if needed
-    if isinstance(close, pd.DataFrame):
-        close = close.iloc[:, 0]
-    if isinstance(high, pd.DataFrame):
-        high = high.iloc[:, 0]
-    if isinstance(low, pd.DataFrame):
-        low = low.iloc[:, 0]
-    if isinstance(volume, pd.DataFrame):
-        volume = volume.iloc[:, 0]
 
     # Calculate indicators
     df['RSI'] = RSIIndicator(close=close).rsi()
