@@ -283,7 +283,7 @@ export default function StockInfo() {
             </div>
           </div>
 
-          <div className="grid-2" style={{ marginBottom: '2rem' }}>
+          <div className="grid-2" style={{ marginBottom: '2rem', gap: '2rem' }}>
             <div className="glass-panel">
               <h3 className="metric-label" style={{ marginBottom: '1.5rem', fontSize: '1.2rem' }}>💰 Financials</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
