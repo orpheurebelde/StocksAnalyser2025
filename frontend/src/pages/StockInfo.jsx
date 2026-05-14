@@ -23,14 +23,10 @@ export default function StockInfo() {
     setDilution(null);
     setAiAnalysis('');
     try {
-      const [infoRes, paRes, dilRes] = await Promise.all([
-        api.get(`/api/stock/${ticker.toUpperCase()}/info`),
-        api.get(`/api/stock/${ticker.toUpperCase()}/price-action`),
-        api.get(`/api/stock/${ticker.toUpperCase()}/dilution`).catch(() => ({ data: null }))
-      ]);
-      setInfo(infoRes.data);
-      setPriceAction(paRes.data);
-      setDilution(dilRes.data);
+      const res = await api.get(`/api/stock/${ticker.toUpperCase()}/full-analysis`);
+      setInfo(res.data.info);
+      setPriceAction(res.data.price_action);
+      setDilution(res.data.dilution);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
     }

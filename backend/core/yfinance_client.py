@@ -77,8 +77,32 @@ def get_ticker(symbol: str):
     return yf.Ticker(symbol)
 
 def download_data(symbol: str, period: str = "6mo", interval: str = "1d") -> pd.DataFrame:
-    """Downloads historical data, letting yfinance handle sessions internally."""
-    df = yf.download(symbol, period=period, interval=interval, progress=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    return df
+    """Downloads historical data with local CSV caching."""
+    symbol = symbol.upper()
+    cache_path = os.path.join(CACHE_DIR, f"{symbol}_{period}_{interval}.csv")
+    
+    # 1. Check if valid cache exists
+    if os.path.exists(cache_path):
+        try:
+            file_time = datetime.fromtimestamp(os.path.getmtime(cache_path))
+            if datetime.now() - file_time < timedelta(hours=CACHE_HOURS):
+                df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
+                if not df.empty:
+                    return df
+        except Exception:
+            pass # corrupted cache, ignore
+
+    # 2. Fetch Fresh Data
+    try:
+        df = yf.download(symbol, period=period, interval=interval, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+            
+        # 3. Save to Cache
+        if not df.empty:
+            df.to_csv(cache_path)
+            
+        return df
+    except Exception as e:
+        print(f"Error downloading data for {symbol}: {e}")
+        return pd.DataFrame()
