@@ -86,3 +86,66 @@ def get_market_analysis(request: Request):
         return {"indices": results, "vix": vix_val}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/sentiment")
+@limiter.limit("5/minute")
+def get_sentiment(request: Request):
+    import os
+    import requests
+    from datetime import datetime, timedelta
+    
+    SENTIMENT_URL = "https://www.aaii.com/files/surveys/sentiment.xls"
+    SENTIMENT_PATH = os.path.join("data", "aaii_sentiment.xls")
+    
+    try:
+        os.makedirs("data", exist_ok=True)
+        
+        # Download if missing or older than 3 days
+        needs_download = True
+        if os.path.exists(SENTIMENT_PATH):
+            file_time = datetime.fromtimestamp(os.path.getmtime(SENTIMENT_PATH))
+            if datetime.now() - file_time < timedelta(days=3):
+                needs_download = False
+                
+        if needs_download:
+            try:
+                # Add headers to avoid 403 Forbidden
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                response = requests.get(SENTIMENT_URL, headers=headers)
+                response.raise_for_status()
+                with open(SENTIMENT_PATH, "wb") as f:
+                    f.write(response.content)
+            except Exception as e:
+                print(f"Failed to download AAII sentiment: {e}")
+                # Continue and try to use existing file if it exists
+                
+        if not os.path.exists(SENTIMENT_PATH):
+            raise HTTPException(status_code=404, detail="Sentiment data not available")
+            
+        df = pd.read_excel(SENTIMENT_PATH, skiprows=3)
+        df.columns = df.columns.str.strip()
+        df = df.dropna(subset=["Date"])
+        
+        # Parse percentages
+        for col in ["Bullish", "Neutral", "Bearish"]:
+            if col in df.columns:
+                df[col] = (
+                    df[col].astype(str)
+                    .str.replace('%', '', regex=False)
+                    .str.replace(',', '.', regex=False)
+                    .astype(float)
+                )
+                
+        # Get the most recent valid row
+        latest = df.iloc[0]
+        
+        return {
+            "date": str(latest.get("Date", "")),
+            "bullish": float(latest.get("Bullish", 0)),
+            "neutral": float(latest.get("Neutral", 0)),
+            "bearish": float(latest.get("Bearish", 0))
+        }
+        
+    except Exception as e:
+        print(f"Sentiment error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

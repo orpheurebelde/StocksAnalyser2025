@@ -19,12 +19,15 @@ class AIPrompt(BaseModel):
 @router.get("/{ticker}/full-analysis")
 @limiter.limit("10/minute")
 def get_full_analysis(request: Request, ticker: str):
-    from core.technical import estimate_past_shares_outstanding, interpret_dilution_extended
+    from core.technical import estimate_past_shares_outstanding, interpret_dilution_extended, calculate_fundamentals_score
     try:
         # 1. Fetch Info
         info = get_ticker_info(ticker)
         if not info:
             raise HTTPException(status_code=404, detail="No info found.")
+        
+        # Calculate Fundamentals Score
+        fundamentals_score = calculate_fundamentals_score(info)
 
         # 2. Fetch 1y Data for everything
         hist = download_data(ticker, period="1y", interval="1d")
@@ -72,6 +75,7 @@ def get_full_analysis(request: Request, ticker: str):
         # 5. Return Master Payload
         return {
             "info": info,
+            "fundamentals_score": fundamentals_score,
             "price_action": price_action,
             "dilution": dilution_data
         }

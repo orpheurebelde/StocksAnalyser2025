@@ -200,3 +200,37 @@ def interpret_dilution_extended(dilution_pct, revenue_growth=None, eps_current=N
             comments.append("💰 No major financing activity noted.")
 
     return comments
+
+def score_metric(value, mid, high, max_val, reverse=False):
+    if value is None:
+        return 0
+    if reverse:
+        if value < mid: return 2
+        elif value <= high: return 1
+        else: return 0
+    else:
+        if value > high: return 2
+        elif value >= mid: return 1
+        else: return 0
+
+def calculate_fundamentals_score(info: dict):
+    score = 0
+    try:
+        score += score_metric(info.get("returnOnEquity"), 0.15, 0.25, 0.4)
+        ebitda_margin = (info.get("ebitda") / info.get("totalRevenue")) if info.get("ebitda") and info.get("totalRevenue") else None
+        score += score_metric(ebitda_margin, 0.15, 0.3, 0.5)
+        score += score_metric(info.get("trailingPegRatio"), 1, 2, 3, reverse=True)
+        score += score_metric(info.get("forwardPE"), 15, 30, 50, reverse=True)
+        score += score_metric(info.get("epsCurrentYear"), 1, 5, 10)
+    except Exception:
+        pass
+    
+    score_pct = (score / 10) * 100
+    if score_pct >= 65:
+        label, color = "Strong", "var(--status-green)"
+    elif score_pct >= 40:
+        label, color = "Average", "var(--accent-orange)"
+    else:
+        label, color = "Weak", "var(--status-red)"
+        
+    return {"score": score, "max_score": 10, "label": label, "color": color}

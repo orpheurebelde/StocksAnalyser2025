@@ -1,15 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
+  const [sentiment, setSentiment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/api/market/analysis')
-      .then(res => {
-        setData(res.data);
+    // Fetch both simultaneously
+    Promise.all([
+      api.get('/api/market/analysis'),
+      api.get('/api/market/sentiment').catch(() => ({ data: null }))
+    ])
+      .then(([marketRes, sentimentRes]) => {
+        setData(marketRes.data);
+        if (sentimentRes.data) setSentiment(sentimentRes.data);
         setLoading(false);
       })
       .catch(err => {
@@ -29,22 +36,90 @@ export default function Dashboard() {
     return val > 0 ? 'var(--status-green)' : 'var(--status-red)';
   };
 
+  const vixGaugeData = [
+    { name: 'Value', value: data?.vix || 0 },
+    { name: 'Empty', value: Math.max(0, 50 - (data?.vix || 0)) }
+  ];
+
   return (
     <div>
       <h2 style={{ marginBottom: '2rem' }}>📈 Market Analysis | Buy Signals</h2>
       
       {loading ? <p>Loading Market Data...</p> : error ? <p style={{ color: 'var(--status-red)' }}>Error: {error}</p> : data && (
         <>
-          <div className="grid-3" style={{ marginBottom: '2rem' }}>
-            <div className="glass-panel" style={{ textAlign: 'center' }}>
-              <h3 className="metric-label">Volatility Index (VIX)</h3>
-              <div style={{ fontSize: '3rem', fontWeight: 'bold', color: data.vix > 20 ? 'var(--status-red)' : 'var(--status-green)' }}>
-                {data.vix ? data.vix.toFixed(2) : 'N/A'}
+          <div className="grid-3" style={{ marginBottom: '2rem', gap: '2rem' }}>
+            <div className="glass-panel" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <h3 className="metric-label" style={{ marginBottom: '1rem' }}>Volatility Index (VIX)</h3>
+              
+              <div style={{ width: '100%', height: '150px', position: 'relative' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={vixGaugeData}
+                      cx="50%"
+                      cy="100%"
+                      startAngle={180}
+                      endAngle={0}
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={0}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      <Cell fill={data.vix > 28 ? 'var(--status-red)' : data.vix < 15 ? 'var(--status-green)' : 'var(--accent-orange)'} />
+                      <Cell fill="rgba(255,255,255,0.1)" />
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ 
+                  position: 'absolute', 
+                  bottom: '10px', 
+                  left: '50%', 
+                  transform: 'translateX(-50%)',
+                  fontSize: '2.5rem', 
+                  fontWeight: 'bold', 
+                  color: data.vix > 28 ? 'var(--status-red)' : data.vix < 15 ? 'var(--status-green)' : 'var(--accent-orange)'
+                }}>
+                  {data.vix ? data.vix.toFixed(2) : 'N/A'}
+                </div>
               </div>
+
               <p className="metric-label" style={{ marginTop: '0.5rem', fontSize: '1.2rem' }}>
                 {data.vix > 28 ? 'Fear Zone' : data.vix < 15 ? 'Greed Zone' : 'Neutral Zone'}
               </p>
             </div>
+
+            {sentiment && (
+              <div className="glass-panel" style={{ gridColumn: 'span 2' }}>
+                <h3 className="metric-label" style={{ marginBottom: '1rem' }}>AAII Investor Sentiment Survey</h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Data for week of {sentiment.date.substring(0,10)}</p>
+                <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '40px', borderRadius: '20px', overflow: 'hidden', marginBottom: '1rem' }}>
+                  <div style={{ width: `${sentiment.bullish}%`, height: '100%', backgroundColor: 'var(--status-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                    {sentiment.bullish > 10 ? `${sentiment.bullish}%` : ''}
+                  </div>
+                  <div style={{ width: `${sentiment.neutral}%`, height: '100%', backgroundColor: 'var(--accent-orange)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                    {sentiment.neutral > 10 ? `${sentiment.neutral}%` : ''}
+                  </div>
+                  <div style={{ width: `${sentiment.bearish}%`, height: '100%', backgroundColor: 'var(--status-red)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                    {sentiment.bearish > 10 ? `${sentiment.bearish}%` : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--status-green)' }}></div>
+                    <span>Bullish</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--accent-orange)' }}></div>
+                    <span>Neutral</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--status-red)' }}></div>
+                    <span>Bearish</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>

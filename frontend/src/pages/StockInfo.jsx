@@ -7,6 +7,7 @@ export default function StockInfo() {
   const [ticker, setTicker] = useState('AAPL');
   const [info, setInfo] = useState(null);
   const [priceAction, setPriceAction] = useState(null);
+  const [fundamentalsScore, setFundamentalsScore] = useState(null);
   const [dilution, setDilution] = useState(null);
   const [loading, setLoading] = useState(false);
   
@@ -20,11 +21,13 @@ export default function StockInfo() {
     setError('');
     setInfo(null);
     setPriceAction(null);
+    setFundamentalsScore(null);
     setDilution(null);
     setAiAnalysis('');
     try {
       const res = await api.get(`/api/stock/${ticker.toUpperCase()}/full-analysis`);
       setInfo(res.data.info);
+      setFundamentalsScore(res.data.fundamentals_score);
       setPriceAction(res.data.price_action);
       setDilution(res.data.dilution);
     } catch (err) {
@@ -151,97 +154,130 @@ export default function StockInfo() {
             />
           </div>
 
-          {priceAction && (
-            <div className="glass-panel" style={{ marginBottom: '2rem' }}>
-              <h3 className="metric-label" style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>📊 Price Action Score (RSI, Volume, Ichimoku, MACD)</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                <div style={{ 
-                  padding: '2rem', 
-                  border: `2px solid ${priceAction.score >= 7 ? 'var(--status-green)' : priceAction.score >= 4 ? 'var(--accent-orange)' : 'var(--status-red)'}`,
-                  borderRadius: '1rem',
-                  textAlign: 'center',
-                  backgroundColor: 'rgba(0,0,0,0.3)',
-                  minWidth: '200px'
-                }}>
-                  <div style={{ fontSize: '3rem', fontWeight: 'bold', color: priceAction.score >= 7 ? 'var(--status-green)' : priceAction.score >= 4 ? 'var(--accent-orange)' : 'var(--status-red)' }}>
-                    {priceAction.score >= 7 ? 'BUY' : priceAction.score >= 4 ? 'HOLD' : 'SELL'}
-                  </div>
-                  <div style={{ color: 'var(--text-secondary)' }}>{priceAction.score} / {priceAction.max_score} Points</div>
-                </div>
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  {priceAction.insights.map((insight, idx) => (
-                    <div key={idx} style={{ fontSize: '1rem', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                      {insight}
+          <div className="grid-2" style={{ marginBottom: '2rem', gap: '2rem' }}>
+            {priceAction && (
+              <div className="glass-panel">
+                <h3 className="metric-label" style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>📊 Price Action Score (RSI, Volume, Ichimoku, MACD)</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                  <div style={{ 
+                    padding: '2rem', 
+                    border: `2px solid ${priceAction.score >= 7 ? 'var(--status-green)' : priceAction.score >= 4 ? 'var(--accent-orange)' : 'var(--status-red)'}`,
+                    borderRadius: '1rem',
+                    textAlign: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    minWidth: '200px'
+                  }}>
+                    <div style={{ fontSize: '3rem', fontWeight: 'bold', color: priceAction.score >= 7 ? 'var(--status-green)' : priceAction.score >= 4 ? 'var(--accent-orange)' : 'var(--status-red)' }}>
+                      {priceAction.score >= 7 ? 'BUY' : priceAction.score >= 4 ? 'HOLD' : 'SELL'}
                     </div>
-                  ))}
+                    <div style={{ color: 'var(--text-secondary)' }}>{priceAction.score} / {priceAction.max_score} Points</div>
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {priceAction.insights.map((insight, idx) => (
+                      <div key={idx} style={{ fontSize: '0.9rem', padding: '0.4rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                        {insight}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {fundamentalsScore && (
+              <div className="glass-panel">
+                <h3 className="metric-label" style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>🔎 Valuation Quality Score</h3>
+                <div style={{ display: 'flex', alignItems: 'center', height: '100%', paddingBottom: '2rem' }}>
+                  <div style={{ 
+                    padding: '2rem', 
+                    border: `2px solid ${fundamentalsScore.color}`,
+                    borderRadius: '1rem',
+                    textAlign: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    width: '100%'
+                  }}>
+                    <div style={{ fontSize: '3rem', fontWeight: 'bold', color: fundamentalsScore.color }}>
+                      {fundamentalsScore.label}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)' }}>{fundamentalsScore.score} / {fundamentalsScore.max_score} Points</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid-2" style={{ marginBottom: '2rem', gap: '2rem' }}>
+            {/* Valuation Column */}
+            <div className="glass-panel">
+              <h3 className="metric-label" style={{ marginBottom: '1.5rem', fontSize: '1.2rem', color: 'var(--accent-cyan)' }}>📈 Valuation</h3>
+              <div className="grid-2" style={{ gap: '1.5rem' }}>
+                <div>
+                  <div className="metric-label">Market Cap</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>{formatBil(info.marketCap)}</div>
+                </div>
+                <div>
+                  <div className="metric-label">Current Price</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{formatCur(info.currentPrice)}</div>
+                </div>
+                <div>
+                  <div className="metric-label">Trailing P/E</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.trailingPE, 15, 25, true) }}>
+                    {info.trailingPE?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div className="metric-label">Forward P/E</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.forwardPE, 15, 25, true) }}>
+                    {info.forwardPE?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div className="metric-label">PEG Ratio</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.trailingPegRatio, 1, 2, true) }}>
+                    {info.trailingPegRatio?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div className="metric-label">P/B Ratio</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.priceToBook, 5, 15, true) }}>
+                    {info.priceToBook?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div className="metric-label">P/S Ratio</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.priceToSalesTrailing12Months, 4, 10, true) }}>
+                    {info.priceToSalesTrailing12Months?.toFixed(2) || 'N/A'}
+                  </div>
                 </div>
               </div>
             </div>
-          )}
 
-          <div className="glass-panel" style={{ marginBottom: '2rem' }}>
-            <h3 className="metric-label" style={{ marginBottom: '1.5rem', fontSize: '1.2rem' }}>📈 Valuation & Fundamentals</h3>
-            <div className="grid-4" style={{ gap: '1.5rem' }}>
-              <div>
-                <div className="metric-label">Market Cap</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>{formatBil(info.marketCap)}</div>
-              </div>
-              <div>
-                <div className="metric-label">Current Price</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{formatCur(info.currentPrice)}</div>
-              </div>
-              <div>
-                <div className="metric-label">Trailing P/E</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.trailingPE, 15, 25, true) }}>
-                  {info.trailingPE?.toFixed(2) || 'N/A'}
+            {/* Fundamentals Column */}
+            <div className="glass-panel">
+              <h3 className="metric-label" style={{ marginBottom: '1.5rem', fontSize: '1.2rem', color: 'var(--accent-blue)' }}>🏢 Fundamentals</h3>
+              <div className="grid-2" style={{ gap: '1.5rem' }}>
+                <div>
+                  <div className="metric-label">ROE</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.returnOnEquity, 0.2, 0.1) }}>
+                    {formatPct(info.returnOnEquity)}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="metric-label">Forward P/E</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.forwardPE, 15, 25, true) }}>
-                  {info.forwardPE?.toFixed(2) || 'N/A'}
+                <div>
+                  <div className="metric-label">EBITDA Margin</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.ebitda / info.totalRevenue, 0.2, 0.1) }}>
+                    {info.ebitda && info.totalRevenue ? formatPct(info.ebitda / info.totalRevenue) : 'N/A'}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="metric-label">PEG Ratio</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.trailingPegRatio, 1, 2, true) }}>
-                  {info.trailingPegRatio?.toFixed(2) || 'N/A'}
+                <div>
+                  <div className="metric-label">EPS (Current Year)</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.epsCurrentYear, 1, 0) }}>
+                    ${info.epsCurrentYear?.toFixed(2) || 'N/A'}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="metric-label">P/B Ratio</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.priceToBook, 5, 15, true) }}>
-                  {info.priceToBook?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div className="metric-label">P/S Ratio</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.priceToSalesTrailing12Months, 4, 10, true) }}>
-                  {info.priceToSalesTrailing12Months?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div className="metric-label">ROE</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.returnOnEquity, 0.2, 0.1) }}>
-                  {formatPct(info.returnOnEquity)}
-                </div>
-              </div>
-              <div>
-                <div className="metric-label">EPS (Current Year)</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.epsCurrentYear, 1, 0) }}>
-                  ${info.epsCurrentYear?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div className="metric-label">EPS (Forward)</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.forwardEps, 1, 0) }}>
-                  ${info.forwardEps?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div className="metric-label">EBITDA Margin</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.ebitda / info.totalRevenue, 0.2, 0.1) }}>
-                  {info.ebitda && info.totalRevenue ? formatPct(info.ebitda / info.totalRevenue) : 'N/A'}
+                <div>
+                  <div className="metric-label">EPS (Forward)</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: getColor(info.forwardEps, 1, 0) }}>
+                    ${info.forwardEps?.toFixed(2) || 'N/A'}
+                  </div>
                 </div>
               </div>
             </div>
