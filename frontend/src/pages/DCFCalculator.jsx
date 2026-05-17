@@ -14,19 +14,19 @@ export default function DCFCalculator() {
     // Shared
     net_cash: 50000000,
     shares_outstanding: 15000000,
-    terminal_growth: 0.025,
-    discount_rate_base: 0.09,
+    terminal_growth: 2.5,
+    discount_rate_base: 9,
 
     // Standard specific
     starting_cf: 100000000,
-    fcf_growth: 0.10,
+    fcf_growth: 10,
 
     // Revenue specific
     current_revenue: 1000000000,
-    revenue_growth: 0.15,
-    current_margin: -0.05,
-    target_margin: 0.15,
-    tax_rate: 0.21,
+    revenue_growth: 15,
+    current_margin: -5,
+    target_margin: 15,
+    tax_rate: 21,
   });
 
   const fetchStockData = async () => {
@@ -55,9 +55,9 @@ export default function DCFCalculator() {
         net_cash: tCash - tDebt,
         shares_outstanding: shares,
         current_revenue: rev,
-        revenue_growth: revGrowth > 0 ? revGrowth : 0.10,
-        current_margin: margin,
-        fcf_growth: revGrowth > 0 ? revGrowth : 0.10,
+        revenue_growth: (revGrowth > 0 ? revGrowth : 0.10) * 100,
+        current_margin: margin * 100,
+        fcf_growth: (revGrowth > 0 ? revGrowth : 0.10) * 100,
       });
     } catch (err) {
       console.error("Failed to preload:", err);
@@ -69,23 +69,23 @@ export default function DCFCalculator() {
   const handleCalculate = async () => {
     setLoading(true);
     try {
-      const baseDiscount = Number(inputs.discount_rate_base);
+      const baseDiscount = Number(inputs.discount_rate_base) / 100;
       const payload = {
         ticker,
         model_type: modelType,
         starting_cf: Number(inputs.starting_cf),
         net_cash: Number(inputs.net_cash),
         shares_outstanding: Number(inputs.shares_outstanding),
-        growth_rates: Array(5).fill(Number(inputs.fcf_growth)), // simple 5 yr projection
+        growth_rates: Array(5).fill(Number(inputs.fcf_growth) / 100), // simple 5 yr projection
         discount_rates: { Bull: baseDiscount - 0.01, Base: baseDiscount, Bear: baseDiscount + 0.01 },
-        terminal_growth: Number(inputs.terminal_growth),
+        terminal_growth: Number(inputs.terminal_growth) / 100,
         
         // Revenue Model Specific
         current_revenue: Number(inputs.current_revenue),
-        revenue_growth: Number(inputs.revenue_growth),
-        current_margin: Number(inputs.current_margin),
-        target_margin: Number(inputs.target_margin),
-        tax_rate: Number(inputs.tax_rate)
+        revenue_growth: Number(inputs.revenue_growth) / 100,
+        current_margin: Number(inputs.current_margin) / 100,
+        target_margin: Number(inputs.target_margin) / 100,
+        tax_rate: Number(inputs.tax_rate) / 100
       };
 
       const res = await api.post(`/api/dcf/calculate`, payload);
@@ -171,7 +171,7 @@ export default function DCFCalculator() {
                 <div>
                   <label className="metric-label">Current Operating Margin</label>
                   <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: inputs.current_margin < 0 ? 'var(--status-red)' : 'var(--status-green)' }}>
-                    {formatPct(inputs.current_margin)}
+                    {formatPct(inputs.current_margin / 100)}
                   </div>
                 </div>
               </>
@@ -186,32 +186,32 @@ export default function DCFCalculator() {
           <div className="grid-2">
             {modelType === 'Standard' ? (
               <div>
-                <label className="metric-label">Year 1-5 FCF Growth Rate</label>
-                <input type="number" step="0.01" value={inputs.fcf_growth} onChange={e => setInputs({...inputs, fcf_growth: e.target.value})} />
+                <label className="metric-label">Year 1-5 FCF Growth Rate (%)</label>
+                <input type="number" step="0.1" value={inputs.fcf_growth} onChange={e => setInputs({...inputs, fcf_growth: e.target.value})} />
               </div>
             ) : (
               <>
                 <div>
-                  <label className="metric-label">Year 1-5 Rev Growth Rate</label>
-                  <input type="number" step="0.01" value={inputs.revenue_growth} onChange={e => setInputs({...inputs, revenue_growth: e.target.value})} />
+                  <label className="metric-label">Year 1-5 Rev Growth Rate (%)</label>
+                  <input type="number" step="0.1" value={inputs.revenue_growth} onChange={e => setInputs({...inputs, revenue_growth: e.target.value})} />
                 </div>
                 <div>
-                  <label className="metric-label">Target Margin (Year 5)</label>
-                  <input type="number" step="0.01" value={inputs.target_margin} onChange={e => setInputs({...inputs, target_margin: e.target.value})} />
+                  <label className="metric-label">Target Margin Year 5 (%)</label>
+                  <input type="number" step="0.1" value={inputs.target_margin} onChange={e => setInputs({...inputs, target_margin: e.target.value})} />
                 </div>
                 <div>
-                  <label className="metric-label">Tax Rate</label>
-                  <input type="number" step="0.01" value={inputs.tax_rate} onChange={e => setInputs({...inputs, tax_rate: e.target.value})} />
+                  <label className="metric-label">Tax Rate (%)</label>
+                  <input type="number" step="0.1" value={inputs.tax_rate} onChange={e => setInputs({...inputs, tax_rate: e.target.value})} />
                 </div>
               </>
             )}
             <div>
-              <label className="metric-label">Discount Rate (Base)</label>
-              <input type="number" step="0.01" value={inputs.discount_rate_base} onChange={e => setInputs({...inputs, discount_rate_base: e.target.value})} />
+              <label className="metric-label">Discount Rate Base (%)</label>
+              <input type="number" step="0.1" value={inputs.discount_rate_base} onChange={e => setInputs({...inputs, discount_rate_base: e.target.value})} />
             </div>
             <div>
-              <label className="metric-label">Terminal Growth Rate</label>
-              <input type="number" step="0.001" value={inputs.terminal_growth} onChange={e => setInputs({...inputs, terminal_growth: e.target.value})} />
+              <label className="metric-label">Terminal Growth Rate (%)</label>
+              <input type="number" step="0.1" value={inputs.terminal_growth} onChange={e => setInputs({...inputs, terminal_growth: e.target.value})} />
             </div>
           </div>
         </div>
