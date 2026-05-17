@@ -9,6 +9,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 class DCFInput(BaseModel):
     ticker: str
+    model_type: str = "Standard"
     starting_cf: float
     net_cash: float
     shares_outstanding: int
@@ -16,6 +17,12 @@ class DCFInput(BaseModel):
     discount_rates: Dict[str, float]  # Bull, Base, Bear as decimals
     terminal_growth: Optional[float] = None
     exit_multiple: Optional[float] = None
+    # For Revenue model
+    current_revenue: Optional[float] = None
+    revenue_growth: Optional[float] = None
+    current_margin: Optional[float] = None
+    target_margin: Optional[float] = None
+    tax_rate: Optional[float] = 0.21
 
 def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth=None, exit_multiple=None):
     pv_years = []
@@ -38,11 +45,29 @@ def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth=None, exit_multip
 @limiter.limit("20/minute")
 def calculate_dcf(request: Request, data: DCFInput):
     fcf_list = []
-    prev = data.starting_cf
-    for g in data.growth_rates:
-        nxt = prev * (1.0 + g)
-        fcf_list.append(nxt)
-        prev = nxt
+    
+    if data.model_type == "Revenue":
+        prev_rev = data.current_revenue or 0.0
+        c_margin = data.current_margin or 0.0
+        t_margin = data.target_margin or 0.15
+        rev_g = data.revenue_growth or 0.10
+        tax = data.tax_rate or 0.21
+        
+        for i in range(1, 6): # 5 years
+            nxt_rev = prev_rev * (1.0 + rev_g)
+            # Interpolate margin linearly over 5 years
+            margin = c_margin + (t_margin - c_margin) * (i / 5.0)
+            ebit = nxt_rev * margin
+            fcf = ebit * (1.0 - tax)
+            fcf_list.append(fcf)
+            prev_rev = nxt_rev
+    else:
+        # Standard
+        prev = data.starting_cf
+        for g in data.growth_rates:
+            nxt = prev * (1.0 + g)
+            fcf_list.append(nxt)
+            prev = nxt
 
     results = {}
     for name, rate in data.discount_rates.items():
