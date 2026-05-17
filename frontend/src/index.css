@@ -290,3 +290,13 @@ input:focus, select:focus {
   animation: pulse-orange 3s infinite;
 }
 
+@keyframes pulse-blue {
+  0% { box-shadow: 0 0 5px rgba(0, 242, 254, 0.2); border-color: rgba(0, 242, 254, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(0, 242, 254, 0.6); border-color: rgba(0, 242, 254, 0.8); }
+  100% { box-shadow: 0 0 5px rgba(0, 242, 254, 0.2); border-color: rgba(0, 242, 254, 0.4); }
+}
+
+.glow-blue {
+  animation: pulse-blue 3s infinite;
+}
+

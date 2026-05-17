@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [sentiment, setSentiment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [aiAnalysis, setAiAnalysis] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     // Fetch both simultaneously
@@ -36,6 +40,25 @@ export default function Dashboard() {
     return val > 0 ? 'var(--status-green)' : 'var(--status-red)';
   };
 
+  const handleMarketAIAnalysis = async () => {
+    if (!data) return;
+    setAiLoading(true);
+    const prompt = `You are a professional market analyst. Here are the current gauge readings:
+- VIX: ${data.vix?.toFixed(2) || 'N/A'}
+- S&P 500 RSI: ${data.indices['S&P 500']?.rsi?.toFixed(2) || 'N/A'}
+- Nasdaq 100 RSI: ${data.indices['Nasdaq 100']?.rsi?.toFixed(2) || 'N/A'}
+
+Write a very brief and concise market analysis based on these three indicators. Conclude with a clear short-term outlook. Keep it under 150 words.`;
+
+    try {
+      const res = await api.post('/api/stock/MARKET/ai-analysis', { prompt });
+      setAiAnalysis(res.data.analysis);
+    } catch (err) {
+      setAiAnalysis(`Error: ${err.response?.data?.detail || err.message}`);
+    }
+    setAiLoading(false);
+  };
+
   return (
     <div>
       <h2 style={{ marginBottom: '2rem' }}>📈 Market Analysis | Buy Signals</h2>
@@ -46,8 +69,8 @@ export default function Dashboard() {
             {/* VIX Card */}
             {(() => {
               const val = data?.vix || 0;
-              let statusClass = 'glow-orange';
-              let fill = 'var(--accent-orange)';
+              let statusClass = 'glow-blue';
+              let fill = 'var(--accent-cyan)';
               let label = 'Neutral Zone';
               if (val > 28) { statusClass = 'glow-red'; fill = 'var(--status-red)'; label = 'Fear Zone'; }
               else if (val < 15) { statusClass = 'glow-green'; fill = 'var(--status-green)'; label = 'Greed Zone'; }
@@ -60,7 +83,7 @@ export default function Dashboard() {
               return (
                 <div className={`glass-panel ${statusClass}`} style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <h3 className="metric-label" style={{ marginBottom: '1rem' }}>Volatility Index (VIX)</h3>
-                  <div style={{ width: '100%', height: '150px', position: 'relative' }}>
+                  <div style={{ width: '100%', height: '150px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={gaugeData} cx="50%" cy="100%" startAngle={180} endAngle={0} innerRadius={60} outerRadius={80} paddingAngle={0} dataKey="value" stroke="none">
@@ -69,11 +92,11 @@ export default function Dashboard() {
                         </Pie>
                       </PieChart>
                     </ResponsiveContainer>
-                    <div style={{ position: 'absolute', bottom: '10px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', fontWeight: 'bold', color: fill }}>
-                      {data.vix ? data.vix.toFixed(2) : 'N/A'}
-                    </div>
                   </div>
-                  <p className="metric-label" style={{ marginTop: '0.5rem', fontSize: '1.2rem' }}>{label}</p>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: fill, marginTop: '-10px' }}>
+                    {data.vix ? data.vix.toFixed(2) : 'N/A'}
+                  </div>
+                  <p className="metric-label" style={{ marginTop: '0.2rem', fontSize: '1.2rem' }}>{label}</p>
                 </div>
               );
             })()}
@@ -82,8 +105,8 @@ export default function Dashboard() {
             {(() => {
               const spData = data?.indices?.['S&P 500'];
               const val = spData?.rsi || 0;
-              let statusClass = 'glow-orange';
-              let fill = 'var(--accent-orange)';
+              let statusClass = 'glow-blue';
+              let fill = 'var(--accent-cyan)';
               let label = 'Neutral';
               if (val > 70) { statusClass = 'glow-red'; fill = 'var(--status-red)'; label = 'Overbought / Bearish'; }
               else if (val < 30) { statusClass = 'glow-green'; fill = 'var(--status-green)'; label = 'Oversold / Bullish'; }
@@ -96,7 +119,7 @@ export default function Dashboard() {
               return (
                 <div className={`glass-panel ${statusClass}`} style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <h3 className="metric-label" style={{ marginBottom: '1rem' }}>S&P 500 RSI</h3>
-                  <div style={{ width: '100%', height: '150px', position: 'relative' }}>
+                  <div style={{ width: '100%', height: '150px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={gaugeData} cx="50%" cy="100%" startAngle={180} endAngle={0} innerRadius={60} outerRadius={80} paddingAngle={0} dataKey="value" stroke="none">
@@ -105,11 +128,11 @@ export default function Dashboard() {
                         </Pie>
                       </PieChart>
                     </ResponsiveContainer>
-                    <div style={{ position: 'absolute', bottom: '10px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', fontWeight: 'bold', color: fill }}>
-                      {spData?.rsi ? spData.rsi.toFixed(2) : 'N/A'}
-                    </div>
                   </div>
-                  <p className="metric-label" style={{ marginTop: '0.5rem', fontSize: '1.2rem' }}>{label}</p>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: fill, marginTop: '-10px' }}>
+                    {spData?.rsi ? spData.rsi.toFixed(2) : 'N/A'}
+                  </div>
+                  <p className="metric-label" style={{ marginTop: '0.2rem', fontSize: '1.2rem' }}>{label}</p>
                 </div>
               );
             })()}
@@ -118,8 +141,8 @@ export default function Dashboard() {
             {(() => {
               const ndxData = data?.indices?.['Nasdaq 100'];
               const val = ndxData?.rsi || 0;
-              let statusClass = 'glow-orange';
-              let fill = 'var(--accent-orange)';
+              let statusClass = 'glow-blue';
+              let fill = 'var(--accent-cyan)';
               let label = 'Neutral';
               if (val > 70) { statusClass = 'glow-red'; fill = 'var(--status-red)'; label = 'Overbought / Bearish'; }
               else if (val < 30) { statusClass = 'glow-green'; fill = 'var(--status-green)'; label = 'Oversold / Bullish'; }
@@ -132,7 +155,7 @@ export default function Dashboard() {
               return (
                 <div className={`glass-panel ${statusClass}`} style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <h3 className="metric-label" style={{ marginBottom: '1rem' }}>Nasdaq 100 RSI</h3>
-                  <div style={{ width: '100%', height: '150px', position: 'relative' }}>
+                  <div style={{ width: '100%', height: '150px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={gaugeData} cx="50%" cy="100%" startAngle={180} endAngle={0} innerRadius={60} outerRadius={80} paddingAngle={0} dataKey="value" stroke="none">
@@ -141,14 +164,31 @@ export default function Dashboard() {
                         </Pie>
                       </PieChart>
                     </ResponsiveContainer>
-                    <div style={{ position: 'absolute', bottom: '10px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', fontWeight: 'bold', color: fill }}>
-                      {ndxData?.rsi ? ndxData.rsi.toFixed(2) : 'N/A'}
-                    </div>
                   </div>
-                  <p className="metric-label" style={{ marginTop: '0.5rem', fontSize: '1.2rem' }}>{label}</p>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: fill, marginTop: '-10px' }}>
+                    {ndxData?.rsi ? ndxData.rsi.toFixed(2) : 'N/A'}
+                  </div>
+                  <p className="metric-label" style={{ marginTop: '0.2rem', fontSize: '1.2rem' }}>{label}</p>
                 </div>
               );
             })()}
+          </div>
+
+          <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 className="metric-label" style={{ color: 'var(--accent-blue)', margin: 0 }}>🤖 Quick AI Market Analysis</h3>
+              <button className="btn-primary" onClick={handleMarketAIAnalysis} disabled={aiLoading} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+                {aiLoading ? 'Mistral is analyzing...' : 'Generate Quick Analysis'}
+              </button>
+            </div>
+            
+            {aiAnalysis ? (
+              <div className="markdown-content" style={{ padding: '1rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysis}</ReactMarkdown>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)' }}>Click the button to generate a brief AI analysis based on the current gauge readings.</p>
+            )}
           </div>
 
           {sentiment && (
