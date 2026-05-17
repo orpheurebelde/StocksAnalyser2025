@@ -185,33 +185,51 @@ export default function DCFCalculator() {
           
           <div className="grid-2">
             {modelType === 'Standard' ? (
-              <div>
-                <label className="metric-label">Year 1-5 FCF Growth Rate (%)</label>
-                <input type="number" step="0.1" value={inputs.fcf_growth} onChange={e => setInputs({...inputs, fcf_growth: e.target.value})} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <label className="metric-label">Year 1-5 FCF Growth Rate (%)</label>
+                  <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.fcf_growth}%</span>
+                </div>
+                <input type="range" min="-50" max="100" step="0.5" value={inputs.fcf_growth} onChange={e => setInputs({...inputs, fcf_growth: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
               </div>
             ) : (
               <>
-                <div>
-                  <label className="metric-label">Year 1-5 Rev Growth Rate (%)</label>
-                  <input type="number" step="0.1" value={inputs.revenue_growth} onChange={e => setInputs({...inputs, revenue_growth: e.target.value})} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <label className="metric-label">Year 1-5 Rev Growth Rate (%)</label>
+                    <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.revenue_growth}%</span>
+                  </div>
+                  <input type="range" min="-50" max="200" step="0.5" value={inputs.revenue_growth} onChange={e => setInputs({...inputs, revenue_growth: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
                 </div>
-                <div>
-                  <label className="metric-label">Target Margin Year 5 (%)</label>
-                  <input type="number" step="0.1" value={inputs.target_margin} onChange={e => setInputs({...inputs, target_margin: e.target.value})} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <label className="metric-label">Target Margin Year 5 (%)</label>
+                    <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.target_margin}%</span>
+                  </div>
+                  <input type="range" min="-20" max="50" step="0.5" value={inputs.target_margin} onChange={e => setInputs({...inputs, target_margin: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
                 </div>
-                <div>
-                  <label className="metric-label">Tax Rate (%)</label>
-                  <input type="number" step="0.1" value={inputs.tax_rate} onChange={e => setInputs({...inputs, tax_rate: e.target.value})} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <label className="metric-label">Tax Rate (%)</label>
+                    <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.tax_rate}%</span>
+                  </div>
+                  <input type="range" min="0" max="50" step="0.5" value={inputs.tax_rate} onChange={e => setInputs({...inputs, tax_rate: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
                 </div>
               </>
             )}
-            <div>
-              <label className="metric-label">Discount Rate Base (%)</label>
-              <input type="number" step="0.1" value={inputs.discount_rate_base} onChange={e => setInputs({...inputs, discount_rate_base: e.target.value})} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <label className="metric-label">Discount Rate Base (%)</label>
+                <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.discount_rate_base}%</span>
+              </div>
+              <input type="range" min="1" max="20" step="0.5" value={inputs.discount_rate_base} onChange={e => setInputs({...inputs, discount_rate_base: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
             </div>
-            <div>
-              <label className="metric-label">Terminal Growth Rate (%)</label>
-              <input type="number" step="0.1" value={inputs.terminal_growth} onChange={e => setInputs({...inputs, terminal_growth: e.target.value})} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <label className="metric-label">Terminal Growth Rate (%)</label>
+                <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.terminal_growth}%</span>
+              </div>
+              <input type="range" min="-5" max="10" step="0.1" value={inputs.terminal_growth} onChange={e => setInputs({...inputs, terminal_growth: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
             </div>
           </div>
         </div>
