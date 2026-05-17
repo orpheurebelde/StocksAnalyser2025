@@ -14,6 +14,7 @@ export default function StockInfo() {
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
+  const [aiRecommendation, setAiRecommendation] = useState(null);
   const [error, setError] = useState('');
 
   const fetchStock = async () => {
@@ -24,6 +25,7 @@ export default function StockInfo() {
     setFundamentalsScore(null);
     setDilution(null);
     setAiAnalysis('');
+    setAiRecommendation(null);
     try {
       const res = await api.get(`/api/stock/${ticker.toUpperCase()}/full-analysis`);
       setInfo(res.data.info);
@@ -52,7 +54,10 @@ export default function StockInfo() {
     - Free Cash Flow: $${(info.freeCashflow / 1e9).toFixed(2)}B
     - Shares Outstanding: ${info.sharesOutstanding}
     
-    Structure the analysis:
+    CRITICAL INSTRUCTION: The VERY FIRST LINE of your response MUST be exactly the following format:
+    RATING: [Choose exactly one: STRONG BUY, BUY, HOLD, SELL, or STRONG SELL]
+    
+    Structure the rest of the analysis:
     1. **Executive Summary**
     2. **Valuation**
     3. **Financial Health**
@@ -98,7 +103,18 @@ export default function StockInfo() {
     setAiLoading(true);
     try {
       const res = await api.post(`/api/stock/${ticker.toUpperCase()}/ai-analysis`, { prompt: promptToSend });
-      setAiAnalysis(res.data.analysis);
+      const text = res.data.analysis;
+      setAiAnalysis(text);
+      
+      const ratingMatch = text.match(/RATING:\s*\[?([^\]\n*]+)\]?/i);
+      if (ratingMatch) {
+         let ratingStr = ratingMatch[1].toUpperCase();
+         if (ratingStr.includes('STRONG BUY')) setAiRecommendation('STRONG BUY');
+         else if (ratingStr.includes('STRONG SELL')) setAiRecommendation('STRONG SELL');
+         else if (ratingStr.includes('BUY')) setAiRecommendation('BUY');
+         else if (ratingStr.includes('SELL')) setAiRecommendation('SELL');
+         else setAiRecommendation('HOLD');
+      }
     } catch (err) {
       setAiAnalysis(`Error fetching AI analysis: ${err.response?.data?.detail || err.message}`);
     }
@@ -139,17 +155,28 @@ export default function StockInfo() {
     <div>
       <h2 style={{ marginBottom: '2rem' }}>📁 Stock Analysis & AI Intelligence</h2>
       
-      <div className="glass-panel" style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', alignItems: 'center' }}>
-        <input 
-          type="text" 
-          value={ticker} 
-          onChange={(e) => setTicker(e.target.value)}
-          placeholder="Enter Ticker (e.g. AAPL)"
-          style={{ maxWidth: '300px' }}
-        />
-        <button className="btn-primary" onClick={fetchStock} disabled={loading}>
-          {loading ? 'Fetching...' : 'Analyze Fundamentals & Price Action'}
-        </button>
+      <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem', alignItems: 'stretch' }}>
+        <div className="glass-panel" style={{ flex: 1, display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <input 
+            type="text" 
+            value={ticker} 
+            onChange={(e) => setTicker(e.target.value)}
+            placeholder="Enter Ticker (e.g. AAPL)"
+            style={{ maxWidth: '300px' }}
+          />
+          <button className="btn-primary" onClick={fetchStock} disabled={loading}>
+            {loading ? 'Fetching...' : 'Analyze Fundamentals & Price Action'}
+          </button>
+        </div>
+
+        {aiRecommendation && (
+          <div className={`glass-panel ${aiRecommendation.includes('BUY') ? 'glow-green' : aiRecommendation.includes('SELL') ? 'glow-red' : 'glow-blue'}`} style={{ minWidth: '250px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="metric-label" style={{ fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '2px' }}>AI Consensus</span>
+            <span style={{ fontSize: '2.5rem', fontWeight: 'bold', color: aiRecommendation.includes('BUY') ? 'var(--status-green)' : aiRecommendation.includes('SELL') ? 'var(--status-red)' : 'var(--accent-cyan)' }}>
+              {aiRecommendation}
+            </span>
+          </div>
+        )}
       </div>
 
       {error && <p style={{ color: 'var(--status-red)', marginBottom: '2rem' }}>{error}</p>}
