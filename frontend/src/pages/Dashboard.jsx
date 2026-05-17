@@ -59,6 +59,14 @@ Write a very brief and concise market analysis based on these three indicators. 
     setAiLoading(false);
   };
 
+  useEffect(() => {
+    if (data && !aiAnalysis && !aiLoading) {
+      handleMarketAIAnalysis();
+    }
+  }, [data]);
+
+
+
   return (
     <div>
       <h2 style={{ marginBottom: '2rem' }}>📈 Market Analysis | Buy Signals</h2>

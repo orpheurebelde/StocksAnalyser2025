@@ -122,6 +122,13 @@ input:focus, select:focus {
   position: sticky;
   top: 0;
   height: 100vh;
+  transition: width 0.3s ease, padding 0.3s ease;
+  overflow-x: hidden;
+}
+
+.sidebar.collapsed {
+  width: 90px;
+  padding: 2rem 1rem;
 }
 
 .main-content {
@@ -129,6 +136,11 @@ input:focus, select:focus {
   padding: 3rem;
   max-width: 1400px;
   margin: 0 auto;
+  transition: max-width 0.3s ease;
+}
+
+.main-content.expanded {
+  max-width: 1800px;
 }
 
 .nav-link {
