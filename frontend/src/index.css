@@ -258,3 +258,35 @@ input:focus, select:focus {
 .markdown-content tr:nth-child(even) {
   background: rgba(255,255,255,0.02);
 }
+
+/* Real-time Glow Animations */
+@keyframes pulse-green {
+  0% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); border-color: rgba(16, 185, 129, 0.8); }
+  100% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4); }
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); border-color: rgba(239, 68, 68, 0.8); }
+  100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); }
+}
+
+@keyframes pulse-orange {
+  0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.6); border-color: rgba(245, 158, 11, 0.8); }
+  100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); }
+}
+
+.glow-green {
+  animation: pulse-green 3s infinite;
+}
+
+.glow-red {
+  animation: pulse-red 3s infinite;
+}
+
+.glow-orange {
+  animation: pulse-orange 3s infinite;
+}
+
