@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -104,6 +104,18 @@ export default function StockInfo() {
     }
     setAiLoading(false);
   };
+
+  useEffect(() => {
+    fetchStock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (info && !aiAnalysis && !aiLoading) {
+      handleAiAnalysis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info]);
 
   // Coloring Helpers
   const getColor = (val, thGreen, thOrange, reverse=false) => {
