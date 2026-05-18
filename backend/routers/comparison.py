@@ -3,7 +3,7 @@ from typing import List
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import get_ticker
+from core.yfinance_client import get_ticker_info
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -17,7 +17,10 @@ def compare_stocks(request: Request, body: CompareRequest):
     results = {}
     for t in body.tickers:
         try:
-            info = get_ticker(t).info
+            info = get_ticker_info(t)
+            if not info:
+                results[t] = {"error": "No info found."}
+                continue
             results[t] = {
                 "Trailing PE": info.get("trailingPE"),
                 "Forward PE": info.get("forwardPE"),

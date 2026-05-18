@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 from tradingview_ta import TA_Handler, Interval
-import yfinance as yf
 import requests
 
 st.set_page_config(page_title="📊 Portfolio Analysis", layout="wide")

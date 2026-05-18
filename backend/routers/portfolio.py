@@ -4,6 +4,7 @@ from slowapi.util import get_remote_address
 import pandas as pd
 import io
 import requests
+from core.yfinance_client import download_data
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -49,12 +50,11 @@ async def analyze_portfolio(request: Request, file: UploadFile = File(...)):
         # Calculate True Risk Metrics via YFinance
         tickers = df["Symbol"].unique()
         price_history = {}
-        import yfinance as yf
         import numpy as np
         
         for t in tickers:
             try:
-                hist = yf.download(t, period="1y", interval="1d", progress=False)
+                hist = download_data(t, period="1y", interval="1d")
                 if not hist.empty:
                     if isinstance(hist.columns, pd.MultiIndex):
                         hist.columns = hist.columns.get_level_values(0)

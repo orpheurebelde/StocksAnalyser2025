@@ -1,8 +1,8 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import numpy as np
 from utils.utils import compute_fibonacci_level, compute_rsi, compute_macd
+from backend.core.yfinance_client import download_data
 from datetime import datetime
 import plotly.graph_objects as go
 import time
@@ -89,7 +89,7 @@ def show_indicators(ticker, title):
     # This message will only appear if the cache is cleared or expires
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Data last fetched/calculated for {title}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
     
-    data = yf.Ticker(ticker).history(period="10y") # Fetches 10 years of daily data
+    data = download_data(ticker, period="10y", interval="1d")
     if data.empty:
         st.error(f"Could not fetch data for {ticker}")
         return
@@ -238,7 +238,7 @@ def fetch_monthly_returns(ticker):
     st.markdown(f"<p style='color: gray; font-size: 12px;'>Monthly returns data last fetched: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>", unsafe_allow_html=True)
     
     # Fetch daily data for a sufficiently long period
-    data = yf.download(ticker, period="10y", interval="1d", progress=False) 
+    data = download_data(ticker, period="10y", interval="1d")
     
     if data.empty:
         st.error(f"Could not fetch data for {ticker}")
@@ -354,7 +354,7 @@ def display_yearly_performance(ticker, title):
         unsafe_allow_html=True
     )
 
-    data = yf.download(ticker, period="10y", interval="1d", progress=False)
+    data = download_data(ticker, period="10y", interval="1d")
     if data.empty or 'Close' not in data.columns:
         st.error(f"Not enough data to calculate yearly performance for {ticker}.")
         return None  # Return None if fail

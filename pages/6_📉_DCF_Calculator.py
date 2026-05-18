@@ -1,10 +1,10 @@
 import streamlit as st
-import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
 from utils.utils import load_stock_list, get_stock_info
+from backend.core.yfinance_client import get_statement
 
 st.set_page_config(page_title="DCF Calculator", layout="wide")
 from utils.theme import apply_theme
@@ -63,13 +63,13 @@ def choose_and_correct_shares(info: dict) -> int:
 
     return safe_int(round(shares), 0)
 
-def get_net_cash_guess(ticker_yf: yf.Ticker) -> float:
+def get_net_cash_guess(ticker_symbol: str) -> float:
     """
     Cash - Total Debt from latest annual balance sheet (falls back to quarterly if needed).
     """
     cash = debt = None
     try:
-        bs = ticker_yf.balance_sheet
+        bs = get_statement(ticker_symbol, "balance_sheet")
         if bs is not None and not bs.empty:
             col = bs.columns[0]
             for key in ["Cash", "Cash And Cash Equivalents", "Cash and cash equivalents"]:
@@ -92,7 +92,7 @@ def get_net_cash_guess(ticker_yf: yf.Ticker) -> float:
     # Try quarterly if annual missing
     if (cash is None or debt is None):
         try:
-            qbs = ticker_yf.quarterly_balance_sheet
+            qbs = get_statement(ticker_symbol, "quarterly_balance_sheet")
             if qbs is not None and not qbs.empty:
                 col = qbs.columns[0]
                 if cash is None:
@@ -133,7 +133,7 @@ def get_latest_val(df, keys):
         pass
     return None
 
-def compute_fcff_ttm(ticker_yf: yf.Ticker, tax_rate: float):
+def compute_fcff_ttm(ticker_symbol: str, tax_rate: float):
     """
     FCFF ≈ Operating Cash Flow + Interest*(1 - tax) - Capex
     Using latest annual; fallback to quarterly avg if annual missing.
@@ -142,7 +142,7 @@ def compute_fcff_ttm(ticker_yf: yf.Ticker, tax_rate: float):
 
     # Annual cashflow
     try:
-        cf = ticker_yf.cashflow
+        cf = get_statement(ticker_symbol, "cashflow")
         if cf is not None and not cf.empty:
             ocf = get_latest_val(cf, ["Operating Cash Flow"])
             capex = get_latest_val(cf, ["Capital Expenditures"])
@@ -150,7 +150,7 @@ def compute_fcff_ttm(ticker_yf: yf.Ticker, tax_rate: float):
             interest = get_latest_val(cf, ["Interest Paid"])
             if interest is None:
                 # Try income statement
-                fin = ticker_yf.financials
+                fin = get_statement(ticker_symbol, "financials")
                 if fin is not None and not fin.empty:
                     interest = get_latest_val(fin, ["Interest Expense"])  # typically negative
     except:
@@ -159,7 +159,7 @@ def compute_fcff_ttm(ticker_yf: yf.Ticker, tax_rate: float):
     # Quarterly fallback if any missing
     if ocf is None or capex is None or interest is None:
         try:
-            qcf = ticker_yf.quarterly_cashflow
+            qcf = get_statement(ticker_symbol, "quarterly_cashflow")
             if qcf is not None and not qcf.empty:
                 ocf_q = get_latest_val(qcf, ["Operating Cash Flow"])
                 capex_q = get_latest_val(qcf, ["Capital Expenditures"])
@@ -177,7 +177,7 @@ def compute_fcff_ttm(ticker_yf: yf.Ticker, tax_rate: float):
     if ocf is None or capex is None:
         # FCFE approx
         try:
-            cf = ticker_yf.cashflow
+            cf = get_statement(ticker_symbol, "cashflow")
             if cf is not None and not cf.empty:
                 for key in ["Free Cash Flow", "FreeCashFlow", "Free Cash Flow (USD)"]:
                     if key in cf.index:
@@ -241,14 +241,13 @@ selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, 
 if selected_display != "Select a stock...":
     ticker_symbol = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
     info = get_stock_info(ticker_symbol)
-    ticker_yf = yf.Ticker(ticker_symbol)
 
     # --- Core fields
     shares_auto = choose_and_correct_shares(info)
     price_auto = safe_float(info.get("previousClose"), 0.0)
     mcap_auto = safe_float(info.get("marketCap"), 0.0)
     long_name = info.get("longName", ticker_symbol)
-    net_cash_auto = get_net_cash_guess(ticker_yf)
+    net_cash_auto = get_net_cash_guess(ticker_symbol)
 
     st.subheader(f"{ticker_symbol} — {long_name}")
     c1, c2, c3 = st.columns(3)
@@ -269,11 +268,11 @@ if selected_display != "Select a stock...":
     tax_rate_input = nc2.slider("Tax Rate for FCFF (%)", 0.0, 35.0, 18.0, 0.5) / 100.0
 
     # --- Starting cash flow (prefer FCFF)
-    fcff_ttm, flow_label = compute_fcff_ttm(ticker_yf, tax_rate_input)
+    fcff_ttm, flow_label = compute_fcff_ttm(ticker_symbol, tax_rate_input)
     if fcff_ttm is None:
         # last fallback: use 3y avg of FCF row if exists
         try:
-            cf = ticker_yf.cashflow
+            cf = get_statement(ticker_symbol, "cashflow")
             if cf is not None and not cf.empty:
                 if "Free Cash Flow" in cf.index:
                     vals = cf.loc["Free Cash Flow"].dropna().values[:3]

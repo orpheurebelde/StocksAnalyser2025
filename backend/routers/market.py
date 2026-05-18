@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import get_ticker, download_data
+from core.yfinance_client import download_data
 from core.technical import compute_rsi, compute_macd, compute_fibonacci_level
 import numpy as np
 import pandas as pd
@@ -80,7 +80,7 @@ def get_market_analysis(request: Request):
                 "sma_200": sma_200
             }
             
-        vix = get_ticker("^VIX").history(period="1d", interval="1m")
+        vix = download_data("^VIX", period="1d", interval="1m")
         vix_val = float(vix["Close"].iloc[-1]) if not vix.empty else None
             
         return {"indices": results, "vix": vix_val}

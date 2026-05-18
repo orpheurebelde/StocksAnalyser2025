@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import get_ticker_info, get_ticker, download_data
+from core.yfinance_client import get_ticker_info, download_data
 from core.technical import analyze_price_action
 import os
 import requests

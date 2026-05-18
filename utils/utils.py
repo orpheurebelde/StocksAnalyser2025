@@ -1,14 +1,7 @@
 import os
 import json
-import yfinance as yf
 import pandas as pd
-import requests_cache
 
-# Set up cached session to avoid yfinance rate limits globally
-yf_session = requests_cache.CachedSession('yfinance_cache', expire_after=3600)
-yf_session.headers['User-agent'] = 'StocksAnalyser/1.0'
-# Override yfinance base session
-yf.Session = yf_session
 from datetime import datetime, timedelta
 import requests
 import traceback
@@ -22,6 +15,7 @@ from ta.trend import IchimokuIndicator, MACD
 from ta.momentum import RSIIndicator
 from ta.volatility import BollingerBands
 import time
+from backend.core.yfinance_client import download_data, get_ticker_info
 
 # Constants
 CACHE_DIR = "cache"
@@ -44,8 +38,7 @@ def fetch_and_cache_stock_info(ticker):
     """Fetch info and save to CSV cache."""
     ticker = ticker.upper()
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
+        info = get_ticker_info(ticker)
         if not info:
             raise ValueError("Empty info returned.")
 
@@ -97,7 +90,7 @@ def load_stock_list():
 def get_stock_info(ticker):
     """Get stock info from cache or fetch if needed."""
     ticker = ticker.upper()
-    if os.path.exists(CSV_PATH):
+    if is_cache_valid():
         try:
             df = pd.read_csv(CSV_PATH)
             if "Ticker" not in df.columns:
@@ -120,7 +113,8 @@ def get_stock_info(ticker):
 @st.cache_data(ttl=CACHE_DURATION_HOURS * 3600, show_spinner=False)
 def get_stock_price_yf(ticker):
     try:
-        return yf.Ticker(ticker).history(period="1d")["Close"].iloc[-1]
+        data = download_data(ticker, period="1d", interval="1d")
+        return data["Close"].iloc[-1] if not data.empty else None
     except Exception:
         return None
 
@@ -137,8 +131,7 @@ def safe_metric(value, divisor=1, suffix="", percentage=False):
 
 # Get VIX value
 def get_vix_data():
-    vix = yf.Ticker("^VIX")
-    data = vix.history(period="1d", interval="1m")
+    data = download_data("^VIX", period="1d", interval="1m")
     if not data.empty:
         return data["Close"].iloc[-1]
     return None
@@ -244,10 +237,8 @@ def monte_carlo_simulation(data, n_simulations=1000, n_days=252, log_normal=Fals
 @st.cache_data
 def fetch_data(ticker):
     try:
-        # Fetch data from Yahoo Finance
-        stock = yf.Ticker(ticker)
-        data = stock.history(period="10y")  # Fetch 10 years of historical data
-        info = stock.info  # Fetch stock information
+        data = download_data(ticker, period="10y", interval="1d")
+        info = get_stock_info(ticker)
 
         # Ensure data and info are not empty
         if data.empty:
@@ -423,7 +414,7 @@ def fetch_price_data(ticker: str) -> pd.DataFrame:
     if not ticker or not isinstance(ticker, str):
         raise ValueError("Invalid ticker")
 
-    df = yf.download(ticker, period="6mo", interval="1d", progress=False)
+    df = download_data(ticker, period="6mo", interval="1d")
     if df.empty:
         raise ValueError(f"No data found for ticker '{ticker}'")
     return df
@@ -546,12 +537,9 @@ def analyze_price_action(df):
 
 def calculate_dcf_valor(ticker, revenue_growth_base=0.10, revenue_growth_bull=0.18, revenue_growth_bear=0.05,
                         discount_rate=0.10, years=5, terminal_growth_rate=0.025):
-    import yfinance as yf
-
     try:
         ticker = ticker.strip().upper()
-        stock = yf.Ticker(ticker)
-        info = stock.info
+        info = get_stock_info(ticker)
 
         revenue = info.get("totalRevenue")
         free_cf = info.get("freeCashflow")
@@ -605,15 +593,13 @@ def calculate_peg_ratio(pe_ratio, eps_growth_percent):
     return None
 
 def estimate_past_shares_outstanding(ticker_symbol):
-    ticker = yf.Ticker(ticker_symbol)
-
-    current_info = ticker.info
+    current_info = get_stock_info(ticker_symbol)
     current_price = current_info.get("currentPrice")
     current_market_cap = current_info.get("marketCap")
     current_shares = current_info.get("sharesOutstanding")
 
     # Get historical price and market cap for 1 year ago
-    hist = ticker.history(period="1y", interval="1mo")
+    hist = download_data(ticker_symbol, period="1y", interval="1mo")
     if len(hist) < 2:
         return None, None, None
 
