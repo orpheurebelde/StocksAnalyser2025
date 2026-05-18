@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import api from '../api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export default function StockInfo() {
-  const [ticker, setTicker] = useState('AAPL');
+  const [ticker, setTicker] = useState('');
+  const [activeTicker, setActiveTicker] = useState('');
   const [info, setInfo] = useState(null);
   const [priceAction, setPriceAction] = useState(null);
   const [fundamentalsScore, setFundamentalsScore] = useState(null);
@@ -17,17 +18,23 @@ export default function StockInfo() {
   const [aiRecommendation, setAiRecommendation] = useState(null);
   const [error, setError] = useState('');
 
-  const fetchStock = async () => {
+  const fetchStock = async (event) => {
+    event?.preventDefault();
+    const nextTicker = ticker.trim().toUpperCase();
+    if (!nextTicker) return;
+
     setLoading(true);
     setError('');
+    setActiveTicker(nextTicker);
     setInfo(null);
     setPriceAction(null);
     setFundamentalsScore(null);
     setDilution(null);
     setAiAnalysis('');
+    setAiPrompt('');
     setAiRecommendation(null);
     try {
-      const res = await api.get(`/api/stock/${ticker.toUpperCase()}/full-analysis`);
+      const res = await api.get(`/api/stock/${nextTicker}/full-analysis`);
       setInfo(res.data.info);
       setFundamentalsScore(res.data.fundamentals_score);
       setPriceAction(res.data.price_action);
@@ -43,7 +50,7 @@ export default function StockInfo() {
     const currentYear = new Date().getFullYear();
     const prompt = `You are a professional equity analyst. Today's year is ${currentYear}. Write a deep analysis using ONLY the following structured data:
     
-    - Company: ${info.shortName || ticker}
+    - Company: ${info.shortName || activeTicker}
     - Sector: ${info.sector}
     - Market Cap: $${(info.marketCap / 1e9).toFixed(2)}B
     - Current Price: $${info.currentPrice}
@@ -73,10 +80,10 @@ export default function StockInfo() {
   const handleAiDCF = async () => {
     if (!info) return;
     const currentYear = new Date().getFullYear();
-    const prompt = `You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for ${info.shortName || ticker} (${ticker.toUpperCase()}), generate a realistic 5-year DCF valuation.
+    const prompt = `You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for ${info.shortName || activeTicker} (${activeTicker}), generate a realistic 5-year DCF valuation.
 
     Use the following data as a baseline:
-    - Company: ${info.shortName || ticker}
+    - Company: ${info.shortName || activeTicker}
     - Sector: ${info.sector}
     - Market Cap: $${(info.marketCap / 1e9).toFixed(2)}B
     - Current Price: $${info.currentPrice}
@@ -102,7 +109,7 @@ export default function StockInfo() {
   const fetchAiAnalysis = async (promptToSend) => {
     setAiLoading(true);
     try {
-      const res = await api.post(`/api/stock/${ticker.toUpperCase()}/ai-analysis`, { prompt: promptToSend });
+      const res = await api.post(`/api/stock/${activeTicker}/ai-analysis`, { prompt: promptToSend });
       const text = res.data.analysis;
       setAiAnalysis(text);
       
@@ -120,18 +127,6 @@ export default function StockInfo() {
     }
     setAiLoading(false);
   };
-
-  useEffect(() => {
-    fetchStock();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (info && !aiAnalysis && !aiLoading) {
-      handleAiAnalysis();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [info]);
 
   // Coloring Helpers
   const getColor = (val, thGreen, thOrange, reverse=false) => {
@@ -156,7 +151,7 @@ export default function StockInfo() {
       <h2 style={{ marginBottom: '2rem' }}>📁 Stock Analysis & AI Intelligence</h2>
       
       <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem', alignItems: 'stretch' }}>
-        <div className="glass-panel" style={{ flex: 1, display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <form className="glass-panel" onSubmit={fetchStock} style={{ flex: 1, display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <input 
             type="text" 
             value={ticker} 
@@ -164,10 +159,10 @@ export default function StockInfo() {
             placeholder="Enter Ticker (e.g. AAPL)"
             style={{ maxWidth: '300px' }}
           />
-          <button className="btn-primary" onClick={fetchStock} disabled={loading}>
+          <button className="btn-primary" type="submit" disabled={loading || !ticker.trim()}>
             {loading ? 'Fetching...' : 'Analyze Fundamentals & Price Action'}
           </button>
-        </div>
+        </form>
 
         {aiRecommendation && (
           <div className={`glass-panel ${aiRecommendation.includes('BUY') ? 'glow-green' : aiRecommendation.includes('SELL') ? 'glow-red' : 'glow-blue'}`} style={{ minWidth: '250px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -185,7 +180,7 @@ export default function StockInfo() {
         <>
           <div className="glass-panel" style={{ marginBottom: '2rem', padding: 0, overflow: 'hidden' }}>
             <iframe 
-              src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=${ticker.toUpperCase()}&interval=W&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=Dark&style=2&timezone=Etc%2FGMT%2B3&hideideas=1`}
+              src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=${activeTicker}&interval=W&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=Dark&style=2&timezone=Etc%2FGMT%2B3&hideideas=1`}
               width="100%" 
               height="500" 
               frameBorder="0" 
