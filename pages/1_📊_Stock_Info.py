@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.utils import interpret_dilution_extended, estimate_past_shares_outstanding, calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action
+from utils.utils import interpret_dilution_extended, estimate_past_shares_outstanding, calculate_peg_ratio, load_stock_list, get_stock_info, get_ai_analysis, format_number, fetch_data, display_fundamentals_score, fetch_price_data, analyze_price_action, search_ticker
 import re
 import time
 from datetime import datetime
@@ -38,8 +38,27 @@ st.title("📁 Análise de Ações | S&P 500 e NASDAQ")
 
 stock_df = load_stock_list()
 stock_df = stock_df.sort_values(by="Display")  # Sort alphabetically by Display column
-options = ["Select a stock..."] + stock_df["Display"].tolist()
-selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, index=0)
+
+search_mode = st.radio("Search Mode", ["Select from List", "Search by Name (Web)"], horizontal=True)
+
+ticker = None
+
+if search_mode == "Select from List":
+    options = ["Select a stock..."] + stock_df["Display"].tolist()
+    selected_display = st.selectbox("🔎 Search Stock by Ticker or Name", options, index=0)
+    if selected_display != "Select a stock...":
+        ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
+else:
+    search_query = st.text_input("🔎 Enter Company Name or Ticker (e.g. Apple, TSLA)")
+    if search_query:
+        with st.spinner("Searching Yahoo Finance..."):
+            results = search_ticker(search_query)
+        if results:
+            options_dict = {f"{r['symbol']} - {r['name']}": r['symbol'] for r in results}
+            selected = st.selectbox("Select best match", list(options_dict.keys()))
+            ticker = options_dict[selected]
+        else:
+            st.error("No results found.")
 
 # Format helpers
 def format_currency(val): return f"${val:,.0f}" if isinstance(val, (int, float)) else "N/A"
@@ -57,8 +76,7 @@ def clean_ai_output(analysis: str, true_price: float) -> str:
     analysis = re.sub(r"\bprice\s*~?\s*\$[0-9]+(?:\.[0-9]{1,2})?", f"price ~ {current_price_str}", analysis)
     return analysis.strip()
 
-if selected_display != "Select a stock...":
-    ticker = stock_df.loc[stock_df["Display"] == selected_display, "Ticker"].values[0]
+if ticker:
     info = get_stock_info(ticker)
 
     if 'error' in info:

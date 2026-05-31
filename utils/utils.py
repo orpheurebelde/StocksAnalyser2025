@@ -661,3 +661,16 @@ def interpret_dilution_extended(dilution_pct, revenue_growth=None, eps_current=N
             comments.append("💰 No major financing activity noted.")
 
     return "\n\n".join(comments)
+
+def search_ticker(query):
+    import requests
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        quotes = data.get("quotes", [])
+        return [{"symbol": q.get("symbol"), "name": q.get("shortname", q.get("longname", ""))} for q in quotes if q.get("quoteType") in ["EQUITY", "ETF"]]
+    except Exception:
+        return []
