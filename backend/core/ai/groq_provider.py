@@ -4,7 +4,7 @@ import json
 from .base import AIProvider
 
 class GroqProvider(AIProvider):
-    def __init__(self, model_name: str = "llama3-70b-8192"):
+    def __init__(self, model_name: str = "llama-3.3-70b-versatile"):
         self.model_name = os.getenv("GROQ_MODEL", model_name)
         self.api_key = os.getenv("GROQ_API_KEY")
         if not self.api_key:
@@ -39,7 +39,9 @@ class GroqProvider(AIProvider):
             data["response_format"] = {"type": "json_object"}
 
         response = requests.post(self.base_url, headers=headers, json=data, timeout=60)
-        response.raise_for_status()
+        
+        if response.status_code != 200:
+            raise ValueError(f"Groq API Error {response.status_code}: {response.text}")
         
         result = response.json()
         content = result["choices"][0]["message"]["content"].strip()
