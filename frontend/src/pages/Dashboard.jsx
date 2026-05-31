@@ -52,9 +52,9 @@ Write a very brief and concise market analysis based on these three indicators. 
 
     try {
       const res = await api.post('/api/stock/MARKET/ai-analysis', { prompt });
-      setAiAnalysis(res.data.primary_analysis || res.data.analysis || 'Error fetching analysis.');
+      setAiAnalysis(res.data);
     } catch (err) {
-      setAiAnalysis(`Error: ${err.response?.data?.detail || err.message}`);
+      setAiAnalysis({ primary_analysis: `Error: ${err.response?.data?.detail || err.message}` });
     }
     setAiLoading(false);
   };
@@ -191,8 +191,75 @@ Write a very brief and concise market analysis based on these three indicators. 
             </div>
             
             {aiAnalysis ? (
-              <div className="markdown-content" style={{ padding: '1rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysis}</ReactMarkdown>
+              <div className="ai-results-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {aiAnalysis.primary_analysis ? (
+                  <>
+                    <details open style={{ background: 'rgba(0,0,0,0.4)', padding: '1.5rem', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>
+                      <summary style={{ cursor: 'pointer', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--accent-purple)' }}>Primary Analysis (Mistral)</summary>
+                      <div className="markdown-content">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysis.primary_analysis}</ReactMarkdown>
+                      </div>
+                      {aiAnalysis.secondary_analysis && (
+                        <div className="glass-panel" style={{ borderLeft: '4px solid var(--accent-orange)', marginTop: '1.5rem' }}>
+                          <h3 style={{ color: 'var(--accent-orange)', marginBottom: '1rem' }}>Secondary Review (Groq)</h3>
+                          {aiAnalysis.secondary_analysis.error ? (
+                            <div style={{ color: 'var(--status-red)', fontStyle: 'italic' }}>
+                              ⚠️ Groq validation could not be completed: {aiAnalysis.secondary_analysis.error}
+                            </div>
+                          ) : (
+                            <>
+                              {aiAnalysis.final_summary && (
+                                <div style={{ marginBottom: '1rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>
+                                  "{aiAnalysis.final_summary}"
+                                </div>
+                              )}
+                              
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                <div>
+                                  <h4 style={{ color: 'var(--status-green)', marginBottom: '0.5rem' }}>✅ Agreements</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.agreement_points?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h4 style={{ color: 'var(--status-red)', marginBottom: '0.5rem' }}>❌ Disagreements</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.disagreement_points?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h4 style={{ color: 'var(--accent-orange)', marginBottom: '0.5rem' }}>⚠️ Additional Risks</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.additional_risks?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h4 style={{ color: 'var(--accent-blue)', marginBottom: '0.5rem' }}>🚀 Additional Catalysts</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.additional_catalysts?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                              </div>
+                              
+                              {aiAnalysis.assumption_warnings?.length > 0 && (
+                                <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255, 165, 0, 0.1)', borderRadius: '8px' }}>
+                                  <h4 style={{ color: 'var(--accent-orange)', marginBottom: '0.5rem' }}>🤔 Assumption Warnings</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.assumption_warnings.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </details>
+                  </>
+                ) : (
+                  <div className="markdown-content" style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{typeof aiAnalysis === 'string' ? aiAnalysis : 'No analysis available.'}</ReactMarkdown>
+                  </div>
+                )}
               </div>
             ) : (
               <p style={{ color: 'var(--text-secondary)' }}>Click the button to generate a brief AI analysis based on the current gauge readings.</p>
