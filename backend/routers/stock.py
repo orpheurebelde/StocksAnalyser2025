@@ -107,12 +107,12 @@ def ai_analysis(request: Request, ticker: str, body: AIPrompt):
             "Content-Type": "application/json"
         }
         data = {
-            "model": "codestral-latest",
+            "model": "mistral-small-latest",
             "messages": [{"role": "user", "content": body.prompt}],
             "temperature": 0.7,
             "max_tokens": 8000
         }
-        response = requests.post("https://codestral.mistral.ai/v1/chat/completions", headers=headers, json=data)
+        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data)
         response.raise_for_status()
         result = response.json()
         return {"analysis": result["choices"][0]["message"]["content"].strip()}
