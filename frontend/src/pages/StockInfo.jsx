@@ -12,6 +12,11 @@ export default function StockInfo() {
   const [dilution, setDilution] = useState(null);
   const [loading, setLoading] = useState(false);
   
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState(null);
+  
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -20,6 +25,7 @@ export default function StockInfo() {
 
   const fetchStock = async (event) => {
     event?.preventDefault();
+    setShowDropdown(false);
     const nextTicker = ticker.trim().toUpperCase();
     if (!nextTicker) return;
 
@@ -43,6 +49,41 @@ export default function StockInfo() {
       setError(err.response?.data?.detail || err.message);
     }
     setLoading(false);
+  };
+
+  const handleTickerChange = (e) => {
+    const val = e.target.value;
+    setTicker(val);
+    
+    if (searchTimeout) clearTimeout(searchTimeout);
+    
+    if (val.trim().length > 0) {
+      const timeoutId = setTimeout(() => {
+        searchTickers(val);
+      }, 500);
+      setSearchTimeout(timeoutId);
+    } else {
+      setSearchResults([]);
+      setShowDropdown(false);
+    }
+  };
+
+  const searchTickers = async (query) => {
+    setIsSearching(true);
+    try {
+      const res = await api.get(`/api/stock/search?q=${encodeURIComponent(query)}`);
+      setSearchResults(res.data.results || []);
+      setShowDropdown(true);
+    } catch (err) {
+      console.error(err);
+    }
+    setIsSearching(false);
+  };
+
+  const selectTicker = (symbol) => {
+    setTicker(symbol);
+    setShowDropdown(false);
+    setSearchResults([]);
   };
 
   const handleAiAnalysis = async () => {
@@ -151,19 +192,64 @@ export default function StockInfo() {
       <h2 style={{ marginBottom: '2rem' }}>📁 Stock Analysis & AI Intelligence</h2>
       
       <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem', alignItems: 'stretch' }}>
-        <form className="glass-panel" onSubmit={fetchStock} style={{ flex: 1, display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <input 
-            type="text" 
-            value={ticker} 
-            onChange={(e) => setTicker(e.target.value)}
-            placeholder="Enter Ticker (e.g. AAPL)"
-            style={{ maxWidth: '300px' }}
-          />
+        <form className="glass-panel" onSubmit={fetchStock} style={{ flex: 1, display: 'flex', gap: '1rem', alignItems: 'center', position: 'relative' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
+            <input 
+              type="text" 
+              value={ticker} 
+              onChange={handleTickerChange}
+              onFocus={() => { if(searchResults.length > 0) setShowDropdown(true); }}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+              placeholder="Enter Company or Ticker (e.g. Apple, AAPL)"
+              style={{ width: '100%' }}
+            />
+            {showDropdown && searchResults.length > 0 && (
+              <ul style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                maxHeight: '300px',
+                overflowY: 'auto',
+                background: '#1a1a1a',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                marginTop: '4px',
+                padding: 0,
+                listStyle: 'none',
+                zIndex: 1000,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+              }}>
+                {searchResults.map((r, i) => (
+                  <li 
+                    key={i} 
+                    onClick={() => selectTicker(r.symbol)}
+                    style={{
+                      padding: '10px 15px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
+                      display: 'flex',
+                      flexDirection: 'column'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <strong style={{ color: 'var(--accent-cyan)' }}>{r.symbol}</strong>
+                    <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>{r.name}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {isSearching && (
+              <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8em', color: 'var(--text-secondary)' }}>
+                Searching...
+              </div>
+            )}
+          </div>
           <button className="btn-primary" type="submit" disabled={loading || !ticker.trim()}>
             {loading ? 'Fetching...' : 'Analyze Fundamentals & Price Action'}
           </button>
         </form>
-
         {aiRecommendation && (
           <div className={`glass-panel ${aiRecommendation.includes('BUY') ? 'glow-green' : aiRecommendation.includes('SELL') ? 'glow-red' : 'glow-blue'}`} style={{ minWidth: '250px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <span className="metric-label" style={{ fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '2px' }}>AI Consensus</span>

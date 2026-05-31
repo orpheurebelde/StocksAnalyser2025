@@ -118,3 +118,19 @@ def ai_analysis(request: Request, ticker: str, body: AIPrompt):
         return {"analysis": result["choices"][0]["message"]["content"].strip()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/search")
+@limiter.limit("30/minute")
+def search_ticker(request: Request, q: str):
+    import requests
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={q}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        quotes = data.get("quotes", [])
+        results = [{"symbol": q.get("symbol"), "name": q.get("shortname", q.get("longname", ""))} for q in quotes if q.get("quoteType") in ["EQUITY", "ETF"]]
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
