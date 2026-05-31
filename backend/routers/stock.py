@@ -98,7 +98,7 @@ def get_history(request: Request, ticker: str, period: str = "6mo", interval: st
 @limiter.limit("5/minute")
 def ai_analysis(request: Request, ticker: str, body: AIPrompt):
     try:
-        from backend.core.ai.orchestrator import AnalysisOrchestrator
+        from core.ai.orchestrator import AnalysisOrchestrator
         orchestrator = AnalysisOrchestrator()
         result = orchestrator.run_analysis(ticker, body.prompt)
         return result
