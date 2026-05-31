@@ -1,15 +1,15 @@
 import json
 from .mistral import MistralProvider
-from .ollama import OllamaProvider
+from .groq_provider import GroqProvider
 
 class AnalysisOrchestrator:
     def __init__(self):
         self.primary_provider = MistralProvider()
         try:
-            self.secondary_provider = OllamaProvider()
+            self.secondary_provider = GroqProvider()
             self.secondary_enabled = True
         except Exception as e:
-            print(f"Ollama provider failed to initialize: {e}")
+            print(f"Groq provider failed to initialize: {e}")
             self.secondary_enabled = False
 
     def run_analysis(self, ticker: str, initial_prompt: str) -> dict:

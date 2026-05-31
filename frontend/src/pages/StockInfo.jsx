@@ -548,10 +548,10 @@ export default function StockInfo() {
                       </div>
                       {aiAnalysis.secondary_analysis && (
                         <div className="glass-panel" style={{ borderLeft: '4px solid var(--accent-orange)' }}>
-                          <h3 style={{ color: 'var(--accent-orange)', marginBottom: '1rem' }}>Secondary Review (Ollama)</h3>
+                          <h3 style={{ color: 'var(--accent-orange)', marginBottom: '1rem' }}>Secondary Review (Groq)</h3>
                           {aiAnalysis.secondary_analysis.error ? (
                             <div style={{ color: 'var(--status-red)', fontStyle: 'italic' }}>
-                              ⚠️ Ollama validation could not be completed: {aiAnalysis.secondary_analysis.error}
+                              ⚠️ Groq validation could not be completed: {aiAnalysis.secondary_analysis.error}
                             </div>
                           ) : (
                             <>
