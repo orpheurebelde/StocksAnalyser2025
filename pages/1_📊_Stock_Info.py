@@ -55,8 +55,9 @@ else:
             results = search_ticker(search_query)
         if results:
             options_dict = {f"{r['symbol']} - {r['name']}": r['symbol'] for r in results}
-            selected = st.selectbox("Select best match", list(options_dict.keys()))
-            ticker = options_dict[selected]
+            selected = st.selectbox("Select best match", list(options_dict.keys()), index=None, placeholder="Choose a stock to analyze...")
+            if selected:
+                ticker = options_dict[selected]
         else:
             st.error("No results found.")
 
