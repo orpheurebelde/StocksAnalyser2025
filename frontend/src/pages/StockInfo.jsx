@@ -546,55 +546,61 @@ export default function StockInfo() {
                       <div className="markdown-content">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysis.primary_analysis}</ReactMarkdown>
                       </div>
-                    </details>
-                    
-                    {aiAnalysis.secondary_analysis && !aiAnalysis.secondary_analysis.error && (
-                      <div className="glass-panel" style={{ borderLeft: '4px solid var(--accent-orange)' }}>
-                        <h3 style={{ color: 'var(--accent-orange)', marginBottom: '1rem' }}>Secondary Review (Ollama)</h3>
-                        
-                        {aiAnalysis.final_summary && (
-                          <div style={{ marginBottom: '1rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>
-                            "{aiAnalysis.final_summary}"
-                          </div>
-                        )}
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                          <div>
-                            <h4 style={{ color: 'var(--status-green)', marginBottom: '0.5rem' }}>✅ Agreements</h4>
-                            <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
-                              {aiAnalysis.agreement_points?.map((pt, i) => <li key={i}>{pt}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 style={{ color: 'var(--status-red)', marginBottom: '0.5rem' }}>❌ Disagreements</h4>
-                            <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
-                              {aiAnalysis.disagreement_points?.map((pt, i) => <li key={i}>{pt}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 style={{ color: 'var(--accent-orange)', marginBottom: '0.5rem' }}>⚠️ Additional Risks</h4>
-                            <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
-                              {aiAnalysis.additional_risks?.map((pt, i) => <li key={i}>{pt}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 style={{ color: 'var(--accent-blue)', marginBottom: '0.5rem' }}>🚀 Additional Catalysts</h4>
-                            <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
-                              {aiAnalysis.additional_catalysts?.map((pt, i) => <li key={i}>{pt}</li>)}
-                            </ul>
-                          </div>
+                      {aiAnalysis.secondary_analysis && (
+                        <div className="glass-panel" style={{ borderLeft: '4px solid var(--accent-orange)' }}>
+                          <h3 style={{ color: 'var(--accent-orange)', marginBottom: '1rem' }}>Secondary Review (Ollama)</h3>
+                          {aiAnalysis.secondary_analysis.error ? (
+                            <div style={{ color: 'var(--status-red)', fontStyle: 'italic' }}>
+                              ⚠️ Ollama validation could not be completed: {aiAnalysis.secondary_analysis.error}
+                            </div>
+                          ) : (
+                            <>
+                              {aiAnalysis.final_summary && (
+                                <div style={{ marginBottom: '1rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>
+                                  "{aiAnalysis.final_summary}"
+                                </div>
+                              )}
+                              
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                <div>
+                                  <h4 style={{ color: 'var(--status-green)', marginBottom: '0.5rem' }}>✅ Agreements</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.agreement_points?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h4 style={{ color: 'var(--status-red)', marginBottom: '0.5rem' }}>❌ Disagreements</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.disagreement_points?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h4 style={{ color: 'var(--accent-orange)', marginBottom: '0.5rem' }}>⚠️ Additional Risks</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.additional_risks?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h4 style={{ color: 'var(--accent-blue)', marginBottom: '0.5rem' }}>🚀 Additional Catalysts</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.additional_catalysts?.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                              </div>
+                              
+                              {aiAnalysis.assumption_warnings?.length > 0 && (
+                                <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255, 165, 0, 0.1)', borderRadius: '8px' }}>
+                                  <h4 style={{ color: 'var(--accent-orange)', marginBottom: '0.5rem' }}>🤔 Assumption Warnings</h4>
+                                  <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
+                                    {aiAnalysis.assumption_warnings.map((pt, i) => <li key={i}>{pt}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                        
-                        {aiAnalysis.assumption_warnings?.length > 0 && (
-                          <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255, 165, 0, 0.1)', borderRadius: '8px' }}>
-                            <h4 style={{ color: 'var(--accent-orange)', marginBottom: '0.5rem' }}>🤔 Assumption Warnings</h4>
-                            <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-secondary)' }}>
-                              {aiAnalysis.assumption_warnings.map((pt, i) => <li key={i}>{pt}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </details>
                   </>
                 ) : (
                   <div className="markdown-content" style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', borderLeft: '4px solid var(--accent-purple)' }}>

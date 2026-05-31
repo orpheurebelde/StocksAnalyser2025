@@ -52,7 +52,7 @@ Write a very brief and concise market analysis based on these three indicators. 
 
     try {
       const res = await api.post('/api/stock/MARKET/ai-analysis', { prompt });
-      setAiAnalysis(res.data.analysis);
+      setAiAnalysis(res.data.primary_analysis || res.data.analysis || 'Error fetching analysis.');
     } catch (err) {
       setAiAnalysis(`Error: ${err.response?.data?.detail || err.message}`);
     }
