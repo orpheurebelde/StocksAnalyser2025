@@ -161,25 +161,12 @@ def create_vix_gauge(vix_value):
     return fig
 
 def get_ai_analysis(prompt, api_key):
+    from backend.core.ai.mistral import MistralProvider
     try:
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "model": "mistral-small-latest",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
-            "max_tokens": 1500
-        }
-
-        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data)
-        response.raise_for_status()
-        result = response.json()
-        return result["choices"][0]["message"]["content"].strip()
-
+        provider = MistralProvider(api_key=api_key)
+        return provider.generate(prompt)
     except Exception:
+        import traceback
         return f"ERROR: {traceback.format_exc()}"
 
 def format_number(num):

@@ -97,25 +97,11 @@ def get_history(request: Request, ticker: str, period: str = "6mo", interval: st
 @router.post("/{ticker}/ai-analysis")
 @limiter.limit("5/minute")
 def ai_analysis(request: Request, ticker: str, body: AIPrompt):
-    api_key = os.getenv("MISTRAL_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="MISTRAL_API_KEY not configured on server.")
-        
+    from backend.core.ai.orchestrator import AnalysisOrchestrator
     try:
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "mistral-small-latest",
-            "messages": [{"role": "user", "content": body.prompt}],
-            "temperature": 0.7,
-            "max_tokens": 8000
-        }
-        response = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data)
-        response.raise_for_status()
-        result = response.json()
-        return {"analysis": result["choices"][0]["message"]["content"].strip()}
+        orchestrator = AnalysisOrchestrator()
+        result = orchestrator.run_analysis(ticker, body.prompt)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
