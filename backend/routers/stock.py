@@ -97,8 +97,8 @@ def get_history(request: Request, ticker: str, period: str = "6mo", interval: st
 @router.post("/{ticker}/ai-analysis")
 @limiter.limit("5/minute")
 def ai_analysis(request: Request, ticker: str, body: AIPrompt):
-    from backend.core.ai.orchestrator import AnalysisOrchestrator
     try:
+        from backend.core.ai.orchestrator import AnalysisOrchestrator
         orchestrator = AnalysisOrchestrator()
         result = orchestrator.run_analysis(ticker, body.prompt)
         return result
