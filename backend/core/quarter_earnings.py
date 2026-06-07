@@ -6,6 +6,8 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+from core.yfinance_client import get_statement
+
 DB_PATH = os.getenv("QUARTER_EARNINGS_DB_PATH") or os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
 MAX_TEXT_CHARS = 90000
 
@@ -135,7 +137,8 @@ def _extract_period(text: str) -> dict[str, str | None]:
 
 def _extract_line_item(text: str, labels: list[str]) -> dict[str, Any]:
     for label in labels:
-        pattern = rf"{label}\s+\$?\(?([\d,]+(?:\.\d+)?)\)?\s+\$?\(?([\d,]+(?:\.\d+)?)\)?"
+        flexible_label = re.escape(label).replace(r"\ ", r"\s+")
+        pattern = rf"{flexible_label}\s+\$?\(?([\d,]+(?:\.\d+)?)\)?\s+\$?\(?([\d,]+(?:\.\d+)?)\)?"
         match = re.search(pattern, text, re.I)
         if match:
             return {
@@ -147,10 +150,183 @@ def _extract_line_item(text: str, labels: list[str]) -> dict[str, Any]:
     return {"label": labels[0], "current": None, "prior": None, "confidence": "missing"}
 
 
+def _calculate_operating_cash_flow_from_10q(text: str) -> dict[str, Any] | None:
+    component_groups = [
+        ["Net income", "Net earnings"],
+        ["Depreciation and amortization", "Depreciation", "Amortization"],
+        ["Stock-based compensation", "Share-based compensation"],
+        ["Deferred income taxes", "Deferred taxes"],
+        ["Accounts receivable", "Receivables"],
+        ["Inventories", "Inventory"],
+        ["Prepaid expenses and other assets", "Other current assets"],
+        ["Accounts payable"],
+        ["Accrued expenses", "Accrued liabilities"],
+        ["Other operating activities", "Other assets and liabilities"],
+    ]
+    current_total = 0.0
+    prior_total = 0.0
+    used = []
+    for labels in component_groups:
+        item = _extract_line_item(text, labels)
+        if item.get("current") is None:
+            continue
+        current_total += item["current"]
+        prior_total += item["prior"] or 0
+        used.append(item["label"])
+    if len(used) < 3:
+        return None
+    prior = prior_total if prior_total != 0 else None
+    return {
+        "label": "Calculated Operating Cash Flow",
+        "current": current_total,
+        "prior": prior,
+        "growth": _growth(current_total, prior),
+        "confidence": "calculated_from_10q_components",
+        "components": used,
+    }
+
+
 def _growth(current: float | None, prior: float | None) -> float | None:
     if current is None or prior in (None, 0):
         return None
     return (current - prior) / abs(prior)
+
+
+def _is_missing_value(item: dict[str, Any] | None) -> bool:
+    return not item or item.get("current") is None
+
+
+def _parse_period_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    for fmt in ("%B %d, %Y", "%b %d, %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _select_statement_column(columns, report_date: str | None):
+    if not columns:
+        return None, None
+    dated_columns = []
+    for column in columns:
+        try:
+            dated_columns.append((column, datetime.fromisoformat(str(getattr(column, "date", lambda: column)()))))
+        except Exception:
+            try:
+                dated_columns.append((column, datetime.fromisoformat(str(column)[:10])))
+            except Exception:
+                continue
+    dated_columns.sort(key=lambda item: item[1], reverse=True)
+    if not dated_columns:
+        return columns[0], columns[1] if len(columns) > 1 else None
+    target = _parse_period_date(report_date)
+    if not target:
+        return None, None
+    matches = [(idx, column, abs((date_value - target).days)) for idx, (column, date_value) in enumerate(dated_columns)]
+    idx, column, distance = min(matches, key=lambda item: item[2])
+    if idx != 0 or distance > 75:
+        return None, None
+    prior = dated_columns[idx + 1][0] if idx + 1 < len(dated_columns) else None
+    return column, prior
+
+
+def _yfinance_operating_cash_flow(ticker: str, report_date: str | None = None) -> dict[str, Any] | None:
+    if not ticker or ticker == "UNKNOWN":
+        return None
+    try:
+        cashflow = get_statement(ticker, "quarterly_cashflow")
+    except Exception:
+        return None
+    if cashflow is None or getattr(cashflow, "empty", True):
+        return None
+    labels = [
+        "Operating Cash Flow",
+        "Total Cash From Operating Activities",
+        "Net Cash Provided By Operating Activities",
+        "Cash Flow From Continuing Operating Activities",
+    ]
+    row = None
+    for label in labels:
+        if label in cashflow.index:
+            row = cashflow.loc[label]
+            break
+    if row is None:
+        for idx in cashflow.index:
+            if "operating" in str(idx).lower() and "cash" in str(idx).lower():
+                row = cashflow.loc[idx]
+                break
+    if row is None:
+        return None
+    current_col, prior_col = _select_statement_column(list(cashflow.columns), report_date)
+    if current_col is None:
+        return None
+    current_raw = row.get(current_col)
+    prior_raw = row.get(prior_col) if prior_col is not None else None
+    if current_raw is None or str(current_raw) == "nan":
+        return None
+    current = float(current_raw)
+    prior = None if prior_raw is None or str(prior_raw) == "nan" else float(prior_raw)
+    return {
+        "label": "Operating Cash Flow",
+        "current": current,
+        "prior": prior,
+        "growth": _growth(current, prior),
+        "confidence": "yfinance_period_fallback",
+    }
+
+
+def enrich_missing_operating_cash_flow(metrics: dict[str, Any], ticker: str, report_date: str | None = None) -> tuple[dict[str, Any], bool]:
+    statements = metrics.setdefault("statements", {})
+    if not _is_missing_value(statements.get("operating_cash_flow")):
+        return metrics, False
+    fallback = _yfinance_operating_cash_flow(ticker, report_date)
+    if not fallback:
+        return metrics, False
+    statements["operating_cash_flow"] = fallback
+    return metrics, True
+
+
+def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
+    init_db()
+    query = """
+        SELECT id, ticker, metrics_json, report_date, report_text
+        FROM quarter_reports
+        WHERE id IN (SELECT MAX(id) FROM quarter_reports GROUP BY ticker)
+    """
+    params: tuple[Any, ...] = ()
+    if ticker:
+        query = """
+            SELECT id, ticker, metrics_json, report_date, report_text
+            FROM quarter_reports
+            WHERE ticker = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """
+        params = (ticker.upper(),)
+    changed = 0
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(query, params).fetchall()
+        for report_id, row_ticker, metrics_json, report_date, report_text in rows:
+            try:
+                metrics = json.loads(metrics_json)
+            except Exception:
+                continue
+            if _is_missing_value(metrics.get("statements", {}).get("operating_cash_flow")) and report_text:
+                calculated = _calculate_operating_cash_flow_from_10q(_clean_text(report_text))
+                if calculated:
+                    metrics.setdefault("statements", {})["operating_cash_flow"] = calculated
+                    updated = True
+                else:
+                    metrics, updated = enrich_missing_operating_cash_flow(metrics, row_ticker, report_date)
+            else:
+                metrics, updated = enrich_missing_operating_cash_flow(metrics, row_ticker, report_date)
+            if updated:
+                conn.execute("UPDATE quarter_reports SET metrics_json = ? WHERE id = ?", (json.dumps(metrics), report_id))
+                changed += 1
+    return changed
 
 
 def extract_10q_data(ticker: str, report_text: str, filename: str | None = None) -> dict[str, Any]:
@@ -165,8 +341,22 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
         "cash": _extract_line_item(text, ["Cash and cash equivalents", "Cash, cash equivalents and restricted cash"]),
         "total_assets": _extract_line_item(text, ["Total assets"]),
         "total_liabilities": _extract_line_item(text, ["Total liabilities"]),
-        "operating_cash_flow": _extract_line_item(text, ["Net cash provided by operating activities", "Net cash used in operating activities"]),
+        "operating_cash_flow": _extract_line_item(text, [
+            "Net cash provided by operating activities",
+            "Net cash used in operating activities",
+            "Net cash provided by (used in) operating activities",
+            "Net cash provided by operating activities from continuing operations",
+            "Cash provided by operating activities",
+            "Cash used in operating activities",
+            "Net cash from operating activities",
+        ]),
     }
+    calculated_ocf = _calculate_operating_cash_flow_from_10q(text)
+    if _is_missing_value(statements.get("operating_cash_flow")) and calculated_ocf:
+        statements["operating_cash_flow"] = calculated_ocf
+    metrics_holder = {"statements": statements}
+    metrics_holder, _ = enrich_missing_operating_cash_flow(metrics_holder, extracted_ticker, period["report_date"])
+    statements = metrics_holder["statements"]
 
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
@@ -238,6 +428,7 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
 
 def list_reports(ticker: str) -> list[dict[str, Any]]:
     init_db()
+    backfill_missing_operating_cash_flow(ticker)
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -249,6 +440,7 @@ def list_reports(ticker: str) -> list[dict[str, Any]]:
 
 def list_all_reports(limit: int = 50) -> list[dict[str, Any]]:
     init_db()
+    backfill_missing_operating_cash_flow()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
