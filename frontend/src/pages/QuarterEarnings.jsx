@@ -268,8 +268,8 @@ export default function QuarterEarnings() {
         setNotice(`Found ${tickers.length} tickers in DB.`);
       } else {
         setAvailableTickers([]);
-        setShowTickerModal(false);
-        setError('No stored 10-Q filings found in DB.');
+        setShowTickerModal(true);
+        setNotice('DB is empty. Upload a 10-Q PDF to create the first stored filing.');
       }
     } catch (err) {
       setError(apiError(err));
@@ -436,13 +436,18 @@ export default function QuarterEarnings() {
               <button className="table-action" onClick={() => setShowTickerModal(false)}>Close</button>
             </div>
             <div className="ticker-list">
-              {availableTickers.map((group) => (
+              {availableTickers.length ? availableTickers.map((group) => (
                 <button className="ticker-choice" key={group.ticker} onClick={() => openTicker(group.ticker)}>
                   <strong>{group.ticker}</strong>
                   <span>{group.filing_count} filings</span>
                   <small>Latest DB record #{group.latest_id}</small>
                 </button>
-              ))}
+              )) : (
+                <div className="empty-state">
+                  <strong>No tickers stored yet</strong>
+                  <span>Upload a 10-Q PDF first. On Render, use a persistent disk and set <code>QUARTER_EARNINGS_DB_PATH</code> so SQLite survives redeploys.</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

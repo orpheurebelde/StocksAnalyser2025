@@ -6,11 +6,14 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
+DB_PATH = os.getenv("QUARTER_EARNINGS_DB_PATH") or os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
 MAX_TEXT_CHARS = 90000
 
 
 def init_db():
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
