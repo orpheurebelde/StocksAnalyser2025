@@ -105,6 +105,13 @@ input:focus, select:focus {
   border-color: var(--accent-cyan);
 }
 
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
 .app-container {
   display: flex;
   min-height: 100vh;
@@ -182,6 +189,38 @@ input:focus, select:focus {
   gap: 1.5rem;
 }
 
+.earnings-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(260px, 2fr) minmax(120px, 0.7fr) auto auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.earnings-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.earnings-table th,
+.earnings-table td {
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.85rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.earnings-table th {
+  color: var(--accent-cyan);
+  font-family: var(--font-display);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.earnings-table td {
+  color: var(--text-secondary);
+}
+
 .metric-card {
   display: flex;
   flex-direction: column;
@@ -198,6 +237,28 @@ input:focus, select:focus {
   font-size: 2rem;
   font-weight: 700;
   font-family: var(--font-display);
+}
+
+@media (max-width: 980px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .sidebar,
+  .sidebar.collapsed {
+    width: 100%;
+    height: auto;
+    position: relative;
+  }
+
+  .main-content {
+    padding: 1.25rem;
+  }
+
+  .earnings-controls,
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Markdown Formatting for Mistral Output */

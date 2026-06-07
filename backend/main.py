@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from routers import stock, market, dcf, monte_carlo, comparison, portfolio
+from routers import stock, market, dcf, monte_carlo, comparison, portfolio, quarter_earnings
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="StocksAnalyser API")
@@ -24,6 +24,7 @@ app.include_router(dcf.router, prefix="/api/dcf", tags=["dcf"])
 app.include_router(monte_carlo.router, prefix="/api/monte-carlo", tags=["monte-carlo"])
 app.include_router(comparison.router, prefix="/api/comparison", tags=["comparison"])
 app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
+app.include_router(quarter_earnings.router, prefix="/api/quarter-earnings", tags=["quarter-earnings"])
 
 @app.get("/")
 @limiter.limit("10/minute")

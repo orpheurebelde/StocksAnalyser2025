@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { LineChart, LayoutDashboard, Calculator, Activity, GitCompare, Briefcase, Menu } from 'lucide-react';
+import { LineChart, LayoutDashboard, Calculator, Activity, GitCompare, Briefcase, Menu, FileText } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import StockInfo from './pages/StockInfo';
 import DCFCalculator from './pages/DCFCalculator';
 import MonteCarlo from './pages/MonteCarlo';
 import StockComparison from './pages/StockComparison';
 import Portfolio from './pages/Portfolio';
+import QuarterEarnings from './pages/QuarterEarnings';
 
 function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -56,6 +57,10 @@ function App() {
               <Calculator size={20} style={{ flexShrink: 0 }} />
               {!isSidebarCollapsed && <span>DCF Calculator</span>}
             </Link>
+            <Link to="/quarter-earnings" className="nav-link" title="Quarter Earnings">
+              <FileText size={20} style={{ flexShrink: 0 }} />
+              {!isSidebarCollapsed && <span>Quarter Earnings</span>}
+            </Link>
           </nav>
         </aside>
 
@@ -67,6 +72,7 @@ function App() {
             <Route path="/monte-carlo" element={<MonteCarlo />} />
             <Route path="/comparison" element={<StockComparison />} />
             <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/quarter-earnings" element={<QuarterEarnings />} />
           </Routes>
         </main>
       </div>
