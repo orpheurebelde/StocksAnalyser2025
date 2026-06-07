@@ -161,6 +161,12 @@ def _clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _clean_pdf_text(text: str) -> str:
+    text = text.replace("\r", "\n").replace("\u00a0", " ")
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.splitlines()]
+    return "\n".join(line for line in lines if line).strip()
+
+
 def _safe_number(raw: str | None) -> float | None:
     if not raw:
         return None
@@ -181,10 +187,13 @@ def extract_pdf_text(file_bytes: bytes) -> str:
         reader = PdfReader(io.BytesIO(file_bytes))
         pages = []
         for page in reader.pages:
-            pages.append(page.extract_text() or "")
+            try:
+                pages.append(page.extract_text(extraction_mode="layout") or "")
+            except TypeError:
+                pages.append(page.extract_text() or "")
             if sum(len(text) for text in pages) >= MAX_TEXT_CHARS:
                 break
-        text = _clean_text("\n".join(pages))
+        text = _clean_pdf_text("\n".join(pages))
     except Exception as exc:
         raise RuntimeError("Could not read PDF text. Upload a selectable 10-Q PDF, not a scanned image PDF.") from exc
     if not text:
@@ -193,11 +202,10 @@ def extract_pdf_text(file_bytes: bytes) -> str:
 
 
 def _extract_company_name(text: str, ticker: str | None) -> str:
-    match = re.search(r"Exact name of registrant as specified in its charter\)?\s*([A-Z0-9][A-Z0-9 .,&'/-]{3,120})", text, re.I)
+    match = re.search(r"Exact name of registrant as specified in its charter\)?[ \t]*([A-Z0-9][A-Z0-9 .,&'/-]{3,120})", text, re.I)
     if match:
         return match.group(1).strip(" .")
-    match = re.search(r"FORM 10-Q\s+([A-Z0-9][A-Z0-9 .,&'/-]{3,120})", text, re.I)
-    return match.group(1).strip(" .") if match else (ticker or "UNKNOWN").upper()
+    return (ticker or "UNKNOWN").upper()
 
 
 def _extract_ticker(text: str, filename: str | None = None, ticker_hint: str | None = None) -> str:
@@ -237,11 +245,42 @@ def _extract_period(text: str) -> dict[str, str | None]:
     }
 
 
+def _number_tokens(fragment: str) -> list[str]:
+    pattern = r"(?<![A-Za-z])\$?\s*\(?-?\d[\d,]*(?:\.\d+)?\)?"
+    return [match.group(0) for match in re.finditer(pattern, fragment)]
+
+
+def _label_regex(label: str) -> str:
+    words = [re.escape(part) for part in label.split()]
+    return r"\b" + r"\s+".join(words) + r"\b"
+
+
 def _extract_line_item(text: str, labels: list[str]) -> dict[str, Any]:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    windows = lines + [f"{lines[idx]} {lines[idx + 1]}" for idx in range(len(lines) - 1)]
     for label in labels:
         flexible_label = re.escape(label).replace(r"\ ", r"\s+")
+        line_pattern = re.compile(_label_regex(label), re.I)
+        for line in windows:
+            match = line_pattern.search(line)
+            if not match:
+                continue
+            fragment = line[match.end():]
+            tokens = _number_tokens(fragment)
+            if not tokens:
+                continue
+            current = _safe_number(tokens[0])
+            prior = _safe_number(tokens[1]) if len(tokens) > 1 else None
+            if current is not None:
+                return {
+                    "label": label,
+                    "current": current,
+                    "prior": prior,
+                    "confidence": "high_line_match" if len(tokens) > 1 else "medium_single_value",
+                }
+
         pattern = rf"{flexible_label}\s+\$?\(?([\d,]+(?:\.\d+)?)\)?\s+\$?\(?([\d,]+(?:\.\d+)?)\)?"
-        match = re.search(pattern, text, re.I)
+        match = re.search(pattern, _clean_text(text), re.I)
         if match:
             return {
                 "label": label,
@@ -418,7 +457,7 @@ def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
             except Exception:
                 continue
             if _is_missing_value(metrics.get("statements", {}).get("operating_cash_flow")) and report_text:
-                calculated = _calculate_operating_cash_flow_from_10q(_clean_text(report_text))
+                calculated = _calculate_operating_cash_flow_from_10q(_clean_pdf_text(report_text))
                 if calculated:
                     metrics.setdefault("statements", {})["operating_cash_flow"] = calculated
                     updated = True
@@ -433,14 +472,15 @@ def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
 
 
 def extract_10q_data(ticker: str, report_text: str, filename: str | None = None) -> dict[str, Any]:
-    text = _clean_text(report_text)
-    extracted_ticker = _extract_ticker(text, filename, ticker)
-    period = _extract_period(text)
+    text = _clean_pdf_text(report_text)
+    search_text = _clean_text(report_text)
+    extracted_ticker = _extract_ticker(search_text, filename, ticker)
+    period = _extract_period(search_text)
     statements = {
-        "revenue": _extract_line_item(text, ["Total revenues", "Total revenue", "Net sales", "Revenues"]),
+        "revenue": _extract_line_item(text, ["Total revenues", "Total revenue", "Revenue", "Net sales", "Net revenue", "Revenues"]),
         "gross_profit": _extract_line_item(text, ["Gross profit", "Gross margin"]),
-        "operating_income": _extract_line_item(text, ["Operating income", "Income from operations"]),
-        "net_income": _extract_line_item(text, ["Net income", "Net earnings"]),
+        "operating_income": _extract_line_item(text, ["Income from operations", "Loss from operations", "Operating income", "Operating loss"]),
+        "net_income": _extract_line_item(text, ["Net income", "Net loss", "Net earnings", "Net income (loss)", "Net loss attributable"]),
         "cash": _extract_line_item(text, ["Cash and cash equivalents", "Cash, cash equivalents and restricted cash"]),
         "total_assets": _extract_line_item(text, ["Total assets"]),
         "total_liabilities": _extract_line_item(text, ["Total liabilities"]),
@@ -465,10 +505,10 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
         item["growth"] = _growth(item["current"], item["prior"])
 
     risk_terms = ["going concern", "material weakness", "impairment", "liquidity", "substantial doubt", "default", "restructuring"]
-    risk_hits = [{"term": term, "count": len(re.findall(term, text, re.I))} for term in risk_terms]
+    risk_hits = [{"term": term, "count": len(re.findall(term, search_text, re.I))} for term in risk_terms]
     filing = {
         "filename": filename,
-        "form_type": "10-Q" if re.search(r"form\s+10-q", text, re.I) else "PDF filing",
+        "form_type": "10-Q" if re.search(r"form\s+10-q", search_text, re.I) else "PDF filing",
         "company_name": _extract_company_name(text, extracted_ticker),
         "ticker": extracted_ticker,
         "fiscal_quarter": period["fiscal_quarter"],
@@ -506,6 +546,56 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
     ph = _placeholder()
     returning = " RETURNING id" if _using_postgres() else ""
     with _connect() as conn:
+        existing = None
+        if payload.get("fiscal_quarter"):
+            existing = conn.execute(
+                f"SELECT id FROM quarter_reports WHERE ticker = {ph} AND fiscal_quarter = {ph} ORDER BY id DESC LIMIT 1",
+                (payload["ticker"], payload.get("fiscal_quarter")),
+            ).fetchone()
+        if not existing and payload.get("report_date"):
+            existing = conn.execute(
+                f"SELECT id FROM quarter_reports WHERE ticker = {ph} AND report_date = {ph} ORDER BY id DESC LIMIT 1",
+                (payload["ticker"], payload.get("report_date")),
+            ).fetchone()
+        if not existing and payload.get("source_url"):
+            existing = conn.execute(
+                f"SELECT id FROM quarter_reports WHERE ticker = {ph} AND source_url = {ph} ORDER BY id DESC LIMIT 1",
+                (payload["ticker"], payload.get("source_url")),
+            ).fetchone()
+
+        if existing:
+            report_id = existing[0]
+            conn.execute(
+                f"""
+                UPDATE quarter_reports
+                SET fiscal_quarter = {ph},
+                    report_date = {ph},
+                    source_url = {ph},
+                    source_type = {ph},
+                    company_name = {ph},
+                    sector = {ph},
+                    industry = {ph},
+                    metrics_json = {ph},
+                    report_text = {ph},
+                    created_at = {ph}
+                WHERE id = {ph}
+                """,
+                (
+                    payload.get("fiscal_quarter"),
+                    payload.get("report_date"),
+                    payload.get("source_url"),
+                    payload["source_type"],
+                    payload.get("company_name"),
+                    payload.get("sector"),
+                    payload.get("industry"),
+                    json.dumps(payload["metrics"]),
+                    payload.get("report_text"),
+                    _now(),
+                    report_id,
+                ),
+            )
+            return {**payload, "id": report_id, "updated": True}
+
         cur = conn.execute(
             f"""
             INSERT INTO quarter_reports (
@@ -528,7 +618,7 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
             ),
         )
         report_id = cur.fetchone()[0] if _using_postgres() else cur.lastrowid
-    return {**payload, "id": report_id}
+    return {**payload, "id": report_id, "updated": False}
 
 
 def list_reports(ticker: str) -> list[dict[str, Any]]:

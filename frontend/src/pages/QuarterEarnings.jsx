@@ -332,7 +332,7 @@ export default function QuarterEarnings() {
       setHistory(res.data.history || []);
       setSelectedTicker(res.data.ticker);
       await loadDbStatus();
-      setNotice(`Stored filing #${res.data.id} in DB for ${res.data.ticker}. Future uploads will compare against this record.`);
+      setNotice(`${res.data.updated ? 'Updated' : 'Stored'} filing #${res.data.id} in DB for ${res.data.ticker}. Future uploads will compare against this record.`);
     } catch (err) {
       setError(apiError(err));
     }
