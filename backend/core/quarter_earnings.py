@@ -1,41 +1,13 @@
-import json
 import io
+import json
 import os
 import re
 import sqlite3
 from datetime import datetime, timezone
-from html.parser import HTMLParser
 from typing import Any
 
-import requests
-
-from core.yfinance_client import get_ticker, get_ticker_info
-
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
-
-
-class TextExtractor(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.parts = []
-        self.skip = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag in {"script", "style", "noscript"}:
-            self.skip = True
-
-    def handle_endtag(self, tag):
-        if tag in {"script", "style", "noscript"}:
-            self.skip = False
-
-    def handle_data(self, data):
-        if not self.skip:
-            text = data.strip()
-            if text:
-                self.parts.append(text)
-
-    def text(self):
-        return re.sub(r"\s+", " ", " ".join(self.parts)).strip()
+MAX_TEXT_CHARS = 90000
 
 
 def init_db():
@@ -78,47 +50,21 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def _safe_float(value):
-    try:
-        if value is None:
-            return None
-        return float(value)
-    except (TypeError, ValueError):
+def _clean_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _safe_number(raw: str | None) -> float | None:
+    if not raw:
         return None
-
-
-def _series_to_records(series, limit=8):
-    if series is None or getattr(series, "empty", True):
-        return []
-    records = []
-    for idx, value in series.head(limit).items():
-        records.append({"period": str(idx.date() if hasattr(idx, "date") else idx), "value": _safe_float(value)})
-    return records
-
-
-def fetch_report_url(url: str) -> str:
+    value = raw.replace(",", "").replace("$", "").strip()
+    negative = value.startswith("(") and value.endswith(")")
+    value = value.strip("()")
     try:
-        response = requests.get(
-            url,
-            timeout=20,
-            headers={
-                "User-Agent": "Mozilla/5.0 (compatible; StocksAnalyser2025/1.0; +https://github.com/orpheurebelde/StocksAnalyser2025)",
-                "Accept": "text/html,application/xhtml+xml,application/xml,text/plain;q=0.9,*/*;q=0.8",
-            },
-        )
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        raise RuntimeError(
-            "Could not read that report URL from the backend. "
-            "The site may block automated requests, require login, or be unavailable. "
-            "Paste the report text into Manual report text and try again."
-        ) from exc
-    content_type = response.headers.get("content-type", "")
-    if "html" in content_type:
-        parser = TextExtractor()
-        parser.feed(response.text)
-        return parser.text()[:60000]
-    return response.text[:60000]
+        parsed = float(value)
+    except ValueError:
+        return None
+    return -parsed if negative else parsed
 
 
 def extract_pdf_text(file_bytes: bytes) -> str:
@@ -129,72 +75,102 @@ def extract_pdf_text(file_bytes: bytes) -> str:
         pages = []
         for page in reader.pages:
             pages.append(page.extract_text() or "")
-            if sum(len(text) for text in pages) >= 60000:
+            if sum(len(text) for text in pages) >= MAX_TEXT_CHARS:
                 break
-        text = re.sub(r"\s+", " ", "\n".join(pages)).strip()
+        text = _clean_text("\n".join(pages))
     except Exception as exc:
-        raise RuntimeError("Could not read the PDF text. Try a text-selectable 10-Q PDF, not a scanned image PDF.") from exc
+        raise RuntimeError("Could not read PDF text. Upload a selectable 10-Q PDF, not a scanned image PDF.") from exc
     if not text:
-        raise RuntimeError("PDF loaded, but no selectable text was found. This looks like a scanned PDF.")
-    return text[:60000]
+        raise RuntimeError("PDF loaded, but no selectable text was found. Scanned 10-Q PDFs need OCR first.")
+    return text[:MAX_TEXT_CHARS]
 
 
-def fetch_quarter_payload(ticker: str, source_url: str | None = None, manual_text: str | None = None) -> dict[str, Any]:
-    symbol = ticker.upper().strip()
-    info = {}
-    quarterly_financials = None
-    quarterly_cashflow = None
-    quarterly_balance = None
+def _extract_company_name(text: str, ticker: str) -> str:
+    match = re.search(r"Exact name of registrant as specified in its charter\)?\s*([A-Z0-9][A-Z0-9 .,&'/-]{3,120})", text, re.I)
+    if match:
+        return match.group(1).strip(" .")
+    match = re.search(r"FORM 10-Q\s+([A-Z0-9][A-Z0-9 .,&'/-]{3,120})", text, re.I)
+    return match.group(1).strip(" .") if match else ticker.upper()
 
-    try:
-        info = get_ticker_info(symbol) or {}
-    except Exception:
-        info = {}
 
-    try:
-        stock = get_ticker(symbol)
-        quarterly_financials = getattr(stock, "quarterly_financials", None)
-        quarterly_cashflow = getattr(stock, "quarterly_cashflow", None)
-        quarterly_balance = getattr(stock, "quarterly_balance", None)
-    except Exception:
-        quarterly_financials = None
-        quarterly_cashflow = None
-        quarterly_balance = None
-
-    metrics = {
-        "revenue": _series_to_records(quarterly_financials.loc["Total Revenue"] if quarterly_financials is not None and "Total Revenue" in quarterly_financials.index else None),
-        "gross_profit": _series_to_records(quarterly_financials.loc["Gross Profit"] if quarterly_financials is not None and "Gross Profit" in quarterly_financials.index else None),
-        "operating_income": _series_to_records(quarterly_financials.loc["Operating Income"] if quarterly_financials is not None and "Operating Income" in quarterly_financials.index else None),
-        "net_income": _series_to_records(quarterly_financials.loc["Net Income"] if quarterly_financials is not None and "Net Income" in quarterly_financials.index else None),
-        "free_cash_flow": _series_to_records(quarterly_cashflow.loc["Free Cash Flow"] if quarterly_cashflow is not None and "Free Cash Flow" in quarterly_cashflow.index else None),
-        "cash": _series_to_records(quarterly_balance.loc["Cash And Cash Equivalents"] if quarterly_balance is not None and "Cash And Cash Equivalents" in quarterly_balance.index else None),
-        "total_debt": _series_to_records(quarterly_balance.loc["Total Debt"] if quarterly_balance is not None and "Total Debt" in quarterly_balance.index else None),
-        "yfinance_snapshot": {
-            "revenue_growth": info.get("revenueGrowth"),
-            "earnings_growth": info.get("earningsGrowth"),
-            "gross_margins": info.get("grossMargins"),
-            "operating_margins": info.get("operatingMargins"),
-            "profit_margins": info.get("profitMargins"),
-            "forward_eps": info.get("forwardEps"),
-            "trailing_eps": info.get("trailingEps"),
-            "market_cap": info.get("marketCap"),
-        },
+def _extract_period(text: str) -> dict[str, str | None]:
+    period_match = re.search(r"quarterly period ended\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})", text, re.I)
+    report_match = re.search(r"Commission File Number.*?(\d{4})", text, re.I)
+    return {
+        "fiscal_quarter": period_match.group(1) if period_match else None,
+        "report_date": period_match.group(1) if period_match else report_match.group(1) if report_match else None,
     }
 
-    latest_period = next((items[0]["period"] for items in metrics.values() if isinstance(items, list) and items), None)
-    clean_manual_text = (manual_text or "").strip()
-    report_text = clean_manual_text[:60000] if clean_manual_text else fetch_report_url(source_url) if source_url else ""
-    source_type = "manual_report_text" if clean_manual_text else "web_report" if source_url else "yfinance_quarterly_financials"
+
+def _extract_line_item(text: str, labels: list[str]) -> dict[str, Any]:
+    for label in labels:
+        pattern = rf"{label}\s+\$?\(?([\d,]+(?:\.\d+)?)\)?\s+\$?\(?([\d,]+(?:\.\d+)?)\)?"
+        match = re.search(pattern, text, re.I)
+        if match:
+            return {
+                "label": label,
+                "current": _safe_number(match.group(1)),
+                "prior": _safe_number(match.group(2)),
+                "confidence": "medium",
+            }
+    return {"label": labels[0], "current": None, "prior": None, "confidence": "missing"}
+
+
+def _growth(current: float | None, prior: float | None) -> float | None:
+    if current is None or prior in (None, 0):
+        return None
+    return (current - prior) / abs(prior)
+
+
+def extract_10q_data(ticker: str, report_text: str, filename: str | None = None) -> dict[str, Any]:
+    text = _clean_text(report_text)
+    period = _extract_period(text)
+    statements = {
+        "revenue": _extract_line_item(text, ["Total revenues", "Total revenue", "Net sales", "Revenues"]),
+        "gross_profit": _extract_line_item(text, ["Gross profit", "Gross margin"]),
+        "operating_income": _extract_line_item(text, ["Operating income", "Income from operations"]),
+        "net_income": _extract_line_item(text, ["Net income", "Net earnings"]),
+        "cash": _extract_line_item(text, ["Cash and cash equivalents", "Cash, cash equivalents and restricted cash"]),
+        "total_assets": _extract_line_item(text, ["Total assets"]),
+        "total_liabilities": _extract_line_item(text, ["Total liabilities"]),
+        "operating_cash_flow": _extract_line_item(text, ["Net cash provided by operating activities", "Net cash used in operating activities"]),
+    }
+
+    for item in statements.values():
+        item["growth"] = _growth(item["current"], item["prior"])
+
+    risk_terms = ["going concern", "material weakness", "impairment", "liquidity", "substantial doubt", "default", "restructuring"]
+    risk_hits = [{"term": term, "count": len(re.findall(term, text, re.I))} for term in risk_terms]
+    filing = {
+        "filename": filename,
+        "form_type": "10-Q" if re.search(r"form\s+10-q", text, re.I) else "PDF filing",
+        "company_name": _extract_company_name(text, ticker),
+        "ticker": ticker.upper(),
+        "fiscal_quarter": period["fiscal_quarter"],
+        "report_date": period["report_date"],
+        "statements": statements,
+        "risk_terms": risk_hits,
+        "text_stats": {
+            "characters": len(text),
+            "words": len(text.split()),
+        },
+    }
+    return filing
+
+
+def build_pdf_payload(ticker: str, file_bytes: bytes, filename: str | None = None) -> dict[str, Any]:
+    report_text = extract_pdf_text(file_bytes)
+    filing = extract_10q_data(ticker, report_text, filename)
     return {
-        "ticker": symbol,
-        "fiscal_quarter": latest_period,
-        "report_date": latest_period,
-        "source_url": source_url,
-        "source_type": source_type,
-        "company_name": info.get("shortName") or info.get("longName") or symbol,
-        "sector": info.get("sector"),
-        "industry": info.get("industry"),
-        "metrics": metrics,
+        "ticker": ticker.upper().strip(),
+        "fiscal_quarter": filing.get("fiscal_quarter"),
+        "report_date": filing.get("report_date"),
+        "source_url": filename,
+        "source_type": "uploaded_10q_pdf",
+        "company_name": filing.get("company_name") or ticker.upper().strip(),
+        "sector": None,
+        "industry": None,
+        "metrics": filing,
         "report_text": report_text,
     }
 
@@ -232,7 +208,7 @@ def list_reports(ticker: str) -> list[dict[str, Any]]:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM quarter_reports WHERE ticker = ? ORDER BY report_date DESC, id DESC LIMIT 20",
+            "SELECT * FROM quarter_reports WHERE ticker = ? ORDER BY id DESC LIMIT 20",
             (ticker.upper(),),
         ).fetchall()
     return [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
@@ -251,52 +227,33 @@ def get_report(report_id: int) -> dict[str, Any] | None:
 
 
 def score_report(metrics: dict[str, Any]) -> dict[str, Any]:
-    def growth(metric):
-        records = metrics.get(metric, [])
-        if len(records) < 2 or not records[0].get("value") or not records[1].get("value"):
-            return None
-        prior = records[1]["value"]
-        if prior == 0:
-            return None
-        return (records[0]["value"] - prior) / abs(prior)
-
-    revenue_growth = growth("revenue")
-    net_income_growth = growth("net_income")
-    fcf_growth = growth("free_cash_flow")
-    snapshot = metrics.get("yfinance_snapshot", {})
-
+    statements = metrics.get("statements", {})
     rows = [
-        ("Revenue Growth", revenue_growth, 25, 0.08, 0.00),
-        ("Net Income Growth", net_income_growth, 20, 0.08, 0.00),
-        ("Free Cash Flow Growth", fcf_growth, 20, 0.05, -0.05),
-        ("Gross Margin", snapshot.get("gross_margins"), 15, 0.40, 0.25),
-        ("Operating Margin", snapshot.get("operating_margins"), 10, 0.20, 0.10),
-        ("Forward Guidance Proxy", snapshot.get("earnings_growth") or snapshot.get("revenue_growth"), 10, 0.08, 0.00),
+        ("Revenue Trend", statements.get("revenue", {}).get("growth"), 25, 0.08, 0.00),
+        ("Gross Profit Trend", statements.get("gross_profit", {}).get("growth"), 15, 0.06, 0.00),
+        ("Operating Income Trend", statements.get("operating_income", {}).get("growth"), 20, 0.06, 0.00),
+        ("Net Income Trend", statements.get("net_income", {}).get("growth"), 20, 0.06, 0.00),
+        ("Operating Cash Flow Trend", statements.get("operating_cash_flow", {}).get("growth"), 10, 0.05, 0.00),
     ]
+    risk_count = sum(item.get("count", 0) for item in metrics.get("risk_terms", []))
+    risk_points = 10 if risk_count == 0 else 6 if risk_count < 5 else 2
     scored = []
-    total = 0
+    total = risk_points
     for label, value, weight, strong, neutral in rows:
         if value is None:
             points = round(weight * 0.35, 1)
-            verdict = "Missing data"
+            verdict = "Needs review"
         elif value >= strong:
             points = weight
             verdict = "Strong"
         elif value >= neutral:
             points = round(weight * 0.65, 1)
-            verdict = "Mixed"
+            verdict = "Stable"
         else:
             points = round(weight * 0.25, 1)
             verdict = "Weak"
         total += points
         scored.append({"factor": label, "value": value, "weight": weight, "points": points, "verdict": verdict})
-
-    if total >= 80:
-        label = "Excellent"
-    elif total >= 65:
-        label = "Good"
-    elif total >= 50:
-        label = "Mixed"
-    else:
-        label = "Weak"
+    scored.append({"factor": "Risk Language", "value": risk_count, "weight": 10, "points": risk_points, "verdict": "Clean" if risk_count == 0 else "Review"})
+    label = "Excellent" if total >= 80 else "Good" if total >= 65 else "Mixed" if total >= 50 else "Weak"
     return {"total": round(total, 1), "max": 100, "label": label, "rows": scored}

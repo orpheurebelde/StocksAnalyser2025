@@ -3,22 +3,17 @@ import os
 
 import requests
 from dotenv import load_dotenv
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.quarter_earnings import extract_pdf_text, fetch_quarter_payload, get_report, list_reports, save_report, score_report
+from core.quarter_earnings import build_pdf_payload, get_report, list_reports, save_report, score_report
 
 load_dotenv()
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-
-
-class IngestRequest(BaseModel):
-    source_url: str | None = None
-    manual_text: str | None = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -28,30 +23,29 @@ class AnalyzeRequest(BaseModel):
 
 def build_prompt(report: dict, score: dict) -> str:
     return f"""
-You are the Quarter Earnings Analyst agent for StocksAnalyser2025.
-Evaluate the complete quarterly report and financial evolution using only supplied data.
+You are the 10-Q Filing Analyst agent for StocksAnalyser2025.
+Interpret the uploaded 10-Q PDF using only supplied filing text and extracted filing metrics.
 
 Required final structure:
 1. Executive summary.
-2. Quarter report interpretation: revenue, margins, earnings, cash flow, balance sheet.
-3. Management/future guidance: quote or paraphrase report text when available, otherwise state data limitation.
-4. Score table in Markdown with Factor, Evidence, Score, Risk, Analyst view.
-5. Sector comparison at report date: compare company performance to sector norms qualitatively using sector and industry context.
-6. Investment guidance: bullish case, bearish case, watchlist, conclusion.
+2. Filing identity: company, period, form type, extraction limits.
+3. Financial statement interpretation: revenue, profit, operating income, net income, cash, assets, liabilities, operating cash flow.
+4. Risk and disclosure interpretation: material weakness, liquidity, impairment, going concern, restructuring, default, legal exposure.
+5. Score table in Markdown with Factor, Evidence from 10-Q, Score, Risk, Analyst view.
+6. Management discussion and future guidance if present in the filing text.
+7. Mistral/Groq analyst guidance: bullish case, bearish case, watchlist, conclusion.
 
 Company: {report.get("company_name")} ({report.get("ticker")})
 Quarter: {report.get("fiscal_quarter")}
-Sector: {report.get("sector")}
-Industry: {report.get("industry")}
-Source: {report.get("source_type")} {report.get("source_url") or ""}
+Source: uploaded 10-Q PDF {report.get("source_url") or ""}
 
 Deterministic score:
 {json.dumps(score, indent=2)}
 
-Quarter metrics:
+Extracted filing data:
 {json.dumps(report.get("metrics"), indent=2)}
 
-Report text:
+10-Q filing text:
 {(report.get("report_text") or "No full web report text supplied.")[:25000]}
 """.strip()
 
@@ -97,34 +91,18 @@ def call_groq(prompt: str, model: str | None):
     return data["choices"][0]["message"]["content"].strip(), selected
 
 
-@router.post("/{ticker}/ingest")
-@limiter.limit("6/minute")
-def ingest_quarter_report(request: Request, ticker: str, body: IngestRequest):
-    try:
-        payload = fetch_quarter_payload(ticker, body.source_url, body.manual_text)
-        saved = save_report(payload)
-        saved["score"] = score_report(saved["metrics"])
-        saved["history"] = list_reports(ticker)
-        return saved
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
 @router.post("/{ticker}/ingest-pdf")
 @limiter.limit("6/minute")
 async def ingest_quarter_pdf(
     request: Request,
     ticker: str,
-    source_url: str | None = Form(default=None),
     file: UploadFile = File(...),
 ):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Upload a PDF 10-Q file.")
     try:
         pdf_bytes = await file.read()
-        report_text = extract_pdf_text(pdf_bytes)
-        payload = fetch_quarter_payload(ticker, source_url, report_text)
-        payload["source_type"] = "uploaded_10q_pdf"
+        payload = build_pdf_payload(ticker, pdf_bytes, file.filename)
         saved = save_report(payload)
         saved["score"] = score_report(saved["metrics"])
         saved["history"] = list_reports(ticker)
