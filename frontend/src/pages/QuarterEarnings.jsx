@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { BarChart3, Brain, Database, FileUp, Landmark, RefreshCw, ShieldAlert } from 'lucide-react';
+import { BarChart3, Brain, Database, FileUp, Landmark, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import api from '../api';
 
 const statementKeys = [
@@ -66,6 +66,15 @@ function FilingBoard({ report, score }) {
         <div className="filing-score">
           <span>{score?.total ?? 'N/A'}</span>
           <small>{score?.label || 'Not scored'}</small>
+          <strong>{score?.suggestion || 'NO RATING'}</strong>
+          {score?.legend && (
+            <div className="score-tooltip">
+              <div className="metric-label">Score Legend</div>
+              {score.legend.map((item) => (
+                <p key={item.range}><b>{item.range}</b> {item.label} | {item.suggestion}: {item.meaning}</p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -93,7 +102,12 @@ function FilingBoard({ report, score }) {
               <thead><tr><th>Factor</th><th>Value</th><th>Points</th><th>Verdict</th></tr></thead>
               <tbody>
                 {(score?.rows || []).map((row) => (
-                  <tr key={row.factor}><td>{row.factor}</td><td>{typeof row.value === 'number' && row.factor !== 'Risk Language' ? pct(row.value) : row.value ?? 'N/A'}</td><td>{row.points}/{row.weight}</td><td>{row.verdict}</td></tr>
+                  <tr
+                    key={row.factor}
+                    title={`${row.factor}: ${row.verdict}. Points show earned score out of factor weight. Growth factors reward positive current-vs-prior filing trends; Risk Language penalizes repeated risk terms.`}
+                  >
+                    <td>{row.factor}</td><td>{typeof row.value === 'number' && row.factor !== 'Risk Language' ? pct(row.value) : row.value ?? 'N/A'}</td><td>{row.points}/{row.weight}</td><td>{row.verdict}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -151,7 +165,7 @@ function QuarterComparison({ report, history }) {
 }
 
 export default function QuarterEarnings() {
-  const [ticker, setTicker] = useState('AAPL');
+  const fileInputRef = useRef(null);
   const [pdfFile, setPdfFile] = useState(null);
   const [provider, setProvider] = useState('mistral');
   const [report, setReport] = useState(null);
@@ -161,23 +175,43 @@ export default function QuarterEarnings() {
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const loadExisting = async () => {
     setLoading(true);
     setError('');
+    setNotice('');
     setAnalysis('');
     try {
-      const res = await api.get(`/api/quarter-earnings/${ticker.toUpperCase()}/reports`);
+      const res = await api.get('/api/quarter-earnings/reports');
       const reports = res.data.reports || [];
       setHistory(reports);
       if (reports.length) {
         setReport(reports[0]);
         setScore(reports[0].score);
+        setNotice(`Loaded ${reports.length} stored 10-Q filing records from DB.`);
       } else {
         setReport(null);
         setScore(null);
-        setError(`No stored 10-Q filings found for ${ticker.toUpperCase()}.`);
+        setError('No stored 10-Q filings found in DB.');
       }
+    } catch (err) {
+      setError(apiError(err));
+    }
+    setLoading(false);
+  };
+
+  const cleanExisting = async () => {
+    setLoading(true);
+    setError('');
+    setNotice('');
+    setAnalysis('');
+    try {
+      const res = await api.delete('/api/quarter-earnings/reports');
+      setHistory([]);
+      setReport(null);
+      setScore(null);
+      setNotice(`Cleaned DB: ${res.data.deleted_reports} filings and ${res.data.deleted_analyses} analyses removed.`);
     } catch (err) {
       setError(apiError(err));
     }
@@ -191,16 +225,18 @@ export default function QuarterEarnings() {
     }
     setLoading(true);
     setError('');
+    setNotice('');
     setAnalysis('');
     try {
       const formData = new FormData();
       formData.append('file', pdfFile);
-      const res = await api.post(`/api/quarter-earnings/${ticker.toUpperCase()}/ingest-pdf`, formData, {
+      const res = await api.post('/api/quarter-earnings/ingest-pdf', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setReport(res.data);
       setScore(res.data.score);
       setHistory(res.data.history || []);
+      setNotice(`Stored filing #${res.data.id} in DB for ${res.data.ticker}. Future uploads will compare against this record.`);
     } catch (err) {
       setError(apiError(err));
     }
@@ -233,8 +269,17 @@ export default function QuarterEarnings() {
 
       <div className="glass-panel" style={{ marginBottom: '2rem' }}>
         <div className="filing-controls">
-          <input value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="Ticker, e.g. MU" />
-          <input type="file" accept="application/pdf,.pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} />
+          <button className="pdf-icon-button" onClick={() => fileInputRef.current?.click()} title="Choose 10-Q PDF" type="button">
+            <FileUp size={24} />
+          </button>
+          <input
+            ref={fileInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+          />
+          <div className="selected-file-name">{pdfFile?.name || 'No 10-Q PDF selected'}</div>
           <select value={provider} onChange={(e) => setProvider(e.target.value)}>
             <option value="mistral">Mistral</option>
             <option value="groq">Groq</option>
@@ -245,6 +290,9 @@ export default function QuarterEarnings() {
           <button className="btn-primary" onClick={loadExisting} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-blue))' }}>
             <RefreshCw size={18} /> {loading ? 'Loading...' : 'Load Existing'}
           </button>
+          <button className="btn-primary" onClick={cleanExisting} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--status-red), var(--status-orange))' }}>
+            <Trash2 size={18} /> Clean DB
+          </button>
           <button className="btn-primary" onClick={analyze} disabled={!report || aiLoading} style={{ background: 'linear-gradient(135deg, var(--status-green), var(--accent-blue))' }}>
             <Brain size={18} /> {aiLoading ? 'Analyzing...' : `Analyze with ${provider}`}
           </button>
@@ -252,6 +300,7 @@ export default function QuarterEarnings() {
         <p className="metric-label" style={{ marginTop: '0.75rem' }}>Only uploaded 10-Q PDFs are supported. Web scraping and manual text loading removed.</p>
       </div>
 
+      {notice && <p style={{ color: 'var(--status-green)', marginBottom: '2rem' }}>{notice}</p>}
       {error && <p style={{ color: 'var(--status-red)', marginBottom: '2rem' }}>{error}</p>}
 
       <FilingBoard report={report} score={score} />

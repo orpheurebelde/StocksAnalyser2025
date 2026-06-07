@@ -85,12 +85,40 @@ def extract_pdf_text(file_bytes: bytes) -> str:
     return text[:MAX_TEXT_CHARS]
 
 
-def _extract_company_name(text: str, ticker: str) -> str:
+def _extract_company_name(text: str, ticker: str | None) -> str:
     match = re.search(r"Exact name of registrant as specified in its charter\)?\s*([A-Z0-9][A-Z0-9 .,&'/-]{3,120})", text, re.I)
     if match:
         return match.group(1).strip(" .")
     match = re.search(r"FORM 10-Q\s+([A-Z0-9][A-Z0-9 .,&'/-]{3,120})", text, re.I)
-    return match.group(1).strip(" .") if match else ticker.upper()
+    return match.group(1).strip(" .") if match else (ticker or "UNKNOWN").upper()
+
+
+def _extract_ticker(text: str, filename: str | None = None, ticker_hint: str | None = None) -> str:
+    if ticker_hint and ticker_hint.upper() not in {"AUTO", "UNKNOWN"}:
+        return ticker_hint.upper().strip()
+    ignored = {"FORM", "NYSE", "LLC", "INC", "THE", "PDF"}
+    symbol_table = re.search(r"Trading\s+Symbol\(s\).*?([A-Z]{1,5})\s+(?:The\s+)?(?:Nasdaq|NYSE|New York Stock Exchange|Nasdaq Stock Market|NYSE American)", text, re.I)
+    if symbol_table:
+        symbol = symbol_table.group(1).upper()
+        if symbol not in ignored:
+            return symbol
+    exchange_table = re.search(r"\b([A-Z]{1,5})\s+(?:The\s+)?(?:Nasdaq Stock Market|Nasdaq|New York Stock Exchange|NYSE|NYSE American)\b", text, re.I)
+    if exchange_table:
+        symbol = exchange_table.group(1).upper()
+        if symbol not in ignored:
+            return symbol
+    inline_symbol = re.search(r"(?:ticker|trading symbol)\s*[:\-]?\s*([A-Z]{1,5})\b", text, re.I)
+    if inline_symbol:
+        symbol = inline_symbol.group(1).upper()
+        if symbol not in ignored:
+            return symbol
+    if filename:
+        file_symbol = re.search(r"\b([A-Z]{1,5})\b", filename.upper().replace("10-Q", " "))
+        if file_symbol:
+            symbol = file_symbol.group(1)
+            if symbol not in ignored:
+                return symbol
+    return "UNKNOWN"
 
 
 def _extract_period(text: str) -> dict[str, str | None]:
@@ -124,6 +152,7 @@ def _growth(current: float | None, prior: float | None) -> float | None:
 
 def extract_10q_data(ticker: str, report_text: str, filename: str | None = None) -> dict[str, Any]:
     text = _clean_text(report_text)
+    extracted_ticker = _extract_ticker(text, filename, ticker)
     period = _extract_period(text)
     statements = {
         "revenue": _extract_line_item(text, ["Total revenues", "Total revenue", "Net sales", "Revenues"]),
@@ -144,8 +173,8 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
     filing = {
         "filename": filename,
         "form_type": "10-Q" if re.search(r"form\s+10-q", text, re.I) else "PDF filing",
-        "company_name": _extract_company_name(text, ticker),
-        "ticker": ticker.upper(),
+        "company_name": _extract_company_name(text, extracted_ticker),
+        "ticker": extracted_ticker,
         "fiscal_quarter": period["fiscal_quarter"],
         "report_date": period["report_date"],
         "statements": statements,
@@ -161,13 +190,14 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
 def build_pdf_payload(ticker: str, file_bytes: bytes, filename: str | None = None) -> dict[str, Any]:
     report_text = extract_pdf_text(file_bytes)
     filing = extract_10q_data(ticker, report_text, filename)
+    extracted_ticker = filing.get("ticker") or "UNKNOWN"
     return {
-        "ticker": ticker.upper().strip(),
+        "ticker": extracted_ticker,
         "fiscal_quarter": filing.get("fiscal_quarter"),
         "report_date": filing.get("report_date"),
         "source_url": filename,
         "source_type": "uploaded_10q_pdf",
-        "company_name": filing.get("company_name") or ticker.upper().strip(),
+        "company_name": filing.get("company_name") or extracted_ticker,
         "sector": None,
         "industry": None,
         "metrics": filing,
@@ -214,6 +244,27 @@ def list_reports(ticker: str) -> list[dict[str, Any]]:
     return [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
 
 
+def list_all_reports(limit: int = 50) -> list[dict[str, Any]]:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM quarter_reports ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+
+
+def delete_all_reports() -> dict[str, int]:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        analysis_count = conn.execute("SELECT COUNT(*) FROM quarter_analyses").fetchone()[0]
+        report_count = conn.execute("SELECT COUNT(*) FROM quarter_reports").fetchone()[0]
+        conn.execute("DELETE FROM quarter_analyses")
+        conn.execute("DELETE FROM quarter_reports")
+    return {"deleted_reports": report_count, "deleted_analyses": analysis_count}
+
+
 def get_report(report_id: int) -> dict[str, Any] | None:
     init_db()
     with sqlite3.connect(DB_PATH) as conn:
@@ -255,5 +306,24 @@ def score_report(metrics: dict[str, Any]) -> dict[str, Any]:
         total += points
         scored.append({"factor": label, "value": value, "weight": weight, "points": points, "verdict": verdict})
     scored.append({"factor": "Risk Language", "value": risk_count, "weight": 10, "points": risk_points, "verdict": "Clean" if risk_count == 0 else "Review"})
-    label = "Excellent" if total >= 80 else "Good" if total >= 65 else "Mixed" if total >= 50 else "Weak"
-    return {"total": round(total, 1), "max": 100, "label": label, "rows": scored}
+    if total >= 80 and risk_count < 5:
+        label = "Excellent"
+        suggestion = "STRONG BUY"
+    elif total >= 65:
+        label = "Good"
+        suggestion = "BUY"
+    elif total >= 50:
+        label = "Mixed"
+        suggestion = "HOLD"
+    else:
+        label = "Weak"
+        suggestion = "SELL"
+    if risk_count >= 10 and suggestion in {"STRONG BUY", "BUY"}:
+        suggestion = "HOLD"
+    legend = [
+        {"range": "80-100", "label": "Excellent", "suggestion": "STRONG BUY", "meaning": "Strong extracted trends and limited tracked risk language."},
+        {"range": "65-79", "label": "Good", "suggestion": "BUY", "meaning": "Positive filing trend, but still needs valuation and sector review."},
+        {"range": "50-64", "label": "Mixed", "suggestion": "HOLD", "meaning": "Balanced or incomplete filing signals; watch next quarter."},
+        {"range": "0-49", "label": "Weak", "suggestion": "SELL", "meaning": "Weak extracted trends or elevated filing risk language."},
+    ]
+    return {"total": round(total, 1), "max": 100, "label": label, "suggestion": suggestion, "legend": legend, "rows": scored}

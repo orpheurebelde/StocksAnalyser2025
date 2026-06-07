@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.quarter_earnings import build_pdf_payload, get_report, list_reports, save_report, score_report
+from core.quarter_earnings import build_pdf_payload, delete_all_reports, get_report, list_all_reports, list_reports, save_report, score_report
 
 load_dotenv()
 
@@ -61,6 +61,42 @@ Prior stored 10-Q filings for comparison:
 
 10-Q filing text:
 {(report.get("report_text") or "No full web report text supplied.")[:25000]}
+""".strip()
+
+
+def build_groq_score_prompt(report: dict, score: dict, prior_reports: list[dict] | None = None) -> str:
+    prior_context = [
+        {
+            "id": item.get("id"),
+            "period": item.get("fiscal_quarter"),
+            "score": score_report(item.get("metrics", {})),
+            "statements": item.get("metrics", {}).get("statements", {}),
+            "risk_terms": item.get("metrics", {}).get("risk_terms", []),
+        }
+        for item in (prior_reports or [])[:4]
+        if item.get("id") != report.get("id")
+    ]
+    compact = {
+        "company": report.get("company_name"),
+        "ticker": report.get("ticker"),
+        "quarter": report.get("fiscal_quarter"),
+        "score": score,
+        "statements": report.get("metrics", {}).get("statements", {}),
+        "risk_terms": report.get("metrics", {}).get("risk_terms", []),
+        "prior_filings": prior_context,
+    }
+    return f"""
+You are validating a 10-Q score, not reading the full filing.
+Use only this compact extracted dataset.
+
+Return:
+1. Score validation summary.
+2. Any score rows that look inconsistent with extracted values.
+3. Quarter-to-quarter comparison highlights.
+4. Final rating: VALID, REVIEW, or REJECT.
+
+Data:
+{json.dumps(compact, indent=2)}
 """.strip()
 
 
@@ -119,10 +155,31 @@ async def ingest_quarter_pdf(
         payload = build_pdf_payload(ticker, pdf_bytes, file.filename)
         saved = save_report(payload)
         saved["score"] = score_report(saved["metrics"])
-        saved["history"] = [{**item, "score": score_report(item["metrics"])} for item in list_reports(ticker)]
+        saved["history"] = [{**item, "score": score_report(item["metrics"])} for item in list_reports(saved["ticker"])]
         return saved
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/ingest-pdf")
+@limiter.limit("6/minute")
+async def ingest_quarter_pdf_auto(request: Request, file: UploadFile = File(...)):
+    return await ingest_quarter_pdf(request, "AUTO", file)
+
+
+@router.get("/reports")
+@limiter.limit("20/minute")
+def all_reports(request: Request):
+    items = list_all_reports()
+    return {
+        "reports": [{**item, "score": score_report(item["metrics"])} for item in items],
+    }
+
+
+@router.delete("/reports")
+@limiter.limit("4/minute")
+def clear_reports(request: Request):
+    return delete_all_reports()
 
 
 @router.get("/{ticker}/reports")
@@ -144,12 +201,13 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
 
     score = score_report(report["metrics"])
     prior_reports = list_reports(report["ticker"])
-    prompt = build_prompt(report, score, prior_reports)
     try:
         provider = body.provider.lower()
         if provider == "groq":
+            prompt = build_groq_score_prompt(report, score, prior_reports)
             analysis, model = call_groq(prompt, body.model)
         elif provider == "mistral":
+            prompt = build_prompt(report, score, prior_reports)
             analysis, model = call_mistral(prompt, body.model)
         else:
             raise HTTPException(status_code=400, detail="Provider must be mistral or groq.")
