@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BarChart3, Brain, Database, FileUp, Landmark, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
@@ -231,8 +231,22 @@ export default function QuarterEarnings() {
   const [showTickerModal, setShowTickerModal] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState('');
   const [availableTickers, setAvailableTickers] = useState([]);
+  const [dbStatus, setDbStatus] = useState(null);
 
   const visibleHistory = selectedTicker ? history.filter((item) => item.ticker === selectedTicker) : history;
+
+  const loadDbStatus = async () => {
+    try {
+      const res = await api.get('/api/quarter-earnings/db-status');
+      setDbStatus(res.data);
+    } catch {
+      setDbStatus(null);
+    }
+  };
+
+  useEffect(() => {
+    loadDbStatus();
+  }, []);
 
   const openTicker = async (ticker) => {
     setLoading(true);
@@ -262,6 +276,7 @@ export default function QuarterEarnings() {
     try {
       const res = await api.get('/api/quarter-earnings/tickers');
       const tickers = res.data.tickers || [];
+      await loadDbStatus();
       setAvailableTickers(tickers);
       if (tickers.length) {
         setShowTickerModal(true);
@@ -316,6 +331,7 @@ export default function QuarterEarnings() {
       setScore(res.data.score);
       setHistory(res.data.history || []);
       setSelectedTicker(res.data.ticker);
+      await loadDbStatus();
       setNotice(`Stored filing #${res.data.id} in DB for ${res.data.ticker}. Future uploads will compare against this record.`);
     } catch (err) {
       setError(apiError(err));
@@ -378,6 +394,19 @@ export default function QuarterEarnings() {
           </button>
         </div>
         <p className="metric-label" style={{ marginTop: '0.75rem' }}>Only uploaded 10-Q PDFs are supported. Web scraping and manual text loading removed.</p>
+        {dbStatus && (
+          <div className="db-status-strip">
+            <Database size={18} color={dbStatus.env_configured ? 'var(--status-green)' : 'var(--status-orange)'} />
+            <span>
+              {dbStatus.backend === 'postgres'
+                ? `Postgres configured on backend via ${dbStatus.env_name}.`
+                : dbStatus.env_configured
+                  ? `SQLite persistent path configured on backend: ${dbStatus.path}`
+                  : `SQLite uses default backend path: ${dbStatus.path}. For production, set DATABASE_URL or POSTGRES_URL from Neon.`}
+            </span>
+            <strong>{dbStatus.report_count} filings</strong>
+          </div>
+        )}
       </div>
 
       {notice && <p style={{ color: 'var(--status-green)', marginBottom: '2rem' }}>{notice}</p>}
@@ -445,7 +474,10 @@ export default function QuarterEarnings() {
               )) : (
                 <div className="empty-state">
                   <strong>No tickers stored yet</strong>
-                  <span>Upload a 10-Q PDF first. On Render, use a persistent disk and set <code>QUARTER_EARNINGS_DB_PATH</code> so SQLite survives redeploys.</span>
+                  <span>Upload a 10-Q PDF to create first stored filing.</span>
+                  {dbStatus && dbStatus.backend !== 'postgres' && (
+                    <span>Production persistence needs Neon Postgres. Set <code>DATABASE_URL</code> or <code>POSTGRES_URL</code> on backend.</span>
+                  )}
                 </div>
               )}
             </div>

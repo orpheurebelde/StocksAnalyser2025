@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.quarter_earnings import build_pdf_payload, delete_all_reports, get_report, list_all_reports, list_reports, list_tickers, save_report, score_report
+from core.quarter_earnings import build_pdf_payload, delete_all_reports, get_db_status, get_report, list_all_reports, list_reports, list_tickers, save_report, score_report
 
 load_dotenv()
 
@@ -190,6 +190,12 @@ def all_reports(request: Request):
 @limiter.limit("4/minute")
 def clear_reports(request: Request):
     return delete_all_reports()
+
+
+@router.get("/db-status")
+@limiter.limit("20/minute")
+def db_status(request: Request):
+    return get_db_status()
 
 
 @router.get("/tickers")

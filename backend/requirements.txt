@@ -11,3 +11,4 @@ openpyxl
 python-dotenv
 python-multipart
 pypdf
+psycopg[binary]

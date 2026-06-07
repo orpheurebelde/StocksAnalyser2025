@@ -270,6 +270,28 @@ button {
   white-space: nowrap;
 }
 
+.db-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+
+.db-status-strip span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.db-status-strip strong {
+  color: var(--accent-cyan);
+  white-space: nowrap;
+}
+
 .filing-hero {
   display: flex;
   justify-content: space-between;

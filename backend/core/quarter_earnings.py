@@ -8,15 +8,83 @@ from typing import Any
 
 from core.yfinance_client import get_statement
 
-DB_PATH = os.getenv("QUARTER_EARNINGS_DB_PATH") or os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
+DB_ENV_NAME = "QUARTER_EARNINGS_DB_PATH"
+POSTGRES_ENV_NAMES = ("DATABASE_URL", "POSTGRES_URL")
+POSTGRES_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+DB_PATH = os.getenv(DB_ENV_NAME) or os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
 MAX_TEXT_CHARS = 90000
+
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
+
+def _using_postgres() -> bool:
+    return bool(POSTGRES_URL)
+
+
+def _placeholder() -> str:
+    return "%s" if _using_postgres() else "?"
+
+
+def _connect(row_factory: bool = False):
+    if _using_postgres():
+        if psycopg is None:
+            raise RuntimeError("DATABASE_URL is set, but psycopg is not installed. Add psycopg[binary] to backend requirements.")
+        return psycopg.connect(POSTGRES_URL, row_factory=dict_row if row_factory else None)
+    conn = sqlite3.connect(DB_PATH)
+    if row_factory:
+        conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _row_to_dict(row: Any) -> dict[str, Any]:
+    return row if isinstance(row, dict) else dict(row)
 
 
 def init_db():
+    if _using_postgres():
+        with _connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quarter_reports (
+                    id SERIAL PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    fiscal_quarter TEXT,
+                    report_date TEXT,
+                    source_url TEXT,
+                    source_type TEXT NOT NULL,
+                    company_name TEXT,
+                    sector TEXT,
+                    industry TEXT,
+                    metrics_json TEXT NOT NULL,
+                    report_text TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quarter_analyses (
+                    id SERIAL PRIMARY KEY,
+                    report_id INTEGER NOT NULL REFERENCES quarter_reports(id),
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    score_json TEXT NOT NULL,
+                    analysis_markdown TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+        return
+
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS quarter_reports (
@@ -49,6 +117,40 @@ def init_db():
             )
             """
         )
+
+
+def get_db_status() -> dict[str, Any]:
+    init_db()
+    with _connect() as conn:
+        report_count = conn.execute("SELECT COUNT(*) FROM quarter_reports").fetchone()[0]
+        analysis_count = conn.execute("SELECT COUNT(*) FROM quarter_analyses").fetchone()[0]
+    if _using_postgres():
+        configured_env = "DATABASE_URL" if os.getenv("DATABASE_URL") else "POSTGRES_URL"
+        return {
+            "backend": "postgres",
+            "env_name": configured_env,
+            "env_configured": True,
+            "exists": True,
+            "directory_writable": True,
+            "report_count": report_count,
+            "analysis_count": analysis_count,
+            "persistence": "postgres_configured",
+        }
+
+    db_dir = os.path.dirname(DB_PATH) or "."
+    env_configured = bool(os.getenv(DB_ENV_NAME))
+    return {
+        "backend": "sqlite",
+        "path": DB_PATH,
+        "directory": db_dir,
+        "env_name": DB_ENV_NAME,
+        "env_configured": env_configured,
+        "exists": os.path.exists(DB_PATH),
+        "directory_writable": os.access(db_dir, os.W_OK),
+        "report_count": report_count,
+        "analysis_count": analysis_count,
+        "persistence": "persistent_disk_configured" if env_configured else "default_ephemeral_path",
+    }
 
 
 def _now():
@@ -291,6 +393,7 @@ def enrich_missing_operating_cash_flow(metrics: dict[str, Any], ticker: str, rep
 
 def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
     init_db()
+    ph = _placeholder()
     query = """
         SELECT id, ticker, metrics_json, report_date, report_text
         FROM quarter_reports
@@ -298,16 +401,16 @@ def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
     """
     params: tuple[Any, ...] = ()
     if ticker:
-        query = """
+        query = f"""
             SELECT id, ticker, metrics_json, report_date, report_text
             FROM quarter_reports
-            WHERE ticker = ?
+            WHERE ticker = {ph}
             ORDER BY id DESC
             LIMIT 1
         """
         params = (ticker.upper(),)
     changed = 0
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         rows = conn.execute(query, params).fetchall()
         for report_id, row_ticker, metrics_json, report_date, report_text in rows:
             try:
@@ -324,7 +427,7 @@ def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
             else:
                 metrics, updated = enrich_missing_operating_cash_flow(metrics, row_ticker, report_date)
             if updated:
-                conn.execute("UPDATE quarter_reports SET metrics_json = ? WHERE id = ?", (json.dumps(metrics), report_id))
+                conn.execute(f"UPDATE quarter_reports SET metrics_json = {ph} WHERE id = {ph}", (json.dumps(metrics), report_id))
                 changed += 1
     return changed
 
@@ -400,13 +503,15 @@ def build_pdf_payload(ticker: str, file_bytes: bytes, filename: str | None = Non
 
 def save_report(payload: dict[str, Any]) -> dict[str, Any]:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
+    ph = _placeholder()
+    returning = " RETURNING id" if _using_postgres() else ""
+    with _connect() as conn:
         cur = conn.execute(
-            """
+            f"""
             INSERT INTO quarter_reports (
                 ticker, fiscal_quarter, report_date, source_url, source_type, company_name,
                 sector, industry, metrics_json, report_text, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}){returning}
             """,
             (
                 payload["ticker"],
@@ -422,38 +527,37 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
                 _now(),
             ),
         )
-        report_id = cur.lastrowid
+        report_id = cur.fetchone()[0] if _using_postgres() else cur.lastrowid
     return {**payload, "id": report_id}
 
 
 def list_reports(ticker: str) -> list[dict[str, Any]]:
     init_db()
     backfill_missing_operating_cash_flow(ticker)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    ph = _placeholder()
+    with _connect(row_factory=True) as conn:
         rows = conn.execute(
-            "SELECT * FROM quarter_reports WHERE ticker = ? ORDER BY id DESC LIMIT 20",
+            f"SELECT * FROM quarter_reports WHERE ticker = {ph} ORDER BY id DESC LIMIT 20",
             (ticker.upper(),),
         ).fetchall()
-    return [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    return [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
 
 
 def list_all_reports(limit: int = 50) -> list[dict[str, Any]]:
     init_db()
     backfill_missing_operating_cash_flow()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    ph = _placeholder()
+    with _connect(row_factory=True) as conn:
         rows = conn.execute(
-            "SELECT * FROM quarter_reports ORDER BY id DESC LIMIT ?",
+            f"SELECT * FROM quarter_reports ORDER BY id DESC LIMIT {ph}",
             (limit,),
         ).fetchall()
-    return [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    return [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
 
 
 def list_tickers() -> list[dict[str, Any]]:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with _connect(row_factory=True) as conn:
         rows = conn.execute(
             """
             SELECT ticker, COUNT(*) AS filing_count, MAX(id) AS latest_id, MAX(created_at) AS latest_created_at
@@ -462,12 +566,12 @@ def list_tickers() -> list[dict[str, Any]]:
             ORDER BY latest_id DESC
             """
         ).fetchall()
-    return [dict(row) for row in rows]
+    return [_row_to_dict(row) for row in rows]
 
 
 def delete_all_reports() -> dict[str, int]:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         analysis_count = conn.execute("SELECT COUNT(*) FROM quarter_analyses").fetchone()[0]
         report_count = conn.execute("SELECT COUNT(*) FROM quarter_reports").fetchone()[0]
         conn.execute("DELETE FROM quarter_analyses")
@@ -477,12 +581,12 @@ def delete_all_reports() -> dict[str, int]:
 
 def get_report(report_id: int) -> dict[str, Any] | None:
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM quarter_reports WHERE id = ?", (report_id,)).fetchone()
+    ph = _placeholder()
+    with _connect(row_factory=True) as conn:
+        row = conn.execute(f"SELECT * FROM quarter_reports WHERE id = {ph}", (report_id,)).fetchone()
     if not row:
         return None
-    data = dict(row)
+    data = _row_to_dict(row)
     data["metrics"] = json.loads(data.pop("metrics_json"))
     return data
 
