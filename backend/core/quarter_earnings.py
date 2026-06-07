@@ -277,14 +277,23 @@ def get_report(report_id: int) -> dict[str, Any] | None:
     return data
 
 
-def score_report(metrics: dict[str, Any]) -> dict[str, Any]:
+def _statement_value(metrics: dict[str, Any], key: str) -> float | None:
+    return metrics.get("statements", {}).get(key, {}).get("current")
+
+
+def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
     statements = metrics.get("statements", {})
+    def trend(key: str):
+        if previous_metrics:
+            return _growth(_statement_value(metrics, key), _statement_value(previous_metrics, key))
+        return statements.get(key, {}).get("growth")
+
     rows = [
-        ("Revenue Trend", statements.get("revenue", {}).get("growth"), 25, 0.08, 0.00),
-        ("Gross Profit Trend", statements.get("gross_profit", {}).get("growth"), 15, 0.06, 0.00),
-        ("Operating Income Trend", statements.get("operating_income", {}).get("growth"), 20, 0.06, 0.00),
-        ("Net Income Trend", statements.get("net_income", {}).get("growth"), 20, 0.06, 0.00),
-        ("Operating Cash Flow Trend", statements.get("operating_cash_flow", {}).get("growth"), 10, 0.05, 0.00),
+        ("Revenue Trend", trend("revenue"), 25, 0.08, 0.00),
+        ("Gross Profit Trend", trend("gross_profit"), 15, 0.06, 0.00),
+        ("Operating Income Trend", trend("operating_income"), 20, 0.06, 0.00),
+        ("Net Income Trend", trend("net_income"), 20, 0.06, 0.00),
+        ("Operating Cash Flow Trend", trend("operating_cash_flow"), 10, 0.05, 0.00),
     ]
     risk_count = sum(item.get("count", 0) for item in metrics.get("risk_terms", []))
     risk_points = 10 if risk_count == 0 else 6 if risk_count < 5 else 2
@@ -326,4 +335,12 @@ def score_report(metrics: dict[str, Any]) -> dict[str, Any]:
         {"range": "50-64", "label": "Mixed", "suggestion": "HOLD", "meaning": "Balanced or incomplete filing signals; watch next quarter."},
         {"range": "0-49", "label": "Weak", "suggestion": "SELL", "meaning": "Weak extracted trends or elevated filing risk language."},
     ]
-    return {"total": round(total, 1), "max": 100, "label": label, "suggestion": suggestion, "legend": legend, "rows": scored}
+    return {
+        "total": round(total, 1),
+        "max": 100,
+        "label": label,
+        "suggestion": suggestion,
+        "basis": "stored-quarter comparison" if previous_metrics else "filing internal comparison",
+        "legend": legend,
+        "rows": scored,
+    }

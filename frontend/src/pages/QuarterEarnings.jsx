@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BarChart3, Brain, Database, FileUp, Landmark, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../api';
 
 const statementKeys = [
@@ -131,7 +132,9 @@ function FilingBoard({ report, score }) {
 
 function QuarterComparison({ report, history }) {
   if (!report || history.length < 2) return null;
-  const previous = history.find((item) => item.id !== report.id);
+  const sameTicker = history.filter((item) => item.ticker === report.ticker);
+  const currentIndex = sameTicker.findIndex((item) => item.id === report.id);
+  const previous = currentIndex >= 0 ? sameTicker[currentIndex + 1] : null;
   if (!previous) return null;
   const currentStatements = report.metrics?.statements || {};
   const previousStatements = previous.metrics?.statements || {};
@@ -164,6 +167,55 @@ function QuarterComparison({ report, history }) {
   );
 }
 
+function EvolutionCharts({ history, ticker }) {
+  const rows = history
+    .filter((item) => !ticker || item.ticker === ticker)
+    .slice()
+    .sort((a, b) => a.id - b.id)
+    .map((item) => ({
+      period: item.fiscal_quarter || `#${item.id}`,
+      revenue: item.metrics?.statements?.revenue?.current ?? null,
+      netIncome: item.metrics?.statements?.net_income?.current ?? null,
+      operatingCashFlow: item.metrics?.statements?.operating_cash_flow?.current ?? null,
+      score: item.score?.total ?? null,
+    }));
+  if (rows.length < 2) return null;
+  return (
+    <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+      <div className="metric-label">Evolution Graphics</div>
+      <h3>{ticker || 'Selected ticker'} quarterly evolution</h3>
+      <div className="evolution-grid">
+        <div className="chart-box">
+          <ResponsiveContainer width="100%" height={260}>
+            <ReLineChart data={rows}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
+              <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
+              <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+              <Legend />
+              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--accent-cyan)" strokeWidth={2} connectNulls />
+              <Line type="monotone" dataKey="netIncome" name="Net Income" stroke="var(--status-green)" strokeWidth={2} connectNulls />
+              <Line type="monotone" dataKey="operatingCashFlow" name="Op Cash Flow" stroke="var(--accent-purple)" strokeWidth={2} connectNulls />
+            </ReLineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="chart-box">
+          <ResponsiveContainer width="100%" height={260}>
+            <ReLineChart data={rows}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
+              <YAxis stroke="var(--text-secondary)" domain={[0, 100]} />
+              <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+              <Legend />
+              <Line type="monotone" dataKey="score" name="Score" stroke="var(--accent-blue)" strokeWidth={3} connectNulls />
+            </ReLineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function QuarterEarnings() {
   const fileInputRef = useRef(null);
   const [pdfFile, setPdfFile] = useState(null);
@@ -176,6 +228,25 @@ export default function QuarterEarnings() {
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [showTickerModal, setShowTickerModal] = useState(false);
+  const [selectedTicker, setSelectedTicker] = useState('');
+
+  const visibleHistory = selectedTicker ? history.filter((item) => item.ticker === selectedTicker) : history;
+  const tickerGroups = Object.values(history.reduce((acc, item) => {
+    acc[item.ticker] = acc[item.ticker] || { ticker: item.ticker, count: 0, latest: item };
+    acc[item.ticker].count += 1;
+    if (item.id > acc[item.ticker].latest.id) acc[item.ticker].latest = item;
+    return acc;
+  }, {}));
+
+  const openTicker = (ticker) => {
+    const rows = history.filter((item) => item.ticker === ticker);
+    setSelectedTicker(ticker);
+    setReport(rows[0] || null);
+    setScore(rows[0]?.score || null);
+    setAnalysis('');
+    setShowTickerModal(false);
+  };
 
   const loadExisting = async () => {
     setLoading(true);
@@ -189,6 +260,8 @@ export default function QuarterEarnings() {
       if (reports.length) {
         setReport(reports[0]);
         setScore(reports[0].score);
+        setSelectedTicker(reports[0].ticker);
+        setShowTickerModal(true);
         setNotice(`Loaded ${reports.length} stored 10-Q filing records from DB.`);
       } else {
         setReport(null);
@@ -211,6 +284,8 @@ export default function QuarterEarnings() {
       setHistory([]);
       setReport(null);
       setScore(null);
+      setSelectedTicker('');
+      setShowTickerModal(false);
       setNotice(`Cleaned DB: ${res.data.deleted_reports} filings and ${res.data.deleted_analyses} analyses removed.`);
     } catch (err) {
       setError(apiError(err));
@@ -236,6 +311,7 @@ export default function QuarterEarnings() {
       setReport(res.data);
       setScore(res.data.score);
       setHistory(res.data.history || []);
+      setSelectedTicker(res.data.ticker);
       setNotice(`Stored filing #${res.data.id} in DB for ${res.data.ticker}. Future uploads will compare against this record.`);
     } catch (err) {
       setError(apiError(err));
@@ -305,6 +381,7 @@ export default function QuarterEarnings() {
 
       <FilingBoard report={report} score={score} />
       <QuarterComparison report={report} history={history} />
+      <EvolutionCharts history={history} ticker={selectedTicker || report?.ticker} />
 
       {history.length > 0 && (
         <div className="glass-panel" style={{ marginBottom: '2rem' }}>
@@ -316,14 +393,14 @@ export default function QuarterEarnings() {
             <table className="earnings-table">
               <thead><tr><th>ID</th><th>Ticker</th><th>Period</th><th>Score</th><th>Company</th><th>Action</th></tr></thead>
               <tbody>
-                {history.map((item) => (
+                {visibleHistory.map((item) => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td>{item.ticker}</td>
                     <td>{item.fiscal_quarter || 'N/A'}</td>
                     <td>{item.score?.total ?? 'N/A'} / 100</td>
                     <td>{item.company_name || 'N/A'}</td>
-                    <td><button className="table-action" onClick={() => { setReport(item); setScore(item.score); setAnalysis(''); }}>Open</button></td>
+                    <td><button className="table-action" onClick={() => { setSelectedTicker(item.ticker); setReport(item); setScore(item.score); setAnalysis(''); }}>Open</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -340,6 +417,29 @@ export default function QuarterEarnings() {
           </div>
           <div className="markdown-content">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{analysis}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {showTickerModal && (
+        <div className="modal-backdrop">
+          <div className="ticker-modal glass-panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+              <div>
+                <div className="metric-label">Available DB Tickers</div>
+                <h3>Select ticker to load</h3>
+              </div>
+              <button className="table-action" onClick={() => setShowTickerModal(false)}>Close</button>
+            </div>
+            <div className="ticker-list">
+              {tickerGroups.map((group) => (
+                <button className="ticker-choice" key={group.ticker} onClick={() => openTicker(group.ticker)}>
+                  <strong>{group.ticker}</strong>
+                  <span>{group.count} filings</span>
+                  <small>{group.latest.company_name || 'Unknown company'}</small>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

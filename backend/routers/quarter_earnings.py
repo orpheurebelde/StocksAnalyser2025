@@ -16,6 +16,14 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
 
+def attach_evolution_scores(items: list[dict]) -> list[dict]:
+    scored = []
+    for index, item in enumerate(items):
+        previous = next((candidate for candidate in items[index + 1:] if candidate.get("ticker") == item.get("ticker")), None)
+        scored.append({**item, "score": score_report(item["metrics"], previous["metrics"] if previous else None)})
+    return scored
+
+
 class AnalyzeRequest(BaseModel):
     provider: str = "mistral"
     model: str | None = None
@@ -154,8 +162,10 @@ async def ingest_quarter_pdf(
         pdf_bytes = await file.read()
         payload = build_pdf_payload(ticker, pdf_bytes, file.filename)
         saved = save_report(payload)
-        saved["score"] = score_report(saved["metrics"])
-        saved["history"] = [{**item, "score": score_report(item["metrics"])} for item in list_reports(saved["ticker"])]
+        history = attach_evolution_scores(list_reports(saved["ticker"]))
+        saved_from_history = next((item for item in history if item["id"] == saved["id"]), None)
+        saved["score"] = saved_from_history["score"] if saved_from_history else score_report(saved["metrics"])
+        saved["history"] = history
         return saved
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -172,7 +182,7 @@ async def ingest_quarter_pdf_auto(request: Request, file: UploadFile = File(...)
 def all_reports(request: Request):
     items = list_all_reports()
     return {
-        "reports": [{**item, "score": score_report(item["metrics"])} for item in items],
+        "reports": attach_evolution_scores(items),
     }
 
 
@@ -188,7 +198,7 @@ def reports(request: Request, ticker: str):
     items = list_reports(ticker)
     return {
         "ticker": ticker.upper(),
-        "reports": [{**item, "score": score_report(item["metrics"])} for item in items],
+        "reports": attach_evolution_scores(items),
     }
 
 
@@ -199,8 +209,10 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
     if not report:
         raise HTTPException(status_code=404, detail="Quarter report not found.")
 
-    score = score_report(report["metrics"])
     prior_reports = list_reports(report["ticker"])
+    current_index = next((index for index, item in enumerate(prior_reports) if item["id"] == report["id"]), -1)
+    previous = prior_reports[current_index + 1] if current_index >= 0 and current_index + 1 < len(prior_reports) else None
+    score = score_report(report["metrics"], previous["metrics"] if previous else None)
     try:
         provider = body.provider.lower()
         if provider == "groq":
