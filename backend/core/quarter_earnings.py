@@ -255,6 +255,21 @@ def list_all_reports(limit: int = 50) -> list[dict[str, Any]]:
     return [{**dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
 
 
+def list_tickers() -> list[dict[str, Any]]:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT ticker, COUNT(*) AS filing_count, MAX(id) AS latest_id, MAX(created_at) AS latest_created_at
+            FROM quarter_reports
+            GROUP BY ticker
+            ORDER BY latest_id DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def delete_all_reports() -> dict[str, int]:
     init_db()
     with sqlite3.connect(DB_PATH) as conn:

@@ -230,22 +230,28 @@ export default function QuarterEarnings() {
   const [notice, setNotice] = useState('');
   const [showTickerModal, setShowTickerModal] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState('');
+  const [availableTickers, setAvailableTickers] = useState([]);
 
   const visibleHistory = selectedTicker ? history.filter((item) => item.ticker === selectedTicker) : history;
-  const tickerGroups = Object.values(history.reduce((acc, item) => {
-    acc[item.ticker] = acc[item.ticker] || { ticker: item.ticker, count: 0, latest: item };
-    acc[item.ticker].count += 1;
-    if (item.id > acc[item.ticker].latest.id) acc[item.ticker].latest = item;
-    return acc;
-  }, {}));
 
-  const openTicker = (ticker) => {
-    const rows = history.filter((item) => item.ticker === ticker);
-    setSelectedTicker(ticker);
-    setReport(rows[0] || null);
-    setScore(rows[0]?.score || null);
-    setAnalysis('');
-    setShowTickerModal(false);
+  const openTicker = async (ticker) => {
+    setLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await api.get(`/api/quarter-earnings/${ticker}/reports`);
+      const rows = res.data.reports || [];
+      setHistory(rows);
+      setSelectedTicker(ticker);
+      setReport(rows[0] || null);
+      setScore(rows[0]?.score || null);
+      setAnalysis('');
+      setShowTickerModal(false);
+      setNotice(`Loaded ${rows.length} stored 10-Q filings for ${ticker}.`);
+    } catch (err) {
+      setError(apiError(err));
+    }
+    setLoading(false);
   };
 
   const loadExisting = async () => {
@@ -254,18 +260,15 @@ export default function QuarterEarnings() {
     setNotice('');
     setAnalysis('');
     try {
-      const res = await api.get('/api/quarter-earnings/reports');
-      const reports = res.data.reports || [];
-      setHistory(reports);
-      if (reports.length) {
-        setReport(reports[0]);
-        setScore(reports[0].score);
-        setSelectedTicker(reports[0].ticker);
+      const res = await api.get('/api/quarter-earnings/tickers');
+      const tickers = res.data.tickers || [];
+      setAvailableTickers(tickers);
+      if (tickers.length) {
         setShowTickerModal(true);
-        setNotice(`Loaded ${reports.length} stored 10-Q filing records from DB.`);
+        setNotice(`Found ${tickers.length} tickers in DB.`);
       } else {
-        setReport(null);
-        setScore(null);
+        setAvailableTickers([]);
+        setShowTickerModal(false);
         setError('No stored 10-Q filings found in DB.');
       }
     } catch (err) {
@@ -285,6 +288,7 @@ export default function QuarterEarnings() {
       setReport(null);
       setScore(null);
       setSelectedTicker('');
+      setAvailableTickers([]);
       setShowTickerModal(false);
       setNotice(`Cleaned DB: ${res.data.deleted_reports} filings and ${res.data.deleted_analyses} analyses removed.`);
     } catch (err) {
@@ -432,11 +436,11 @@ export default function QuarterEarnings() {
               <button className="table-action" onClick={() => setShowTickerModal(false)}>Close</button>
             </div>
             <div className="ticker-list">
-              {tickerGroups.map((group) => (
+              {availableTickers.map((group) => (
                 <button className="ticker-choice" key={group.ticker} onClick={() => openTicker(group.ticker)}>
                   <strong>{group.ticker}</strong>
-                  <span>{group.count} filings</span>
-                  <small>{group.latest.company_name || 'Unknown company'}</small>
+                  <span>{group.filing_count} filings</span>
+                  <small>Latest DB record #{group.latest_id}</small>
                 </button>
               ))}
             </div>
