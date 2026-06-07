@@ -13,6 +13,14 @@ const money = (value) => {
   return `$${Number(value).toLocaleString()}`;
 };
 
+const apiError = (err) => {
+  if (err.response?.data?.detail) return err.response.data.detail;
+  if (err.message === 'Network Error') {
+    return 'Network Error: backend did not return a readable response. Check Render deploy/logs, CORS, or backend startup dependencies.';
+  }
+  return err.message;
+};
+
 function ScoreTable({ score }) {
   if (!score) return null;
   return (
@@ -119,7 +127,7 @@ export default function QuarterEarnings() {
       setScore(res.data.score);
       setHistory(res.data.history || []);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setError(apiError(err));
     }
     setLoading(false);
   };
@@ -133,7 +141,7 @@ export default function QuarterEarnings() {
       setAnalysis(res.data.analysis);
       setScore(res.data.score);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setError(apiError(err));
     }
     setAiLoading(false);
   };
@@ -157,7 +165,7 @@ export default function QuarterEarnings() {
       setScore(res.data.score);
       setHistory(res.data.history || []);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setError(apiError(err));
     }
     setLoading(false);
   };

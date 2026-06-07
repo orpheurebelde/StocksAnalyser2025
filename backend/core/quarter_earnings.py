@@ -8,7 +8,6 @@ from html.parser import HTMLParser
 from typing import Any
 
 import requests
-from pypdf import PdfReader
 
 from core.yfinance_client import get_ticker, get_ticker_info
 
@@ -124,6 +123,8 @@ def fetch_report_url(url: str) -> str:
 
 def extract_pdf_text(file_bytes: bytes) -> str:
     try:
+        from pypdf import PdfReader
+
         reader = PdfReader(io.BytesIO(file_bytes))
         pages = []
         for page in reader.pages:
@@ -140,12 +141,25 @@ def extract_pdf_text(file_bytes: bytes) -> str:
 
 def fetch_quarter_payload(ticker: str, source_url: str | None = None, manual_text: str | None = None) -> dict[str, Any]:
     symbol = ticker.upper().strip()
-    stock = get_ticker(symbol)
-    info = get_ticker_info(symbol) or {}
+    info = {}
+    quarterly_financials = None
+    quarterly_cashflow = None
+    quarterly_balance = None
 
-    quarterly_financials = getattr(stock, "quarterly_financials", None)
-    quarterly_cashflow = getattr(stock, "quarterly_cashflow", None)
-    quarterly_balance = getattr(stock, "quarterly_balance", None)
+    try:
+        info = get_ticker_info(symbol) or {}
+    except Exception:
+        info = {}
+
+    try:
+        stock = get_ticker(symbol)
+        quarterly_financials = getattr(stock, "quarterly_financials", None)
+        quarterly_cashflow = getattr(stock, "quarterly_cashflow", None)
+        quarterly_balance = getattr(stock, "quarterly_balance", None)
+    except Exception:
+        quarterly_financials = None
+        quarterly_cashflow = None
+        quarterly_balance = None
 
     metrics = {
         "revenue": _series_to_records(quarterly_financials.loc["Total Revenue"] if quarterly_financials is not None and "Total Revenue" in quarterly_financials.index else None),
