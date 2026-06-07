@@ -21,7 +21,17 @@ class AnalyzeRequest(BaseModel):
     model: str | None = None
 
 
-def build_prompt(report: dict, score: dict) -> str:
+def build_prompt(report: dict, score: dict, prior_reports: list[dict] | None = None) -> str:
+    prior_context = [
+        {
+            "id": item.get("id"),
+            "period": item.get("fiscal_quarter"),
+            "company": item.get("company_name"),
+            "metrics": item.get("metrics", {}),
+        }
+        for item in (prior_reports or [])[:4]
+        if item.get("id") != report.get("id")
+    ]
     return f"""
 You are the 10-Q Filing Analyst agent for StocksAnalyser2025.
 Interpret the uploaded 10-Q PDF using only supplied filing text and extracted filing metrics.
@@ -32,8 +42,9 @@ Required final structure:
 3. Financial statement interpretation: revenue, profit, operating income, net income, cash, assets, liabilities, operating cash flow.
 4. Risk and disclosure interpretation: material weakness, liquidity, impairment, going concern, restructuring, default, legal exposure.
 5. Score table in Markdown with Factor, Evidence from 10-Q, Score, Risk, Analyst view.
-6. Management discussion and future guidance if present in the filing text.
-7. Mistral/Groq analyst guidance: bullish case, bearish case, watchlist, conclusion.
+6. Quarter-to-quarter comparison using prior stored filings when available.
+7. Management discussion and future guidance if present in the filing text.
+8. Mistral/Groq analyst guidance: bullish case, bearish case, watchlist, conclusion.
 
 Company: {report.get("company_name")} ({report.get("ticker")})
 Quarter: {report.get("fiscal_quarter")}
@@ -44,6 +55,9 @@ Deterministic score:
 
 Extracted filing data:
 {json.dumps(report.get("metrics"), indent=2)}
+
+Prior stored 10-Q filings for comparison:
+{json.dumps(prior_context, indent=2)}
 
 10-Q filing text:
 {(report.get("report_text") or "No full web report text supplied.")[:25000]}
@@ -105,7 +119,7 @@ async def ingest_quarter_pdf(
         payload = build_pdf_payload(ticker, pdf_bytes, file.filename)
         saved = save_report(payload)
         saved["score"] = score_report(saved["metrics"])
-        saved["history"] = list_reports(ticker)
+        saved["history"] = [{**item, "score": score_report(item["metrics"])} for item in list_reports(ticker)]
         return saved
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -114,7 +128,11 @@ async def ingest_quarter_pdf(
 @router.get("/{ticker}/reports")
 @limiter.limit("20/minute")
 def reports(request: Request, ticker: str):
-    return {"ticker": ticker.upper(), "reports": list_reports(ticker)}
+    items = list_reports(ticker)
+    return {
+        "ticker": ticker.upper(),
+        "reports": [{**item, "score": score_report(item["metrics"])} for item in items],
+    }
 
 
 @router.post("/{report_id}/analyze")
@@ -125,7 +143,8 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
         raise HTTPException(status_code=404, detail="Quarter report not found.")
 
     score = score_report(report["metrics"])
-    prompt = build_prompt(report, score)
+    prior_reports = list_reports(report["ticker"])
+    prompt = build_prompt(report, score, prior_reports)
     try:
         provider = body.provider.lower()
         if provider == "groq":

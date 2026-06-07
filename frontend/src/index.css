@@ -231,7 +231,7 @@ button {
 
 .filing-controls {
   display: grid;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(260px, 1.5fr) minmax(120px, 0.7fr) auto auto;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(260px, 1.4fr) minmax(120px, 0.65fr) auto auto auto;
   gap: 1rem;
   align-items: center;
 }
@@ -284,6 +284,40 @@ button {
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-secondary);
+}
+
+.comparison-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.comparison-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.comparison-card strong {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.comparison-card small {
+  color: var(--text-secondary);
+}
+
+.table-action {
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
 .metric-card {

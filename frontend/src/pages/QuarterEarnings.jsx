@@ -4,6 +4,16 @@ import remarkGfm from 'remark-gfm';
 import { BarChart3, Brain, Database, FileUp, Landmark, RefreshCw, ShieldAlert } from 'lucide-react';
 import api from '../api';
 
+const statementKeys = [
+  ['revenue', 'Revenue'],
+  ['operating_income', 'Operating Income'],
+  ['net_income', 'Net Income'],
+  ['operating_cash_flow', 'Operating Cash Flow'],
+  ['cash', 'Cash'],
+  ['total_assets', 'Total Assets'],
+  ['total_liabilities', 'Total Liabilities'],
+];
+
 const money = (value) => {
   if (value === null || value === undefined) return 'N/A';
   const abs = Math.abs(value);
@@ -13,6 +23,11 @@ const money = (value) => {
 };
 
 const pct = (value) => (value === null || value === undefined ? 'N/A' : `${(value * 100).toFixed(1)}%`);
+
+const valueChange = (current, previous) => {
+  if (current === null || current === undefined || previous === null || previous === undefined || previous === 0) return null;
+  return (current - previous) / Math.abs(previous);
+};
 
 const apiError = (err) => {
   if (err.response?.data?.detail) return err.response.data.detail;
@@ -100,6 +115,41 @@ function FilingBoard({ report, score }) {
   );
 }
 
+function QuarterComparison({ report, history }) {
+  if (!report || history.length < 2) return null;
+  const previous = history.find((item) => item.id !== report.id);
+  if (!previous) return null;
+  const currentStatements = report.metrics?.statements || {};
+  const previousStatements = previous.metrics?.statements || {};
+  return (
+    <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+        <div>
+          <div className="metric-label">Stored Quarter Comparison</div>
+          <h3>{report.fiscal_quarter || 'Current filing'} vs {previous.fiscal_quarter || 'Previous filing'}</h3>
+        </div>
+        <div className="metric-label">Current score {report.score?.total ?? 'N/A'} | Previous score {previous.score?.total ?? 'N/A'}</div>
+      </div>
+      <div className="comparison-strip">
+        {statementKeys.map(([key, label]) => {
+          const current = currentStatements[key]?.current;
+          const prior = previousStatements[key]?.current;
+          const change = valueChange(current, prior);
+          const color = change === null ? 'var(--text-secondary)' : change >= 0 ? 'var(--status-green)' : 'var(--status-red)';
+          return (
+            <div className="comparison-card" key={key}>
+              <span className="metric-label">{label}</span>
+              <strong>{money(current)}</strong>
+              <span style={{ color }}>{pct(change)}</span>
+              <small>Prev filing: {money(prior)}</small>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function QuarterEarnings() {
   const [ticker, setTicker] = useState('AAPL');
   const [pdfFile, setPdfFile] = useState(null);
@@ -111,6 +161,28 @@ export default function QuarterEarnings() {
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const loadExisting = async () => {
+    setLoading(true);
+    setError('');
+    setAnalysis('');
+    try {
+      const res = await api.get(`/api/quarter-earnings/${ticker.toUpperCase()}/reports`);
+      const reports = res.data.reports || [];
+      setHistory(reports);
+      if (reports.length) {
+        setReport(reports[0]);
+        setScore(reports[0].score);
+      } else {
+        setReport(null);
+        setScore(null);
+        setError(`No stored 10-Q filings found for ${ticker.toUpperCase()}.`);
+      }
+    } catch (err) {
+      setError(apiError(err));
+    }
+    setLoading(false);
+  };
 
   const ingestPdf = async () => {
     if (!pdfFile) {
@@ -170,6 +242,9 @@ export default function QuarterEarnings() {
           <button className="btn-primary" onClick={ingestPdf} disabled={loading || !pdfFile}>
             <FileUp size={18} /> {loading ? 'Reading 10-Q...' : 'Load 10-Q PDF'}
           </button>
+          <button className="btn-primary" onClick={loadExisting} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-blue))' }}>
+            <RefreshCw size={18} /> {loading ? 'Loading...' : 'Load Existing'}
+          </button>
           <button className="btn-primary" onClick={analyze} disabled={!report || aiLoading} style={{ background: 'linear-gradient(135deg, var(--status-green), var(--accent-blue))' }}>
             <Brain size={18} /> {aiLoading ? 'Analyzing...' : `Analyze with ${provider}`}
           </button>
@@ -180,6 +255,7 @@ export default function QuarterEarnings() {
       {error && <p style={{ color: 'var(--status-red)', marginBottom: '2rem' }}>{error}</p>}
 
       <FilingBoard report={report} score={score} />
+      <QuarterComparison report={report} history={history} />
 
       {history.length > 0 && (
         <div className="glass-panel" style={{ marginBottom: '2rem' }}>
@@ -189,10 +265,17 @@ export default function QuarterEarnings() {
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="earnings-table">
-              <thead><tr><th>ID</th><th>Ticker</th><th>Period</th><th>Company</th><th>Created</th></tr></thead>
+              <thead><tr><th>ID</th><th>Ticker</th><th>Period</th><th>Score</th><th>Company</th><th>Action</th></tr></thead>
               <tbody>
                 {history.map((item) => (
-                  <tr key={item.id}><td>{item.id}</td><td>{item.ticker}</td><td>{item.fiscal_quarter || 'N/A'}</td><td>{item.company_name || 'N/A'}</td><td>{item.created_at}</td></tr>
+                  <tr key={item.id}>
+                    <td>{item.id}</td>
+                    <td>{item.ticker}</td>
+                    <td>{item.fiscal_quarter || 'N/A'}</td>
+                    <td>{item.score?.total ?? 'N/A'} / 100</td>
+                    <td>{item.company_name || 'N/A'}</td>
+                    <td><button className="table-action" onClick={() => { setReport(item); setScore(item.score); setAnalysis(''); }}>Open</button></td>
+                  </tr>
                 ))}
               </tbody>
             </table>
