@@ -1,4 +1,5 @@
 import json
+import io
 import os
 import re
 import sqlite3
@@ -7,6 +8,7 @@ from html.parser import HTMLParser
 from typing import Any
 
 import requests
+from pypdf import PdfReader
 
 from core.yfinance_client import get_ticker, get_ticker_info
 
@@ -118,6 +120,22 @@ def fetch_report_url(url: str) -> str:
         parser.feed(response.text)
         return parser.text()[:60000]
     return response.text[:60000]
+
+
+def extract_pdf_text(file_bytes: bytes) -> str:
+    try:
+        reader = PdfReader(io.BytesIO(file_bytes))
+        pages = []
+        for page in reader.pages:
+            pages.append(page.extract_text() or "")
+            if sum(len(text) for text in pages) >= 60000:
+                break
+        text = re.sub(r"\s+", " ", "\n".join(pages)).strip()
+    except Exception as exc:
+        raise RuntimeError("Could not read the PDF text. Try a text-selectable 10-Q PDF, not a scanned image PDF.") from exc
+    if not text:
+        raise RuntimeError("PDF loaded, but no selectable text was found. This looks like a scanned PDF.")
+    return text[:60000]
 
 
 def fetch_quarter_payload(ticker: str, source_url: str | None = None, manual_text: str | None = None) -> dict[str, Any]:

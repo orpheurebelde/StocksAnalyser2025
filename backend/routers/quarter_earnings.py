@@ -3,12 +3,12 @@ import os
 
 import requests
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.quarter_earnings import fetch_quarter_payload, get_report, list_reports, save_report, score_report
+from core.quarter_earnings import extract_pdf_text, fetch_quarter_payload, get_report, list_reports, save_report, score_report
 
 load_dotenv()
 
@@ -102,6 +102,29 @@ def call_groq(prompt: str, model: str | None):
 def ingest_quarter_report(request: Request, ticker: str, body: IngestRequest):
     try:
         payload = fetch_quarter_payload(ticker, body.source_url, body.manual_text)
+        saved = save_report(payload)
+        saved["score"] = score_report(saved["metrics"])
+        saved["history"] = list_reports(ticker)
+        return saved
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/{ticker}/ingest-pdf")
+@limiter.limit("6/minute")
+async def ingest_quarter_pdf(
+    request: Request,
+    ticker: str,
+    source_url: str | None = Form(default=None),
+    file: UploadFile = File(...),
+):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Upload a PDF 10-Q file.")
+    try:
+        pdf_bytes = await file.read()
+        report_text = extract_pdf_text(pdf_bytes)
+        payload = fetch_quarter_payload(ticker, source_url, report_text)
+        payload["source_type"] = "uploaded_10q_pdf"
         saved = save_report(payload)
         saved["score"] = score_report(saved["metrics"])
         saved["history"] = list_reports(ticker)

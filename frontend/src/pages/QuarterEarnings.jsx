@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Brain, Database, FileSearch, LineChart, RefreshCw } from 'lucide-react';
+import { Brain, Database, FileSearch, FileUp, LineChart, RefreshCw } from 'lucide-react';
 import api from '../api';
 
 const pct = (value) => (value === null || value === undefined ? 'N/A' : `${(value * 100).toFixed(1)}%`);
@@ -96,6 +96,7 @@ export default function QuarterEarnings() {
   const [ticker, setTicker] = useState('AAPL');
   const [sourceUrl, setSourceUrl] = useState('');
   const [manualText, setManualText] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
   const [provider, setProvider] = useState('mistral');
   const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
@@ -137,6 +138,30 @@ export default function QuarterEarnings() {
     setAiLoading(false);
   };
 
+  const ingestPdf = async () => {
+    if (!pdfFile) {
+      setError('Choose a 10-Q PDF first.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setAnalysis('');
+    try {
+      const formData = new FormData();
+      formData.append('file', pdfFile);
+      if (sourceUrl.trim()) formData.append('source_url', sourceUrl.trim());
+      const res = await api.post(`/api/quarter-earnings/${ticker.toUpperCase()}/ingest-pdf`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setReport(res.data);
+      setScore(res.data.score);
+      setHistory(res.data.history || []);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    }
+    setLoading(false);
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '2rem' }}>
@@ -170,6 +195,19 @@ export default function QuarterEarnings() {
         />
         <p className="metric-label" style={{ marginTop: '0.75rem' }}>
           Manual text wins over URL. Keep URL filled only as source reference when pasting content.
+        </p>
+        <div className="earnings-upload">
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+          />
+          <button className="btn-primary" onClick={ingestPdf} disabled={loading || !pdfFile} style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--status-green))' }}>
+            <FileUp size={18} /> {loading ? 'Reading PDF...' : 'Read PDF & Store'}
+          </button>
+        </div>
+        <p className="metric-label" style={{ marginTop: '0.75rem' }}>
+          PDF mode reads selectable 10-Q text locally in the backend. Scanned image PDFs need OCR first.
         </p>
       </div>
 

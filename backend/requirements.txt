@@ -10,3 +10,4 @@ numpy
 openpyxl
 python-dotenv
 python-multipart
+pypdf

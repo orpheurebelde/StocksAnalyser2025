@@ -221,6 +221,14 @@ button {
   color: var(--text-secondary);
 }
 
+.earnings-upload {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
 .metric-card {
   display: flex;
   flex-direction: column;
@@ -256,6 +264,7 @@ button {
   }
 
   .earnings-controls,
+  .earnings-upload,
   .grid-2 {
     grid-template-columns: 1fr;
   }
