@@ -95,6 +95,7 @@ function MetricEvolution({ metrics }) {
 export default function QuarterEarnings() {
   const [ticker, setTicker] = useState('AAPL');
   const [sourceUrl, setSourceUrl] = useState('');
+  const [manualText, setManualText] = useState('');
   const [provider, setProvider] = useState('mistral');
   const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
@@ -111,6 +112,7 @@ export default function QuarterEarnings() {
     try {
       const res = await api.post(`/api/quarter-earnings/${ticker.toUpperCase()}/ingest`, {
         source_url: sourceUrl.trim() || null,
+        manual_text: manualText.trim() || null,
       });
       setReport(res.data);
       setScore(res.data.score);
@@ -160,6 +162,15 @@ export default function QuarterEarnings() {
             <Brain size={18} /> {aiLoading ? 'Analyzing...' : `Analyze with ${provider}`}
           </button>
         </div>
+        <textarea
+          value={manualText}
+          onChange={(e) => setManualText(e.target.value)}
+          placeholder="Manual report text fallback: paste the earnings release, quarterly report, or transcript here when the website blocks network reading."
+          style={{ width: '100%', minHeight: '160px', marginTop: '1rem', background: 'rgba(0,0,0,0.3)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', fontFamily: 'var(--font-body)', resize: 'vertical' }}
+        />
+        <p className="metric-label" style={{ marginTop: '0.75rem' }}>
+          Manual text wins over URL. Keep URL filled only as source reference when pasting content.
+        </p>
       </div>
 
       {error && <p style={{ color: 'var(--status-red)', marginBottom: '2rem' }}>{error}</p>}

@@ -96,8 +96,22 @@ def _series_to_records(series, limit=8):
 
 
 def fetch_report_url(url: str) -> str:
-    response = requests.get(url, timeout=20, headers={"User-Agent": "StocksAnalyser2025/1.0"})
-    response.raise_for_status()
+    try:
+        response = requests.get(
+            url,
+            timeout=20,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; StocksAnalyser2025/1.0; +https://github.com/orpheurebelde/StocksAnalyser2025)",
+                "Accept": "text/html,application/xhtml+xml,application/xml,text/plain;q=0.9,*/*;q=0.8",
+            },
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            "Could not read that report URL from the backend. "
+            "The site may block automated requests, require login, or be unavailable. "
+            "Paste the report text into Manual report text and try again."
+        ) from exc
     content_type = response.headers.get("content-type", "")
     if "html" in content_type:
         parser = TextExtractor()
@@ -106,7 +120,7 @@ def fetch_report_url(url: str) -> str:
     return response.text[:60000]
 
 
-def fetch_quarter_payload(ticker: str, source_url: str | None = None) -> dict[str, Any]:
+def fetch_quarter_payload(ticker: str, source_url: str | None = None, manual_text: str | None = None) -> dict[str, Any]:
     symbol = ticker.upper().strip()
     stock = get_ticker(symbol)
     info = get_ticker_info(symbol) or {}
@@ -136,13 +150,15 @@ def fetch_quarter_payload(ticker: str, source_url: str | None = None) -> dict[st
     }
 
     latest_period = next((items[0]["period"] for items in metrics.values() if isinstance(items, list) and items), None)
-    report_text = fetch_report_url(source_url) if source_url else ""
+    clean_manual_text = (manual_text or "").strip()
+    report_text = clean_manual_text[:60000] if clean_manual_text else fetch_report_url(source_url) if source_url else ""
+    source_type = "manual_report_text" if clean_manual_text else "web_report" if source_url else "yfinance_quarterly_financials"
     return {
         "ticker": symbol,
         "fiscal_quarter": latest_period,
         "report_date": latest_period,
         "source_url": source_url,
-        "source_type": "web_report" if source_url else "yfinance_quarterly_financials",
+        "source_type": source_type,
         "company_name": info.get("shortName") or info.get("longName") or symbol,
         "sector": info.get("sector"),
         "industry": info.get("industry"),

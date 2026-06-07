@@ -89,7 +89,7 @@ h1, h2, h3, h4, h5, h6 {
   transform: scale(1.02);
 }
 
-input, select {
+input, select, textarea {
   background: rgba(0,0,0,0.3);
   border: 1px solid var(--border-color);
   color: white;
@@ -100,7 +100,7 @@ input, select {
   width: 100%;
 }
 
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent-cyan);
 }

@@ -18,6 +18,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 class IngestRequest(BaseModel):
     source_url: str | None = None
+    manual_text: str | None = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -100,7 +101,7 @@ def call_groq(prompt: str, model: str | None):
 @limiter.limit("6/minute")
 def ingest_quarter_report(request: Request, ticker: str, body: IngestRequest):
     try:
-        payload = fetch_quarter_payload(ticker, body.source_url)
+        payload = fetch_quarter_payload(ticker, body.source_url, body.manual_text)
         saved = save_report(payload)
         saved["score"] = score_report(saved["metrics"])
         saved["history"] = list_reports(ticker)
