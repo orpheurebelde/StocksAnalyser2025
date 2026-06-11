@@ -13,6 +13,7 @@ POSTGRES_ENV_NAMES = ("DATABASE_URL", "POSTGRES_URL")
 POSTGRES_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 DB_PATH = os.getenv(DB_ENV_NAME) or os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
 MAX_TEXT_CHARS = 90000
+FINANCIAL_NUMBER_RE = re.compile(r"\(?-?\$?\s*\d[\d,]*(?:\.\d+)?\)?")
 
 try:
     import psycopg
@@ -170,9 +171,12 @@ def _clean_pdf_text(text: str) -> str:
 def _safe_number(raw: str | None) -> float | None:
     if not raw:
         return None
-    value = raw.replace(",", "").replace("$", "").strip()
+    value = raw.replace(",", "").replace("$", "").replace(" ", "").strip()
     negative = value.startswith("(") and value.endswith(")")
     value = value.strip("()")
+    if value.startswith("-"):
+        negative = True
+        value = value[1:]
     try:
         parsed = float(value)
     except ValueError:
@@ -257,38 +261,73 @@ def _label_regex(label: str) -> str:
 
 def _extract_line_item(text: str, labels: list[str]) -> dict[str, Any]:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    windows = lines + [f"{lines[idx]} {lines[idx + 1]}" for idx in range(len(lines) - 1)]
     for label in labels:
-        flexible_label = re.escape(label).replace(r"\ ", r"\s+")
         line_pattern = re.compile(_label_regex(label), re.I)
-        for line in windows:
+        for line_index, line in enumerate(lines):
             match = line_pattern.search(line)
             if not match:
                 continue
             fragment = line[match.end():]
             tokens = _number_tokens(fragment)
+            if len(tokens) < 2 and line_index + 1 < len(lines):
+                tokens = tokens + _number_tokens(lines[line_index + 1])
             if not tokens:
                 continue
             current = _safe_number(tokens[0])
             prior = _safe_number(tokens[1]) if len(tokens) > 1 else None
             if current is not None:
+                scale = _statement_scale(lines, line_index)
                 return {
                     "label": label,
-                    "current": current,
-                    "prior": prior,
+                    "current": current * scale,
+                    "prior": prior * scale if prior is not None else None,
+                    "growth": _growth(current * scale, prior * scale if prior is not None else None),
                     "confidence": "high_line_match" if len(tokens) > 1 else "medium_single_value",
+                    "scale": scale,
                 }
 
+    flat_text = _clean_text(text)
+    for label in labels:
+        flexible_label = re.escape(label).replace(r"\ ", r"\s+")
         pattern = rf"{flexible_label}\s+\$?\(?([\d,]+(?:\.\d+)?)\)?\s+\$?\(?([\d,]+(?:\.\d+)?)\)?"
-        match = re.search(pattern, _clean_text(text), re.I)
+        match = re.search(pattern, flat_text, re.I)
         if match:
+            current = _safe_number(match.group(1))
+            prior = _safe_number(match.group(2))
             return {
                 "label": label,
-                "current": _safe_number(match.group(1)),
-                "prior": _safe_number(match.group(2)),
-                "confidence": "medium",
+                "current": current,
+                "prior": prior,
+                "growth": _growth(current, prior),
+                "confidence": "low_flat_match",
             }
     return {"label": labels[0], "current": None, "prior": None, "confidence": "missing"}
+
+
+def _financial_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.replace("\r", "\n").split("\n") if line.strip()]
+
+
+def _line_has_label(line: str, label: str) -> bool:
+    normalized_line = re.sub(r"\s+", " ", line).lower()
+    normalized_label = re.sub(r"\s+", " ", label).lower()
+    return normalized_line.startswith(normalized_label) or re.search(rf"\b{re.escape(normalized_label)}\b", normalized_line) is not None
+
+
+def _numbers_after_label(line: str, label: str) -> list[str]:
+    match = re.search(re.escape(label).replace(r"\ ", r"\s+"), line, re.I)
+    search_area = line[match.end():] if match else line
+    return FINANCIAL_NUMBER_RE.findall(search_area)
+
+
+def _statement_scale(lines: list[str], line_index: int) -> int:
+    context_start = max(0, line_index - 12)
+    context = " ".join(lines[context_start:line_index + 1]).lower()
+    if re.search(r"\bin\s+millions\b|amounts\s+in\s+millions|dollars\s+in\s+millions", context):
+        return 1_000_000
+    if re.search(r"\bin\s+thousands\b|amounts\s+in\s+thousands|dollars\s+in\s+thousands", context):
+        return 1_000
+    return 1
 
 
 def _calculate_operating_cash_flow_from_10q(text: str) -> dict[str, Any] | None:
@@ -469,6 +508,53 @@ def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
                 conn.execute(f"UPDATE quarter_reports SET metrics_json = {ph} WHERE id = {ph}", (json.dumps(metrics), report_id))
                 changed += 1
     return changed
+
+
+def reprocess_stored_reports(ticker: str | None = None) -> dict[str, int]:
+    init_db()
+    ph = _placeholder()
+    query = """
+        SELECT id, ticker, source_url, report_text
+        FROM quarter_reports
+        WHERE report_text IS NOT NULL AND report_text != ''
+        ORDER BY id DESC
+    """
+    params: tuple[Any, ...] = ()
+    if ticker:
+        query = """
+            SELECT id, ticker, source_url, report_text
+            FROM quarter_reports
+            WHERE ticker = {ph} AND report_text IS NOT NULL AND report_text != ''
+            ORDER BY id DESC
+        """.format(ph=ph)
+        params = (ticker.upper(),)
+    updated = 0
+    skipped = 0
+    with _connect() as conn:
+        rows = conn.execute(query, params).fetchall()
+        for report_id, row_ticker, source_url, report_text in rows:
+            try:
+                metrics = extract_10q_data(row_ticker, report_text, source_url)
+            except Exception:
+                skipped += 1
+                continue
+            conn.execute(
+                f"""
+                UPDATE quarter_reports
+                SET ticker = {ph}, fiscal_quarter = {ph}, report_date = {ph}, company_name = {ph}, metrics_json = {ph}
+                WHERE id = {ph}
+                """,
+                (
+                    metrics.get("ticker") or row_ticker,
+                    metrics.get("fiscal_quarter"),
+                    metrics.get("report_date"),
+                    metrics.get("company_name") or row_ticker,
+                    json.dumps(metrics),
+                    report_id,
+                ),
+            )
+            updated += 1
+    return {"updated_reports": updated, "skipped_reports": skipped}
 
 
 def extract_10q_data(ticker: str, report_text: str, filename: str | None = None) -> dict[str, Any]:
