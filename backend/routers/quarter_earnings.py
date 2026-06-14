@@ -26,6 +26,7 @@ load_dotenv()
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+MAX_GROQ_DRAFT_CHARS = 6000
 
 
 def attach_evolution_scores(items: list[dict]) -> list[dict]:
@@ -132,22 +133,48 @@ Data:
 
 
 def build_unified_optimization_prompt(report: dict, score: dict, prior_reports: list[dict] | None, mistral_analysis: str) -> str:
+    statements = report.get("metrics", {}).get("statements", {})
+    compact_statements = {
+        key: {
+            "current": value.get("current"),
+            "prior": value.get("prior"),
+            "growth": value.get("growth"),
+            "confidence": value.get("confidence"),
+        }
+        for key, value in statements.items()
+        if key in {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow", "cash", "total_assets", "total_liabilities"}
+    }
     compact = {
         "company": report.get("company_name"),
         "ticker": report.get("ticker"),
         "quarter": report.get("fiscal_quarter"),
-        "score": score,
-        "statements": report.get("metrics", {}).get("statements", {}),
+        "score": {
+            "total": score.get("total"),
+            "label": score.get("label"),
+            "suggestion": score.get("suggestion"),
+            "confidence": score.get("confidence"),
+            "rows": score.get("rows"),
+        },
+        "statements": compact_statements,
         "prior_filings": [
             {
                 "id": item.get("id"),
                 "period": item.get("fiscal_quarter"),
-                "statements": item.get("metrics", {}).get("statements", {}),
+                "statements": {
+                    key: {
+                        "current": value.get("current"),
+                        "growth": value.get("growth"),
+                        "confidence": value.get("confidence"),
+                    }
+                    for key, value in item.get("metrics", {}).get("statements", {}).items()
+                    if key in {"revenue", "operating_income", "net_income", "operating_cash_flow"}
+                },
             }
-            for item in (prior_reports or [])[:4]
+            for item in (prior_reports or [])[:3]
             if item.get("id") != report.get("id")
         ],
     }
+    draft = mistral_analysis[:MAX_GROQ_DRAFT_CHARS]
     return f"""
 You are the final optimizer for a quarter earnings AI analysis.
 Use the SEC/XBRL dataset as the source of truth. Review the Mistral draft, correct weak reasoning, remove unsupported claims, and return one unified analyst report.
@@ -171,8 +198,8 @@ Strict guardrail:
 SEC/XBRL dataset:
 {json.dumps(compact, indent=2)}
 
-Mistral draft:
-{mistral_analysis}
+Mistral draft excerpt:
+{draft}
 """.strip()
 
 
@@ -208,7 +235,7 @@ def call_groq(prompt: str, model: str | None):
             "model": selected,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.35,
-            "max_tokens": 8000,
+            "max_tokens": 4000,
         },
         timeout=90,
     )
