@@ -227,7 +227,7 @@ export default function QuarterEarnings() {
   const [availableTickers, setAvailableTickers] = useState([]);
   const [dbStatus, setDbStatus] = useState(null);
   const [secTicker, setSecTicker] = useState('ZS');
-  const [secMode, setSecMode] = useState('last_4_quarters');
+  const [secMode, setSecMode] = useState('last_8_quarters');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -439,6 +439,9 @@ export default function QuarterEarnings() {
           </div>
           <select value={secMode} onChange={(e) => setSecMode(e.target.value)}>
             <option value="last_4_quarters">Last 4 quarters</option>
+            <option value="last_8_quarters">Last 8 quarters</option>
+            <option value="last_12_quarters">Last 12 quarters</option>
+            <option value="all_available_quarters">All available quarters</option>
             <option value="last_quarter">Last quarter</option>
             <option value="this_year_quarters">This year quarters</option>
             <option value="last_year_quarters">Last year quarters</option>
@@ -488,12 +491,13 @@ export default function QuarterEarnings() {
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="earnings-table">
-              <thead><tr><th>ID</th><th>Ticker</th><th>Period</th><th>Score</th><th>Company</th><th>Action</th></tr></thead>
+              <thead><tr><th>ID</th><th>Ticker</th><th>Form</th><th>Period</th><th>Score</th><th>Company</th><th>Action</th></tr></thead>
               <tbody>
                 {visibleHistory.map((item) => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td>{item.ticker}</td>
+                    <td>{item.metrics?.form_type || 'N/A'}</td>
                     <td>{item.fiscal_quarter || 'N/A'}</td>
                     <td>{item.score?.total ?? 'N/A'} / 100</td>
                     <td>{item.company_name || 'N/A'}</td>

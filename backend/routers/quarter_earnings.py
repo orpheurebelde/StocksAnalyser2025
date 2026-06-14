@@ -13,6 +13,7 @@ from core.quarter_earnings import (
     delete_all_reports,
     get_db_status,
     get_report,
+    get_sec_filing_text,
     import_sec_filings,
     list_all_reports,
     list_reports,
@@ -27,6 +28,14 @@ load_dotenv()
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 MAX_GROQ_DRAFT_CHARS = 6000
+MAX_CONCERN_CONTEXT_CHARS = 9000
+CONCERN_TERMS = {
+    "Revenue Trend": ["revenue", "customers", "billings", "remaining performance obligations", "deferred revenue"],
+    "Gross Profit Trend": ["gross profit", "cost of revenue", "gross margin"],
+    "Operating Income Trend": ["loss from operations", "operating income", "operating expenses", "sales and marketing", "research and development"],
+    "Net Income Trend": ["net loss", "net income", "income taxes", "interest expense", "other income"],
+    "Operating Cash Flow Trend": ["operating activities", "accounts receivable", "deferred revenue", "deferred contract acquisition costs"],
+}
 
 
 def attach_evolution_scores(items: list[dict]) -> list[dict]:
@@ -55,7 +64,60 @@ class SecImportRequest(BaseModel):
     mode: str = "last_4_quarters"
 
 
-def build_prompt(report: dict, score: dict, prior_reports: list[dict] | None = None) -> str:
+def _snippet(text: str, term: str, radius: int = 700) -> str | None:
+    lower = text.lower()
+    index = lower.find(term.lower())
+    if index < 0:
+        return None
+    start = max(0, index - radius)
+    end = min(len(text), index + len(term) + radius)
+    return text[start:end].strip()
+
+
+def build_concern_review(report: dict, score: dict) -> dict:
+    rows = score.get("rows", [])
+    confidence = score.get("confidence", {})
+    flagged_rows = [
+        row for row in rows
+        if row.get("factor") != "Risk Language"
+        and (row.get("verdict") in {"Weak", "Needs review"} or (isinstance(row.get("value"), (int, float)) and row.get("value") < -0.1))
+    ]
+    if confidence.get("score", 100) < 80:
+        flagged_rows.append({"factor": "Data Confidence", "value": confidence.get("score"), "verdict": confidence.get("level")})
+
+    metrics = report.get("metrics", {})
+    xbrl = metrics.get("xbrl") or {}
+    accession = metrics.get("accession") or xbrl.get("accession")
+    cik = xbrl.get("cik")
+    text = report.get("report_text") or ""
+    sec_text = get_sec_filing_text(cik, accession)
+    if sec_text:
+        text = sec_text
+
+    snippets = []
+    seen = set()
+    for row in flagged_rows:
+        factor = row.get("factor")
+        terms = CONCERN_TERMS.get(factor, [str(factor or "")])
+        for term in terms:
+            found = _snippet(text, term)
+            if found and found not in seen:
+                snippets.append({"factor": factor, "term": term, "excerpt": found})
+                seen.add(found)
+                break
+    context = json.dumps({"flagged_rows": flagged_rows, "snippets": snippets[:8]}, indent=2)
+    return {
+        "has_concerns": bool(flagged_rows),
+        "source": "sec_archive" if sec_text else "stored_report_text",
+        "accession": accession,
+        "cik": cik,
+        "flagged_rows": flagged_rows,
+        "snippets": snippets[:8],
+        "context": context[:MAX_CONCERN_CONTEXT_CHARS],
+    }
+
+
+def build_prompt(report: dict, score: dict, prior_reports: list[dict] | None = None, concern_review: dict | None = None) -> str:
     prior_context = [
         {
             "id": item.get("id"),
@@ -85,6 +147,7 @@ Rating guardrail:
 - Treat deterministic score and confidence as source of truth.
 - If confidence.level is Low, final action must be HOLD / REVIEW, never BUY or SELL.
 - If confidence.score is below 70, state that manual review is required before any trade action.
+- If concern review has flagged_rows, analyze those SEC excerpts before giving rating. Do not ignore weak score board items.
 
 Company: {report.get("company_name")} ({report.get("ticker")})
 Quarter: {report.get("fiscal_quarter")}
@@ -98,6 +161,9 @@ Extracted filing data:
 
 Prior stored 10-Q filings for comparison:
 {json.dumps(prior_context, indent=2)}
+
+Concern review from latest SEC filing:
+{(concern_review or {}).get("context", "No score-board concerns detected.")}
 
 10-Q filing text:
 {(report.get("report_text") or "No full web report text supplied.")[:25000]}
@@ -140,7 +206,7 @@ Data:
 """.strip()
 
 
-def build_unified_optimization_prompt(report: dict, score: dict, prior_reports: list[dict] | None, mistral_analysis: str) -> str:
+def build_unified_optimization_prompt(report: dict, score: dict, prior_reports: list[dict] | None, mistral_analysis: str, concern_review: dict | None = None) -> str:
     statements = report.get("metrics", {}).get("statements", {})
     compact_statements = {
         key: {
@@ -202,9 +268,13 @@ Strict guardrail:
 - SEC/XBRL data and deterministic score override Mistral draft.
 - Never upgrade to BUY/STRONG BUY when confidence.score < 70.
 - Never issue a high-conviction rating without naming the specific metrics that support it.
+- If concern review has flagged_rows, discuss each flagged factor and use those SEC excerpts to moderate rating.
 
 SEC/XBRL dataset:
 {json.dumps(compact, indent=2)}
+
+Concern review:
+{(concern_review or {}).get("context", "No score-board concerns detected.")}
 
 Mistral draft excerpt:
 {draft}
@@ -310,7 +380,16 @@ def reprocess_reports(request: Request, ticker: str | None = None):
 @router.post("/sec/import")
 @limiter.limit("4/minute")
 def import_from_sec(request: Request, body: SecImportRequest):
-    allowed_modes = {"last_quarter", "last_4_quarters", "this_year_quarters", "last_year_quarters", "last_4_quarters_plus_10k"}
+    allowed_modes = {
+        "last_quarter",
+        "last_4_quarters",
+        "last_8_quarters",
+        "last_12_quarters",
+        "all_available_quarters",
+        "this_year_quarters",
+        "last_year_quarters",
+        "last_4_quarters_plus_10k",
+    }
     if body.mode not in allowed_modes:
         raise HTTPException(status_code=400, detail="Invalid SEC import mode.")
     try:
@@ -361,10 +440,11 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
         None,
     ) if current_index >= 0 else None
     score = score_report(report["metrics"], previous["metrics"] if previous else None)
+    concern_review = build_concern_review(report, score)
     try:
-        mistral_prompt = build_prompt(report, score, prior_reports)
+        mistral_prompt = build_prompt(report, score, prior_reports, concern_review)
         mistral_analysis, mistral_model = call_mistral(mistral_prompt, body.model)
-        groq_prompt = build_unified_optimization_prompt(report, score, prior_reports, mistral_analysis)
+        groq_prompt = build_unified_optimization_prompt(report, score, prior_reports, mistral_analysis, concern_review)
         unified_analysis, groq_model = call_groq(groq_prompt, None)
         return {
             "report": report,
@@ -374,6 +454,7 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
             "model": {"mistral": mistral_model, "groq": groq_model},
             "prompt": {"mistral": mistral_prompt, "groq": groq_prompt},
             "mistral_draft": mistral_analysis,
+            "concern_review": concern_review,
         }
     except HTTPException:
         raise

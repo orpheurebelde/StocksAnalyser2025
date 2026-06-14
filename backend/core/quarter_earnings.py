@@ -845,6 +845,12 @@ def _select_sec_filings(rows: list[dict[str, Any]], mode: str) -> list[dict[str,
     quarter_rows = [item for item in rows if item["form"] == "10-Q"]
     if mode == "last_quarter":
         return quarter_rows[:1]
+    if mode == "last_8_quarters":
+        return quarter_rows[:8]
+    if mode == "last_12_quarters":
+        return quarter_rows[:12]
+    if mode == "all_available_quarters":
+        return quarter_rows[:20]
     if mode == "this_year_quarters":
         latest_year = quarter_rows[0]["report_date"][:4] if quarter_rows else ""
         return [item for item in quarter_rows if item["report_date"].startswith(latest_year)][:4]
@@ -866,6 +872,12 @@ def _filing_archive_text(cik: str, accession: str) -> str:
     url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{compact_accession}/{accession}.txt"
     text = _sec_get_text(url) or ""
     return _clean_pdf_text(text)[:MAX_TEXT_CHARS]
+
+
+def get_sec_filing_text(cik: str | None, accession: str | None) -> str:
+    if not cik or not accession:
+        return ""
+    return _filing_archive_text(cik, accession)
 
 
 def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any], filing: dict[str, Any]) -> dict[str, Any]:
