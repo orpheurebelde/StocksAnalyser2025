@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sqlite3
+import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
@@ -14,6 +15,16 @@ POSTGRES_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 DB_PATH = os.getenv(DB_ENV_NAME) or os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
 MAX_TEXT_CHARS = 90000
 FINANCIAL_NUMBER_RE = re.compile(r"\(?-?\$?\s*\d[\d,]*(?:\.\d+)?\)?")
+SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "StocksAnalyser2025 quarter-earnings contact@example.com")
+XBRL_TAGS = {
+    "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues"],
+    "operating_income": ["OperatingIncomeLoss"],
+    "net_income": ["NetIncomeLoss"],
+    "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
+    "cash": ["CashAndCashEquivalentsAtCarryingValue"],
+    "total_assets": ["Assets"],
+    "total_liabilities": ["Liabilities"],
+}
 
 try:
     import psycopg
@@ -246,6 +257,173 @@ def _extract_period(text: str) -> dict[str, str | None]:
     return {
         "fiscal_quarter": period_match.group(1) if period_match else None,
         "report_date": period_match.group(1) if period_match else report_match.group(1) if report_match else None,
+    }
+
+
+def _extract_accession(filename: str | None, text: str) -> str | None:
+    source = f"{filename or ''} {text[:5000]}"
+    match = re.search(r"(?<!\d)(\d{10})-(\d{2})-(\d{6})(?!\d)", source)
+    if match:
+        return "-".join(match.groups())
+    compact = re.search(r"(?<!\d)(\d{10})(\d{2})(\d{6})(?!\d)", source)
+    if compact:
+        return f"{compact.group(1)}-{compact.group(2)}-{compact.group(3)}"
+    return None
+
+
+def _cik_from_accession(accession: str | None) -> str | None:
+    if not accession:
+        return None
+    cik = accession.split("-")[0].lstrip("0")
+    return cik or None
+
+
+def _date_iso(value: str | None) -> str | None:
+    parsed = _parse_period_date(value)
+    return parsed.strftime("%Y-%m-%d") if parsed else None
+
+
+def _load_sec_companyfacts(cik: str) -> dict[str, Any] | None:
+    padded = cik.zfill(10)
+    url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{padded}.json"
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": SEC_USER_AGENT, "Accept-Encoding": "identity"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _cik_from_ticker(ticker: str | None) -> str | None:
+    if not ticker or ticker == "UNKNOWN":
+        return None
+    try:
+        request = urllib.request.Request(
+            "https://www.sec.gov/files/company_tickers.json",
+            headers={"User-Agent": SEC_USER_AGENT, "Accept-Encoding": "identity"},
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+    target = ticker.upper()
+    for item in data.values():
+        if str(item.get("ticker", "")).upper() == target:
+            return str(item.get("cik_str"))
+    return None
+
+
+def _find_accession_for_period(companyfacts: dict[str, Any], report_date: str | None) -> str | None:
+    if not report_date:
+        return None
+    counts: dict[str, int] = {}
+    for tags in XBRL_TAGS.values():
+        for tag in tags:
+            fact = companyfacts.get("facts", {}).get("us-gaap", {}).get(tag)
+            if not fact:
+                continue
+            for unit_rows in fact.get("units", {}).values():
+                for row in unit_rows:
+                    if row.get("form") == "10-Q" and row.get("end") == report_date and row.get("accn"):
+                        counts[row["accn"]] = counts.get(row["accn"], 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda item: (item[1], item[0]))[0]
+
+
+def _xbrl_facts_for_tag(companyfacts: dict[str, Any], tag: str, accession: str) -> list[dict[str, Any]]:
+    fact = companyfacts.get("facts", {}).get("us-gaap", {}).get(tag)
+    if not fact:
+        return []
+    rows = []
+    for unit_rows in fact.get("units", {}).values():
+        rows.extend(row for row in unit_rows if row.get("accn") == accession and row.get("val") is not None)
+    return rows
+
+
+def _duration_days(row: dict[str, Any]) -> int | None:
+    if not row.get("start") or not row.get("end"):
+        return None
+    try:
+        return (datetime.fromisoformat(row["end"]) - datetime.fromisoformat(row["start"])).days
+    except ValueError:
+        return None
+
+
+def _select_xbrl_current(rows: list[dict[str, Any]], report_date: str | None, prefer_longest: bool) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    ended = [row for row in rows if row.get("end") == report_date] if report_date else rows
+    candidates = ended or rows
+    duration_rows = [(row, _duration_days(row)) for row in candidates if _duration_days(row) is not None]
+    if duration_rows:
+        key = (lambda item: item[1]) if prefer_longest else (lambda item: -item[1])
+        return max(duration_rows, key=key)[0]
+    instant_rows = [row for row in candidates if not row.get("start")]
+    return instant_rows[-1] if instant_rows else candidates[-1]
+
+
+def _select_xbrl_prior(rows: list[dict[str, Any]], current: dict[str, Any], prefer_longest: bool) -> dict[str, Any] | None:
+    current_end = current.get("end")
+    current_days = _duration_days(current)
+    prior_rows = [row for row in rows if row is not current and row.get("end") != current_end]
+    if not prior_rows:
+        return None
+    if current_days is None:
+        before = [row for row in prior_rows if row.get("end") and current_end and row["end"] < current_end]
+        return max(before, key=lambda row: row["end"]) if before else prior_rows[-1]
+    candidates = [(row, _duration_days(row)) for row in prior_rows if _duration_days(row) is not None]
+    if candidates:
+        same_profile = [item for item in candidates if (item[1] >= 180) == prefer_longest]
+        pool = same_profile or candidates
+        return min(pool, key=lambda item: (abs(item[1] - current_days), item[0].get("end", "")))[0]
+    return None
+
+
+def _xbrl_item(companyfacts: dict[str, Any], accession: str, key: str, report_date: str | None) -> dict[str, Any] | None:
+    prefer_longest = key == "operating_cash_flow"
+    for tag in XBRL_TAGS[key]:
+        rows = _xbrl_facts_for_tag(companyfacts, tag, accession)
+        current = _select_xbrl_current(rows, report_date, prefer_longest)
+        if not current:
+            continue
+        prior = _select_xbrl_prior(rows, current, prefer_longest)
+        current_value = float(current["val"])
+        prior_value = float(prior["val"]) if prior else None
+        return {
+            "label": tag,
+            "current": current_value,
+            "prior": prior_value,
+            "growth": _growth(current_value, prior_value),
+            "confidence": "xbrl_sec_companyfacts",
+            "accession": accession,
+            "xbrl_end": current.get("end"),
+            "xbrl_start": current.get("start"),
+        }
+    return None
+
+
+def _xbrl_statements(accession: str | None, ticker: str | None, report_date: str | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    cik = _cik_from_accession(accession) or _cik_from_ticker(ticker)
+    if not cik:
+        return {}, None
+    companyfacts = _load_sec_companyfacts(cik)
+    if not companyfacts:
+        return {}, {"accession": accession, "cik": cik, "available": False}
+    report_date_iso = _date_iso(report_date)
+    accession = accession or _find_accession_for_period(companyfacts, report_date_iso)
+    if not accession:
+        return {}, {"accession": None, "cik": cik, "available": False, "source": "sec_companyfacts"}
+    statements = {}
+    for key in XBRL_TAGS:
+        item = _xbrl_item(companyfacts, accession, key, report_date_iso)
+        if item:
+            statements[key] = item
+    return statements, {
+        "accession": accession,
+        "cik": cik,
+        "available": bool(statements),
+        "source": "sec_companyfacts",
     }
 
 
@@ -562,6 +740,7 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
     search_text = _clean_text(report_text)
     extracted_ticker = _extract_ticker(search_text, filename, ticker)
     period = _extract_period(search_text)
+    accession = _extract_accession(filename, search_text)
     statements = {
         "revenue": _extract_line_item(text, ["Total revenues", "Total revenue", "Revenue", "Net sales", "Net revenue", "Revenues"]),
         "gross_profit": _extract_line_item(text, ["Gross profit", "Gross margin"]),
@@ -586,6 +765,10 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
     metrics_holder = {"statements": statements}
     metrics_holder, _ = enrich_missing_operating_cash_flow(metrics_holder, extracted_ticker, period["report_date"])
     statements = metrics_holder["statements"]
+    xbrl_statements, xbrl_meta = _xbrl_statements(accession, extracted_ticker, period["report_date"])
+    if xbrl_meta and xbrl_meta.get("accession"):
+        accession = xbrl_meta["accession"]
+    statements.update(xbrl_statements)
 
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
@@ -599,6 +782,8 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
         "ticker": extracted_ticker,
         "fiscal_quarter": period["fiscal_quarter"],
         "report_date": period["report_date"],
+        "accession": accession,
+        "xbrl": xbrl_meta,
         "statements": statements,
         "risk_terms": risk_hits,
         "text_stats": {
