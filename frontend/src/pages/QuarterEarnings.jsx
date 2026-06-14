@@ -36,6 +36,12 @@ const periodTime = (item) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const formGroup = (item) => {
+  const form = item?.metrics?.form_type || '';
+  if (form.startsWith('10-Q') || form.startsWith('10-K (Q4 derived)')) return 'quarter';
+  return form;
+};
+
 const apiError = (err) => {
   if (err.response?.data?.detail) return err.response.data.detail;
   if (err.message === 'Network Error') return 'Network Error: backend did not return a readable response. Check Render deploy/logs.';
@@ -125,9 +131,9 @@ function FilingBoard({ report, score }) {
 
 function QuarterComparison({ report, history }) {
   if (!report || history.length < 2) return null;
-  const reportForm = report.metrics?.form_type;
+  const reportForm = formGroup(report);
   const sameTicker = history
-    .filter((item) => item.ticker === report.ticker && item.metrics?.form_type === reportForm)
+    .filter((item) => item.ticker === report.ticker && formGroup(item) === reportForm)
     .slice()
     .sort((a, b) => periodTime(b) - periodTime(a));
   const currentIndex = sameTicker.findIndex((item) => item.id === report.id);

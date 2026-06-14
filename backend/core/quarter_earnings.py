@@ -27,6 +27,7 @@ XBRL_TAGS = {
     "total_liabilities": ["Liabilities"],
 }
 SEC_FORMS = {"10-Q", "10-K"}
+FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow"}
 
 try:
     import psycopg
@@ -343,6 +344,16 @@ def _xbrl_facts_for_tag(companyfacts: dict[str, Any], tag: str, accession: str) 
     return rows
 
 
+def _xbrl_facts_all_accessions(companyfacts: dict[str, Any], tag: str) -> list[dict[str, Any]]:
+    fact = companyfacts.get("facts", {}).get("us-gaap", {}).get(tag)
+    if not fact:
+        return []
+    rows = []
+    for unit_rows in fact.get("units", {}).values():
+        rows.extend(row for row in unit_rows if row.get("val") is not None)
+    return rows
+
+
 def _duration_days(row: dict[str, Any]) -> int | None:
     if not row.get("start") or not row.get("end"):
         return None
@@ -350,6 +361,66 @@ def _duration_days(row: dict[str, Any]) -> int | None:
         return (datetime.fromisoformat(row["end"]) - datetime.fromisoformat(row["start"])).days
     except ValueError:
         return None
+
+
+def _derive_10k_q4_statements(companyfacts: dict[str, Any], statements: dict[str, Any]) -> dict[str, Any]:
+    updated = dict(statements)
+    for key in FLOW_STATEMENT_KEYS:
+        item = statements.get(key)
+        if not item or item.get("current") is None or not item.get("xbrl_start") or not item.get("xbrl_end"):
+            continue
+        annual_start = item["xbrl_start"]
+        annual_end = item["xbrl_end"]
+        annual_days = _duration_days({"start": annual_start, "end": annual_end})
+        if annual_days is None or annual_days < 300:
+            continue
+        tag = item.get("label")
+        if not tag:
+            continue
+        all_rows = _xbrl_facts_all_accessions(companyfacts, tag)
+        q3_candidates = [
+            row for row in all_rows
+            if row.get("form") == "10-Q"
+            and row.get("start") == annual_start
+            and row.get("end")
+            and row["end"] < annual_end
+            and _duration_days(row) is not None
+            and _duration_days(row) >= 180
+        ]
+        if not q3_candidates:
+            continue
+        q3_row = max(q3_candidates, key=lambda row: row["end"])
+        current = float(item["current"]) - float(q3_row["val"])
+
+        prior = None
+        prior_annual = _select_xbrl_prior(all_rows, {"start": annual_start, "end": annual_end, "val": item["current"]}, True)
+        if prior_annual and prior_annual.get("start") and prior_annual.get("end"):
+            prior_q3_candidates = [
+                row for row in all_rows
+                if row.get("form") == "10-Q"
+                and row.get("start") == prior_annual.get("start")
+                and row.get("end")
+                and row["end"] < prior_annual.get("end")
+                and _duration_days(row) is not None
+                and _duration_days(row) >= 180
+            ]
+            if prior_q3_candidates:
+                prior_q3_row = max(prior_q3_candidates, key=lambda row: row["end"])
+                prior = float(prior_annual["val"]) - float(prior_q3_row["val"])
+
+        updated[key] = {
+            **item,
+            "current": current,
+            "prior": prior,
+            "growth": _growth(current, prior),
+            "confidence": "xbrl_sec_companyfacts_q4_derived",
+            "derived_from": "10-K FY value minus latest 10-Q YTD value",
+            "xbrl_start": q3_row["end"],
+            "xbrl_end": annual_end,
+            "annual_value": item["current"],
+            "ytd_subtracted": float(q3_row["val"]),
+        }
+    return updated
 
 
 def _select_xbrl_current(rows: list[dict[str, Any]], report_date: str | None, prefer_longest: bool) -> dict[str, Any] | None:
@@ -889,6 +960,8 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
         item = _xbrl_item(companyfacts, accession, key, report_date)
         if item:
             statements[key] = item
+    if filing["form"] == "10-K":
+        statements = _derive_10k_q4_statements(companyfacts, statements)
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
 
@@ -899,7 +972,7 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
     source_url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}/{filing.get('primary_document') or ''}"
     metrics = {
         "filename": filing.get("primary_document") or accession,
-        "form_type": filing["form"],
+        "form_type": "10-K (Q4 derived)" if filing["form"] == "10-K" else filing["form"],
         "company_name": company_name,
         "ticker": ticker.upper(),
         "fiscal_quarter": report_date,

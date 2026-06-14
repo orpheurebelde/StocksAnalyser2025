@@ -41,17 +41,24 @@ CONCERN_TERMS = {
 def attach_evolution_scores(items: list[dict]) -> list[dict]:
     scored = []
     for index, item in enumerate(items):
-        item_form = item.get("metrics", {}).get("form_type")
+        item_form = _score_form_group(item)
         previous = next(
             (
                 candidate for candidate in items[index + 1:]
                 if candidate.get("ticker") == item.get("ticker")
-                and candidate.get("metrics", {}).get("form_type") == item_form
+                and _score_form_group(candidate) == item_form
             ),
             None,
         )
         scored.append({**item, "score": score_report(item["metrics"], previous["metrics"] if previous else None)})
     return scored
+
+
+def _score_form_group(item: dict) -> str:
+    form = item.get("metrics", {}).get("form_type") or item.get("form_type") or ""
+    if form.startswith("10-Q") or form.startswith("10-K (Q4 derived)"):
+        return "quarter"
+    return form
 
 
 class AnalyzeRequest(BaseModel):
@@ -431,11 +438,11 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
 
     prior_reports = list_reports(report["ticker"])
     current_index = next((index for index, item in enumerate(prior_reports) if item["id"] == report["id"]), -1)
-    report_form = report.get("metrics", {}).get("form_type")
+    report_form = _score_form_group(report)
     previous = next(
         (
             item for item in prior_reports[current_index + 1:]
-            if item.get("metrics", {}).get("form_type") == report_form
+            if _score_form_group(item) == report_form
         ),
         None,
     ) if current_index >= 0 else None
