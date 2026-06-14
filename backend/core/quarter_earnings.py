@@ -842,22 +842,23 @@ def _recent_filing_rows(submissions: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _select_sec_filings(rows: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:
     rows = sorted(rows, key=lambda item: item["report_date"], reverse=True)
+    quarter_rows = [item for item in rows if item["form"] == "10-Q"]
     if mode == "last_quarter":
-        return [item for item in rows if item["form"] == "10-Q"][:1]
+        return quarter_rows[:1]
     if mode == "this_year_quarters":
-        latest_year = rows[0]["report_date"][:4] if rows else ""
-        return [item for item in rows if item["report_date"].startswith(latest_year)][:4]
+        latest_year = quarter_rows[0]["report_date"][:4] if quarter_rows else ""
+        return [item for item in quarter_rows if item["report_date"].startswith(latest_year)][:4]
     if mode == "last_year_quarters":
-        years = sorted({item["report_date"][:4] for item in rows}, reverse=True)
+        years = sorted({item["report_date"][:4] for item in quarter_rows}, reverse=True)
         target_year = years[1] if len(years) > 1 else (years[0] if years else "")
-        return [item for item in rows if item["report_date"].startswith(target_year)][:4]
+        return [item for item in quarter_rows if item["report_date"].startswith(target_year)][:4]
     if mode == "last_4_quarters_plus_10k":
-        selected = [item for item in rows if item["form"] == "10-Q"][:4]
+        selected = quarter_rows[:4]
         latest_10k = next((item for item in rows if item["form"] == "10-K"), None)
         if latest_10k and all(item["accession"] != latest_10k["accession"] for item in selected):
             selected.append(latest_10k)
         return sorted(selected, key=lambda item: item["report_date"], reverse=True)
-    return rows[:4]
+    return quarter_rows[:4]
 
 
 def _filing_archive_text(cik: str, accession: str) -> str:
@@ -1040,22 +1041,22 @@ def list_reports(ticker: str) -> list[dict[str, Any]]:
     ph = _placeholder()
     with _connect(row_factory=True) as conn:
         rows = conn.execute(
-            f"SELECT * FROM quarter_reports WHERE ticker = {ph} ORDER BY id DESC LIMIT 20",
+            f"SELECT * FROM quarter_reports WHERE ticker = {ph} ORDER BY id DESC LIMIT 100",
             (ticker.upper(),),
         ).fetchall()
-    return [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    reports = [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    return sorted(reports, key=_report_date_key, reverse=True)[:20]
 
 
 def list_all_reports(limit: int = 50) -> list[dict[str, Any]]:
     init_db()
     backfill_missing_operating_cash_flow()
-    ph = _placeholder()
     with _connect(row_factory=True) as conn:
         rows = conn.execute(
-            f"SELECT * FROM quarter_reports ORDER BY id DESC LIMIT {ph}",
-            (limit,),
+            "SELECT * FROM quarter_reports ORDER BY id DESC LIMIT 200",
         ).fetchall()
-    return [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    reports = [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    return sorted(reports, key=_report_date_key, reverse=True)[:limit]
 
 
 def list_tickers() -> list[dict[str, Any]]:
@@ -1092,6 +1093,14 @@ def get_report(report_id: int) -> dict[str, Any] | None:
     data = _row_to_dict(row)
     data["metrics"] = json.loads(data.pop("metrics_json"))
     return data
+
+
+def _report_date_key(report: dict[str, Any]) -> str:
+    value = report.get("report_date") or report.get("fiscal_quarter") or report.get("created_at") or ""
+    parsed = _parse_period_date(value)
+    if parsed:
+        return parsed.strftime("%Y-%m-%d")
+    return str(value)
 
 
 def _statement_value(metrics: dict[str, Any], key: str) -> float | None:

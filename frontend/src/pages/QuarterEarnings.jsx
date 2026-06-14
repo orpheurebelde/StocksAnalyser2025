@@ -30,6 +30,12 @@ const valueChange = (current, previous) => {
   return (current - previous) / Math.abs(previous);
 };
 
+const periodTime = (item) => {
+  const raw = item?.report_date || item?.fiscal_quarter || item?.metrics?.report_date || item?.metrics?.fiscal_quarter || '';
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 const apiError = (err) => {
   if (err.response?.data?.detail) return err.response.data.detail;
   if (err.message === 'Network Error') return 'Network Error: backend did not return a readable response. Check Render deploy/logs.';
@@ -119,7 +125,11 @@ function FilingBoard({ report, score }) {
 
 function QuarterComparison({ report, history }) {
   if (!report || history.length < 2) return null;
-  const sameTicker = history.filter((item) => item.ticker === report.ticker);
+  const reportForm = report.metrics?.form_type;
+  const sameTicker = history
+    .filter((item) => item.ticker === report.ticker && item.metrics?.form_type === reportForm)
+    .slice()
+    .sort((a, b) => periodTime(b) - periodTime(a));
   const currentIndex = sameTicker.findIndex((item) => item.id === report.id);
   const previous = currentIndex >= 0 ? sameTicker[currentIndex + 1] : null;
   if (!previous) return null;
@@ -156,9 +166,9 @@ function QuarterComparison({ report, history }) {
 
 function EvolutionCharts({ history, ticker }) {
   const rows = history
-    .filter((item) => !ticker || item.ticker === ticker)
+    .filter((item) => (!ticker || item.ticker === ticker) && item.metrics?.form_type !== '10-K')
     .slice()
-    .sort((a, b) => a.id - b.id)
+    .sort((a, b) => periodTime(a) - periodTime(b))
     .map((item) => ({
       period: item.fiscal_quarter || `#${item.id}`,
       revenue: item.metrics?.statements?.revenue?.current ?? null,

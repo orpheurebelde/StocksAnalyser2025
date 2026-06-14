@@ -32,7 +32,15 @@ MAX_GROQ_DRAFT_CHARS = 6000
 def attach_evolution_scores(items: list[dict]) -> list[dict]:
     scored = []
     for index, item in enumerate(items):
-        previous = next((candidate for candidate in items[index + 1:] if candidate.get("ticker") == item.get("ticker")), None)
+        item_form = item.get("metrics", {}).get("form_type")
+        previous = next(
+            (
+                candidate for candidate in items[index + 1:]
+                if candidate.get("ticker") == item.get("ticker")
+                and candidate.get("metrics", {}).get("form_type") == item_form
+            ),
+            None,
+        )
         scored.append({**item, "score": score_report(item["metrics"], previous["metrics"] if previous else None)})
     return scored
 
@@ -344,7 +352,14 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
 
     prior_reports = list_reports(report["ticker"])
     current_index = next((index for index, item in enumerate(prior_reports) if item["id"] == report["id"]), -1)
-    previous = prior_reports[current_index + 1] if current_index >= 0 and current_index + 1 < len(prior_reports) else None
+    report_form = report.get("metrics", {}).get("form_type")
+    previous = next(
+        (
+            item for item in prior_reports[current_index + 1:]
+            if item.get("metrics", {}).get("form_type") == report_form
+        ),
+        None,
+    ) if current_index >= 0 else None
     score = score_report(report["metrics"], previous["metrics"] if previous else None)
     try:
         mistral_prompt = build_prompt(report, score, prior_reports)
