@@ -192,7 +192,7 @@ function EvolutionCharts({ history, ticker }) {
           <ResponsiveContainer width="100%" height={260}>
             <ReLineChart data={rows}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
               <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
               <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
               <Legend />
@@ -206,7 +206,7 @@ function EvolutionCharts({ history, ticker }) {
           <ResponsiveContainer width="100%" height={260}>
             <ReLineChart data={rows}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
               <YAxis stroke="var(--text-secondary)" domain={[0, 100]} />
               <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
               <Legend />
