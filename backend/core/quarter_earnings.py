@@ -18,6 +18,7 @@ FINANCIAL_NUMBER_RE = re.compile(r"\(?-?\$?\s*\d[\d,]*(?:\.\d+)?\)?")
 SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "StocksAnalyser2025 quarter-earnings almeida1976marco@gmail.com")
 XBRL_TAGS = {
     "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues"],
+    "gross_profit": ["GrossProfit"],
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss"],
     "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
@@ -1097,6 +1098,44 @@ def _statement_value(metrics: dict[str, Any], key: str) -> float | None:
     return metrics.get("statements", {}).get(key, {}).get("current")
 
 
+def _confidence_score(metrics: dict[str, Any], previous_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
+    statements = metrics.get("statements", {})
+    required = ["revenue", "operating_income", "net_income", "operating_cash_flow", "cash", "total_assets", "total_liabilities"]
+    present = [key for key in required if statements.get(key, {}).get("current") is not None]
+    xbrl = [key for key in required if statements.get(key, {}).get("confidence") == "xbrl_sec_companyfacts"]
+    comparable = [key for key in required if statements.get(key, {}).get("prior") is not None]
+    previous_comparable = []
+    if previous_metrics:
+        previous_comparable = [
+            key for key in required
+            if _statement_value(metrics, key) is not None and _statement_value(previous_metrics, key) is not None
+        ]
+    completeness_points = (len(present) / len(required)) * 40
+    source_points = (len(xbrl) / len(required)) * 35
+    comparability_base = previous_comparable if previous_metrics else comparable
+    comparability_points = (len(comparability_base) / len(required)) * 20
+    identity_points = 5 if metrics.get("ticker") and (metrics.get("accession") or metrics.get("xbrl", {}).get("accession")) else 0
+    total = round(completeness_points + source_points + comparability_points + identity_points, 1)
+    if total >= 85:
+        level = "High"
+    elif total >= 70:
+        level = "Medium"
+    else:
+        level = "Low"
+    return {
+        "score": total,
+        "level": level,
+        "method": "data completeness + SEC XBRL source quality + prior-period comparability",
+        "coverage": {
+            "required_metrics": len(required),
+            "present_metrics": len(present),
+            "xbrl_metrics": len(xbrl),
+            "comparable_metrics": len(comparability_base),
+        },
+        "warnings": [] if total >= 70 else ["Low confidence: do not use rating without manual review."],
+    }
+
+
 def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
     statements = metrics.get("statements", {})
     def trend(key: str):
@@ -1131,10 +1170,14 @@ def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | Non
         total += points
         scored.append({"factor": label, "value": value, "weight": weight, "points": points, "verdict": verdict})
     scored.append({"factor": "Risk Language", "value": risk_count, "weight": 10, "points": risk_points, "verdict": "Clean" if risk_count == 0 else "Review"})
-    if total >= 80 and risk_count < 5:
+    confidence = _confidence_score(metrics, previous_metrics)
+    if confidence["score"] < 70:
+        label = "Needs Review"
+        suggestion = "HOLD"
+    elif total >= 85 and risk_count < 5 and confidence["score"] >= 80:
         label = "Excellent"
         suggestion = "STRONG BUY"
-    elif total >= 65:
+    elif total >= 70:
         label = "Good"
         suggestion = "BUY"
     elif total >= 50:
@@ -1157,6 +1200,7 @@ def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | Non
         "label": label,
         "suggestion": suggestion,
         "basis": "stored-quarter comparison" if previous_metrics else "filing internal comparison",
+        "confidence": confidence,
         "legend": legend,
         "rows": scored,
     }

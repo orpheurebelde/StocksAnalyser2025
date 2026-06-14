@@ -37,7 +37,7 @@ def attach_evolution_scores(items: list[dict]) -> list[dict]:
 
 
 class AnalyzeRequest(BaseModel):
-    provider: str = "mistral"
+    provider: str = "unified"
     model: str | None = None
 
 
@@ -59,21 +59,27 @@ def build_prompt(report: dict, score: dict, prior_reports: list[dict] | None = N
     ]
     return f"""
 You are the 10-Q Filing Analyst agent for StocksAnalyser2025.
-Interpret the uploaded 10-Q PDF using only supplied filing text and extracted filing metrics.
+Interpret the SEC filing using only supplied filing text and extracted filing metrics.
 
 Required final structure:
 1. Executive summary.
 2. Filing identity: company, period, form type, extraction limits.
 3. Financial statement interpretation: revenue, profit, operating income, net income, cash, assets, liabilities, operating cash flow.
 4. Risk and disclosure interpretation: material weakness, liquidity, impairment, going concern, restructuring, default, legal exposure.
-5. Score table in Markdown with Factor, Evidence from 10-Q, Score, Risk, Analyst view.
-6. Quarter-to-quarter comparison using prior stored filings when available.
-7. Management discussion and future guidance if present in the filing text.
-8. Mistral/Groq analyst guidance: bullish case, bearish case, watchlist, conclusion.
+5. Deterministic score and confidence: explain total score, confidence.score, confidence.level, coverage, and limits.
+6. Score table in Markdown with Factor, Evidence from 10-Q, Score, Risk, Analyst view.
+7. Quarter-to-quarter comparison using prior stored filings when available.
+8. Management discussion and future guidance if present in the filing text.
+9. Analyst guidance: bullish case, bearish case, watchlist, conclusion.
+
+Rating guardrail:
+- Treat deterministic score and confidence as source of truth.
+- If confidence.level is Low, final action must be HOLD / REVIEW, never BUY or SELL.
+- If confidence.score is below 70, state that manual review is required before any trade action.
 
 Company: {report.get("company_name")} ({report.get("ticker")})
 Quarter: {report.get("fiscal_quarter")}
-Source: uploaded 10-Q PDF {report.get("source_url") or ""}
+Source: SEC/PDF filing {report.get("source_url") or ""}
 
 Deterministic score:
 {json.dumps(score, indent=2)}
@@ -122,6 +128,51 @@ Return:
 
 Data:
 {json.dumps(compact, indent=2)}
+""".strip()
+
+
+def build_unified_optimization_prompt(report: dict, score: dict, prior_reports: list[dict] | None, mistral_analysis: str) -> str:
+    compact = {
+        "company": report.get("company_name"),
+        "ticker": report.get("ticker"),
+        "quarter": report.get("fiscal_quarter"),
+        "score": score,
+        "statements": report.get("metrics", {}).get("statements", {}),
+        "prior_filings": [
+            {
+                "id": item.get("id"),
+                "period": item.get("fiscal_quarter"),
+                "statements": item.get("metrics", {}).get("statements", {}),
+            }
+            for item in (prior_reports or [])[:4]
+            if item.get("id") != report.get("id")
+        ],
+    }
+    return f"""
+You are the final optimizer for a quarter earnings AI analysis.
+Use the SEC/XBRL dataset as the source of truth. Review the Mistral draft, correct weak reasoning, remove unsupported claims, and return one unified analyst report.
+
+Return Markdown only:
+1. Unified rating: STRONG BUY, BUY, HOLD, SELL, or STRONG SELL.
+2. Confidence score: 0-100, level, and whether data is good enough for action.
+3. Executive summary.
+4. Financial trend analysis.
+5. Quarter-to-quarter comparison.
+6. Bull case.
+7. Bear case.
+8. Watchlist.
+9. Final conclusion.
+
+Strict guardrail:
+- SEC/XBRL data and deterministic score override Mistral draft.
+- Never upgrade to BUY/STRONG BUY when confidence.score < 70.
+- Never issue a high-conviction rating without naming the specific metrics that support it.
+
+SEC/XBRL dataset:
+{json.dumps(compact, indent=2)}
+
+Mistral draft:
+{mistral_analysis}
 """.strip()
 
 
@@ -269,16 +320,19 @@ def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
     previous = prior_reports[current_index + 1] if current_index >= 0 and current_index + 1 < len(prior_reports) else None
     score = score_report(report["metrics"], previous["metrics"] if previous else None)
     try:
-        provider = body.provider.lower()
-        if provider == "groq":
-            prompt = build_groq_score_prompt(report, score, prior_reports)
-            analysis, model = call_groq(prompt, body.model)
-        elif provider == "mistral":
-            prompt = build_prompt(report, score, prior_reports)
-            analysis, model = call_mistral(prompt, body.model)
-        else:
-            raise HTTPException(status_code=400, detail="Provider must be mistral or groq.")
-        return {"report": report, "score": score, "analysis": analysis, "provider": provider, "model": model, "prompt": prompt}
+        mistral_prompt = build_prompt(report, score, prior_reports)
+        mistral_analysis, mistral_model = call_mistral(mistral_prompt, body.model)
+        groq_prompt = build_unified_optimization_prompt(report, score, prior_reports, mistral_analysis)
+        unified_analysis, groq_model = call_groq(groq_prompt, None)
+        return {
+            "report": report,
+            "score": score,
+            "analysis": unified_analysis,
+            "provider": "mistral+groq",
+            "model": {"mistral": mistral_model, "groq": groq_model},
+            "prompt": {"mistral": mistral_prompt, "groq": groq_prompt},
+            "mistral_draft": mistral_analysis,
+        }
     except HTTPException:
         raise
     except Exception as exc:

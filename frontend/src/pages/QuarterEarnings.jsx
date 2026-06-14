@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { BarChart3, Brain, Database, FileUp, Landmark, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { BarChart3, Brain, Database, Landmark, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../api';
 
@@ -55,18 +55,18 @@ function FilingBoard({ report, score }) {
   if (!report) return null;
   const filing = report.metrics || {};
   const statements = filing.statements || {};
-  const riskHits = (filing.risk_terms || []).filter((item) => item.count > 0);
   return (
     <>
       <div className="filing-hero glass-panel">
         <div>
-          <div className="metric-label">Uploaded 10-Q Filing</div>
+          <div className="metric-label">SEC Filing</div>
           <h2>{filing.company_name || report.company_name}</h2>
           <p>{filing.form_type || '10-Q'} | {filing.fiscal_quarter || 'Period not extracted'} | {filing.filename || 'PDF'}</p>
         </div>
         <div className="filing-score">
           <span>{score?.total ?? 'N/A'}</span>
           <small>{score?.label || 'Not scored'}</small>
+          {score?.confidence && <small>Confidence {score.confidence.score}/100 | {score.confidence.level}</small>}
           <strong>{score?.suggestion || 'NO RATING'}</strong>
           {score?.legend && (
             <div className="score-tooltip">
@@ -92,38 +92,25 @@ function FilingBoard({ report, score }) {
         <FilingMetricCard label="Total Liabilities" item={statements.total_liabilities} />
       </div>
 
-      <div className="grid-2" style={{ marginBottom: '2rem' }}>
-        <div className="glass-panel">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <BarChart3 size={20} color="var(--accent-cyan)" />
-            <h3>10-Q Score Table</h3>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="earnings-table">
-              <thead><tr><th>Factor</th><th>Value</th><th>Points</th><th>Verdict</th></tr></thead>
-              <tbody>
-                {(score?.rows || []).map((row) => (
-                  <tr
-                    key={row.factor}
-                    title={`${row.factor}: ${row.verdict}. Points show earned score out of factor weight. Growth factors reward positive current-vs-prior filing trends; Risk Language penalizes repeated risk terms.`}
-                  >
-                    <td>{row.factor}</td><td>{typeof row.value === 'number' && row.factor !== 'Risk Language' ? pct(row.value) : row.value ?? 'N/A'}</td><td>{row.points}/{row.weight}</td><td>{row.verdict}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+          <BarChart3 size={20} color="var(--accent-cyan)" />
+          <h3>10-Q Score Table</h3>
         </div>
-
-        <div className="glass-panel">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <ShieldAlert size={20} color="var(--status-orange)" />
-            <h3>Risk Language</h3>
-          </div>
-          {riskHits.length ? riskHits.map((item) => (
-            <div className="risk-row" key={item.term}><span>{item.term}</span><strong>{item.count}</strong></div>
-          )) : <p className="metric-label">No tracked risk terms found in extracted text.</p>}
-          <p className="metric-label" style={{ marginTop: '1rem' }}>Extraction reads selectable PDF text. Values can need analyst review when table columns are ambiguous.</p>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="earnings-table">
+            <thead><tr><th>Factor</th><th>Value</th><th>Points</th><th>Verdict</th></tr></thead>
+            <tbody>
+              {(score?.rows || []).filter((row) => row.factor !== 'Risk Language').map((row) => (
+                <tr
+                  key={row.factor}
+                  title={`${row.factor}: ${row.verdict}. Points show earned score out of factor weight. Growth factors reward positive current-vs-prior filing trends.`}
+                >
+                  <td>{row.factor}</td><td>{typeof row.value === 'number' ? pct(row.value) : row.value ?? 'N/A'}</td><td>{row.points}/{row.weight}</td><td>{row.verdict}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </>
@@ -217,9 +204,6 @@ function EvolutionCharts({ history, ticker }) {
 }
 
 export default function QuarterEarnings() {
-  const fileInputRef = useRef(null);
-  const [pdfFile, setPdfFile] = useState(null);
-  const [provider, setProvider] = useState('mistral');
   const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
   const [score, setScore] = useState(null);
@@ -234,6 +218,10 @@ export default function QuarterEarnings() {
   const [dbStatus, setDbStatus] = useState(null);
   const [secTicker, setSecTicker] = useState('ZS');
   const [secMode, setSecMode] = useState('last_4_quarters');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState(null);
 
   const visibleHistory = selectedTicker ? history.filter((item) => item.ticker === selectedTicker) : history;
 
@@ -286,7 +274,7 @@ export default function QuarterEarnings() {
       } else {
         setAvailableTickers([]);
         setShowTickerModal(true);
-        setNotice('DB is empty. Upload a 10-Q PDF to create the first stored filing.');
+      setNotice('DB is empty. Import SEC filings to create the first stored filing.');
       }
     } catch (err) {
       setError(apiError(err));
@@ -295,6 +283,7 @@ export default function QuarterEarnings() {
   };
 
   const cleanExisting = async () => {
+    if (!window.confirm('Delete all stored quarter earnings filings and analyses?')) return;
     setLoading(true);
     setError('');
     setNotice('');
@@ -308,33 +297,6 @@ export default function QuarterEarnings() {
       setAvailableTickers([]);
       setShowTickerModal(false);
       setNotice(`Cleaned DB: ${res.data.deleted_reports} filings and ${res.data.deleted_analyses} analyses removed.`);
-    } catch (err) {
-      setError(apiError(err));
-    }
-    setLoading(false);
-  };
-
-  const ingestPdf = async () => {
-    if (!pdfFile) {
-      setError('Choose a 10-Q PDF first.');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    setNotice('');
-    setAnalysis('');
-    try {
-      const formData = new FormData();
-      formData.append('file', pdfFile);
-      const res = await api.post('/api/quarter-earnings/ingest-pdf', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setReport(res.data);
-      setScore(res.data.score);
-      setHistory(res.data.history || []);
-      setSelectedTicker(res.data.ticker);
-      await loadDbStatus();
-      setNotice(`${res.data.updated ? 'Updated' : 'Stored'} filing #${res.data.id} in DB for ${res.data.ticker}. Future uploads will compare against this record.`);
     } catch (err) {
       setError(apiError(err));
     }
@@ -366,12 +328,41 @@ export default function QuarterEarnings() {
     setLoading(false);
   };
 
+  const handleTickerChange = (event) => {
+    const value = event.target.value;
+    setSecTicker(value.toUpperCase());
+    if (searchTimeout) clearTimeout(searchTimeout);
+    if (value.trim().length < 1) {
+      setSearchResults([]);
+      setShowSearchDropdown(false);
+      return;
+    }
+    const timeoutId = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await api.get(`/api/stock/search?q=${encodeURIComponent(value)}`);
+        setSearchResults(res.data.results || []);
+        setShowSearchDropdown(true);
+      } catch {
+        setSearchResults([]);
+      }
+      setIsSearching(false);
+    }, 400);
+    setSearchTimeout(timeoutId);
+  };
+
+  const selectTicker = (symbol) => {
+    setSecTicker(symbol);
+    setSearchResults([]);
+    setShowSearchDropdown(false);
+  };
+
   const analyze = async () => {
     if (!report?.id) return;
     setAiLoading(true);
     setError('');
     try {
-      const res = await api.post(`/api/quarter-earnings/${report.id}/analyze`, { provider });
+      const res = await api.post(`/api/quarter-earnings/${report.id}/analyze`, { provider: 'unified' });
       setAnalysis(res.data.analysis);
       setScore(res.data.score);
     } catch (err) {
@@ -385,20 +376,57 @@ export default function QuarterEarnings() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '2rem' }}>
         <div>
           <h2>10-Q Filing Intelligence</h2>
-          <p className="metric-label">Upload one 10-Q PDF, extract filing data into SQLite, interpret board, then analyze with Mistral or Groq.</p>
+          <p className="metric-label">Import public SEC filings into DB, compare quarters, then generate unified Mistral + Groq analysis.</p>
         </div>
         <Landmark color="var(--accent-cyan)" size={34} />
       </div>
 
       <div className="glass-panel" style={{ marginBottom: '2rem' }}>
         <div className="filing-controls">
-          <input
-            aria-label="SEC ticker"
-            value={secTicker}
-            onChange={(e) => setSecTicker(e.target.value.toUpperCase())}
-            placeholder="Ticker"
-            style={{ maxWidth: 110 }}
-          />
+          <div style={{ position: 'relative', minWidth: 280 }}>
+            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <input
+              aria-label="SEC ticker"
+              value={secTicker}
+              onChange={handleTickerChange}
+              onFocus={() => { if (searchResults.length > 0) setShowSearchDropdown(true); }}
+              onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
+              placeholder="Company or ticker"
+              style={{ width: '100%', paddingLeft: 38 }}
+            />
+            {showSearchDropdown && searchResults.length > 0 && (
+              <ul style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                maxHeight: '280px',
+                overflowY: 'auto',
+                background: '#1a1a1a',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                marginTop: '4px',
+                padding: 0,
+                listStyle: 'none',
+                zIndex: 1000,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+              }}>
+                {searchResults.map((result, index) => (
+                  <li
+                    key={`${result.symbol}-${index}`}
+                    onClick={() => selectTicker(result.symbol)}
+                    style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                  >
+                    <strong style={{ color: 'var(--accent-cyan)' }}>{result.symbol}</strong>
+                    <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>{result.name}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {isSearching && (
+              <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Searching</span>
+            )}
+          </div>
           <select value={secMode} onChange={(e) => setSecMode(e.target.value)}>
             <option value="last_4_quarters">Last 4 quarters</option>
             <option value="last_quarter">Last quarter</option>
@@ -409,35 +437,17 @@ export default function QuarterEarnings() {
           <button className="btn-primary" onClick={importSec} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}>
             <Database size={18} /> {loading ? 'Importing...' : 'Import SEC'}
           </button>
-          <button className="pdf-icon-button" onClick={() => fileInputRef.current?.click()} title="Choose 10-Q PDF" type="button">
-            <FileUp size={24} />
+          <button className="pdf-icon-button" onClick={loadExisting} disabled={loading} title="Load existing filings" type="button">
+            <RefreshCw size={22} />
           </button>
-          <input
-            ref={fileInputRef}
-            className="hidden-file-input"
-            type="file"
-            accept="application/pdf,.pdf"
-            onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-          />
-          <div className="selected-file-name">{pdfFile?.name || 'No 10-Q PDF selected'}</div>
-          <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-            <option value="mistral">Mistral</option>
-            <option value="groq">Groq</option>
-          </select>
-          <button className="btn-primary" onClick={ingestPdf} disabled={loading || !pdfFile}>
-            <FileUp size={18} /> {loading ? 'Reading 10-Q...' : 'Load 10-Q PDF'}
-          </button>
-          <button className="btn-primary" onClick={loadExisting} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-blue))' }}>
-            <RefreshCw size={18} /> {loading ? 'Loading...' : 'Load Existing'}
-          </button>
-          <button className="btn-primary" onClick={cleanExisting} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--status-red), var(--status-orange))' }}>
-            <Trash2 size={18} /> Clean DB
+          <button className="pdf-icon-button" onClick={cleanExisting} disabled={loading} title="Clean DB" type="button" style={{ color: 'var(--status-red)' }}>
+            <Trash2 size={22} />
           </button>
           <button className="btn-primary" onClick={analyze} disabled={!report || aiLoading} style={{ background: 'linear-gradient(135deg, var(--status-green), var(--accent-blue))' }}>
-            <Brain size={18} /> {aiLoading ? 'Analyzing...' : `Analyze with ${provider}`}
+            <Brain size={18} /> {aiLoading ? 'Analyzing...' : 'Unified AI Analysis'}
           </button>
         </div>
-        <p className="metric-label" style={{ marginTop: '0.75rem' }}>SEC import uses public EDGAR XBRL for financial metrics. PDF upload remains available for filing text review.</p>
+        <p className="metric-label" style={{ marginTop: '0.75rem' }}>SEC import uses public EDGAR XBRL for financial metrics and filing text for AI context.</p>
         {dbStatus && (
           <div className="db-status-strip">
             <Database size={18} color={dbStatus.env_configured ? 'var(--status-green)' : 'var(--status-orange)'} />
@@ -518,7 +528,7 @@ export default function QuarterEarnings() {
               )) : (
                 <div className="empty-state">
                   <strong>No tickers stored yet</strong>
-                  <span>Upload a 10-Q PDF to create first stored filing.</span>
+                  <span>Import SEC filings to create first stored filing.</span>
                   {dbStatus && dbStatus.backend !== 'postgres' && (
                     <span>Production persistence needs Neon Postgres. Set <code>DATABASE_URL</code> or <code>POSTGRES_URL</code> on backend.</span>
                   )}
