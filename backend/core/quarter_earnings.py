@@ -15,7 +15,7 @@ POSTGRES_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 DB_PATH = os.getenv(DB_ENV_NAME) or os.path.join(os.path.dirname(os.path.dirname(__file__)), "quarter_earnings.sqlite")
 MAX_TEXT_CHARS = 90000
 FINANCIAL_NUMBER_RE = re.compile(r"\(?-?\$?\s*\d[\d,]*(?:\.\d+)?\)?")
-SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "StocksAnalyser2025 quarter-earnings contact@example.com")
+SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "StocksAnalyser2025 quarter-earnings almeida1976marco@gmail.com")
 XBRL_TAGS = {
     "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues"],
     "operating_income": ["OperatingIncomeLoss"],
@@ -25,6 +25,7 @@ XBRL_TAGS = {
     "total_assets": ["Assets"],
     "total_liabilities": ["Liabilities"],
 }
+SEC_FORMS = {"10-Q", "10-K"}
 
 try:
     import psycopg
@@ -792,6 +793,146 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
         },
     }
     return filing
+
+
+def _sec_get_text(url: str) -> str | None:
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": SEC_USER_AGENT, "Accept-Encoding": "identity"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return None
+
+
+def _load_sec_submissions(cik: str) -> dict[str, Any] | None:
+    padded = cik.zfill(10)
+    url = f"https://data.sec.gov/submissions/CIK{padded}.json"
+    text = _sec_get_text(url)
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _recent_filing_rows(submissions: dict[str, Any]) -> list[dict[str, Any]]:
+    recent = submissions.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    rows = []
+    for index, form in enumerate(forms):
+        if form not in SEC_FORMS:
+            continue
+        accession = recent.get("accessionNumber", [None])[index]
+        report_date = recent.get("reportDate", [None])[index]
+        if not accession or not report_date:
+            continue
+        rows.append(
+            {
+                "accession": accession,
+                "form": form,
+                "filing_date": recent.get("filingDate", [None])[index],
+                "report_date": report_date,
+                "primary_document": recent.get("primaryDocument", [None])[index],
+            }
+        )
+    return rows
+
+
+def _select_sec_filings(rows: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:
+    rows = sorted(rows, key=lambda item: item["report_date"], reverse=True)
+    if mode == "last_quarter":
+        return [item for item in rows if item["form"] == "10-Q"][:1]
+    if mode == "this_year_quarters":
+        latest_year = rows[0]["report_date"][:4] if rows else ""
+        return [item for item in rows if item["report_date"].startswith(latest_year)][:4]
+    if mode == "last_year_quarters":
+        years = sorted({item["report_date"][:4] for item in rows}, reverse=True)
+        target_year = years[1] if len(years) > 1 else (years[0] if years else "")
+        return [item for item in rows if item["report_date"].startswith(target_year)][:4]
+    if mode == "last_4_quarters_plus_10k":
+        selected = [item for item in rows if item["form"] == "10-Q"][:4]
+        latest_10k = next((item for item in rows if item["form"] == "10-K"), None)
+        if latest_10k and all(item["accession"] != latest_10k["accession"] for item in selected):
+            selected.append(latest_10k)
+        return sorted(selected, key=lambda item: item["report_date"], reverse=True)
+    return rows[:4]
+
+
+def _filing_archive_text(cik: str, accession: str) -> str:
+    compact_accession = accession.replace("-", "")
+    url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{compact_accession}/{accession}.txt"
+    text = _sec_get_text(url) or ""
+    return _clean_pdf_text(text)[:MAX_TEXT_CHARS]
+
+
+def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any], filing: dict[str, Any]) -> dict[str, Any]:
+    accession = filing["accession"]
+    report_date = filing["report_date"]
+    report_text = _filing_archive_text(cik, accession)
+    statements = {}
+    for key in XBRL_TAGS:
+        item = _xbrl_item(companyfacts, accession, key, report_date)
+        if item:
+            statements[key] = item
+    for item in statements.values():
+        item["growth"] = _growth(item["current"], item["prior"])
+
+    search_text = _clean_text(report_text)
+    risk_terms = ["going concern", "material weakness", "impairment", "liquidity", "substantial doubt", "default", "restructuring"]
+    risk_hits = [{"term": term, "count": len(re.findall(term, search_text, re.I))} for term in risk_terms]
+    company_name = companyfacts.get("entityName") or ticker.upper()
+    source_url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}/{filing.get('primary_document') or ''}"
+    metrics = {
+        "filename": filing.get("primary_document") or accession,
+        "form_type": filing["form"],
+        "company_name": company_name,
+        "ticker": ticker.upper(),
+        "fiscal_quarter": report_date,
+        "report_date": report_date,
+        "accession": accession,
+        "xbrl": {"accession": accession, "cik": cik, "available": bool(statements), "source": "sec_companyfacts"},
+        "statements": statements,
+        "risk_terms": risk_hits,
+        "text_stats": {"characters": len(report_text), "words": len(report_text.split())},
+    }
+    return {
+        "ticker": ticker.upper(),
+        "fiscal_quarter": report_date,
+        "report_date": report_date,
+        "source_url": source_url,
+        "source_type": "sec_xbrl_import",
+        "company_name": company_name,
+        "sector": None,
+        "industry": None,
+        "metrics": metrics,
+        "report_text": report_text,
+    }
+
+
+def import_sec_filings(ticker: str, mode: str = "last_4_quarters") -> dict[str, Any]:
+    ticker = ticker.upper().strip()
+    cik = _cik_from_ticker(ticker)
+    if not cik:
+        raise RuntimeError(f"Could not find SEC CIK for ticker {ticker}.")
+    companyfacts = _load_sec_companyfacts(cik)
+    submissions = _load_sec_submissions(cik)
+    if not companyfacts or not submissions:
+        raise RuntimeError(f"Could not load SEC filings for ticker {ticker}.")
+    filings = _select_sec_filings(_recent_filing_rows(submissions), mode)
+    if not filings:
+        raise RuntimeError(f"No SEC 10-Q/10-K filings found for ticker {ticker}.")
+    saved = []
+    for filing in reversed(filings):
+        payload = _sec_payload_from_filing(ticker, cik, companyfacts, filing)
+        saved.append(save_report(payload))
+    return {
+        "ticker": ticker,
+        "cik": cik,
+        "mode": mode,
+        "imported": len(saved),
+        "reports": saved,
+    }
 
 
 def build_pdf_payload(ticker: str, file_bytes: bytes, filename: str | None = None) -> dict[str, Any]:

@@ -232,6 +232,8 @@ export default function QuarterEarnings() {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [availableTickers, setAvailableTickers] = useState([]);
   const [dbStatus, setDbStatus] = useState(null);
+  const [secTicker, setSecTicker] = useState('ZS');
+  const [secMode, setSecMode] = useState('last_4_quarters');
 
   const visibleHistory = selectedTicker ? history.filter((item) => item.ticker === selectedTicker) : history;
 
@@ -339,6 +341,31 @@ export default function QuarterEarnings() {
     setLoading(false);
   };
 
+  const importSec = async () => {
+    const ticker = secTicker.trim().toUpperCase();
+    if (!ticker) {
+      setError('Enter a ticker for SEC import.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setNotice('');
+    setAnalysis('');
+    try {
+      const res = await api.post('/api/quarter-earnings/sec/import', { ticker, mode: secMode });
+      const rows = res.data.history || [];
+      setHistory(rows);
+      setSelectedTicker(res.data.ticker);
+      setReport(res.data.latest || rows[0] || null);
+      setScore(res.data.score || rows[0]?.score || null);
+      await loadDbStatus();
+      setNotice(`Imported ${res.data.imported} SEC filings for ${res.data.ticker}. Metrics loaded from SEC XBRL.`);
+    } catch (err) {
+      setError(apiError(err));
+    }
+    setLoading(false);
+  };
+
   const analyze = async () => {
     if (!report?.id) return;
     setAiLoading(true);
@@ -365,6 +392,23 @@ export default function QuarterEarnings() {
 
       <div className="glass-panel" style={{ marginBottom: '2rem' }}>
         <div className="filing-controls">
+          <input
+            aria-label="SEC ticker"
+            value={secTicker}
+            onChange={(e) => setSecTicker(e.target.value.toUpperCase())}
+            placeholder="Ticker"
+            style={{ maxWidth: 110 }}
+          />
+          <select value={secMode} onChange={(e) => setSecMode(e.target.value)}>
+            <option value="last_4_quarters">Last 4 quarters</option>
+            <option value="last_quarter">Last quarter</option>
+            <option value="this_year_quarters">This year quarters</option>
+            <option value="last_year_quarters">Last year quarters</option>
+            <option value="last_4_quarters_plus_10k">Last 4 + 10-K</option>
+          </select>
+          <button className="btn-primary" onClick={importSec} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}>
+            <Database size={18} /> {loading ? 'Importing...' : 'Import SEC'}
+          </button>
           <button className="pdf-icon-button" onClick={() => fileInputRef.current?.click()} title="Choose 10-Q PDF" type="button">
             <FileUp size={24} />
           </button>
@@ -393,7 +437,7 @@ export default function QuarterEarnings() {
             <Brain size={18} /> {aiLoading ? 'Analyzing...' : `Analyze with ${provider}`}
           </button>
         </div>
-        <p className="metric-label" style={{ marginTop: '0.75rem' }}>Only uploaded 10-Q PDFs are supported. Web scraping and manual text loading removed.</p>
+        <p className="metric-label" style={{ marginTop: '0.75rem' }}>SEC import uses public EDGAR XBRL for financial metrics. PDF upload remains available for filing text review.</p>
         {dbStatus && (
           <div className="db-status-strip">
             <Database size={18} color={dbStatus.env_configured ? 'var(--status-green)' : 'var(--status-orange)'} />

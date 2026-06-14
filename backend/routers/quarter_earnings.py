@@ -13,6 +13,7 @@ from core.quarter_earnings import (
     delete_all_reports,
     get_db_status,
     get_report,
+    import_sec_filings,
     list_all_reports,
     list_reports,
     list_tickers,
@@ -38,6 +39,11 @@ def attach_evolution_scores(items: list[dict]) -> list[dict]:
 class AnalyzeRequest(BaseModel):
     provider: str = "mistral"
     model: str | None = None
+
+
+class SecImportRequest(BaseModel):
+    ticker: str
+    mode: str = "last_4_quarters"
 
 
 def build_prompt(report: dict, score: dict, prior_reports: list[dict] | None = None) -> str:
@@ -213,6 +219,26 @@ def db_status(request: Request):
 @limiter.limit("2/minute")
 def reprocess_reports(request: Request, ticker: str | None = None):
     return reprocess_stored_reports(ticker)
+
+
+@router.post("/sec/import")
+@limiter.limit("4/minute")
+def import_from_sec(request: Request, body: SecImportRequest):
+    allowed_modes = {"last_quarter", "last_4_quarters", "this_year_quarters", "last_year_quarters", "last_4_quarters_plus_10k"}
+    if body.mode not in allowed_modes:
+        raise HTTPException(status_code=400, detail="Invalid SEC import mode.")
+    try:
+        result = import_sec_filings(body.ticker, body.mode)
+        history = attach_evolution_scores(list_reports(result["ticker"]))
+        latest = history[0] if history else None
+        return {
+            **result,
+            "history": history,
+            "latest": latest,
+            "score": latest.get("score") if latest else None,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/tickers")
