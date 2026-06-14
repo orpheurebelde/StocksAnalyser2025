@@ -765,17 +765,16 @@ def reprocess_stored_reports(ticker: str | None = None) -> dict[str, int]:
     init_db()
     ph = _placeholder()
     query = """
-        SELECT id, ticker, source_url, report_text
+        SELECT id, ticker, source_url, source_type, report_date, metrics_json, report_text
         FROM quarter_reports
-        WHERE report_text IS NOT NULL AND report_text != ''
         ORDER BY id DESC
     """
     params: tuple[Any, ...] = ()
     if ticker:
         query = """
-            SELECT id, ticker, source_url, report_text
+            SELECT id, ticker, source_url, source_type, report_date, metrics_json, report_text
             FROM quarter_reports
-            WHERE ticker = {ph} AND report_text IS NOT NULL AND report_text != ''
+            WHERE ticker = {ph}
             ORDER BY id DESC
         """.format(ph=ph)
         params = (ticker.upper(),)
@@ -783,24 +782,54 @@ def reprocess_stored_reports(ticker: str | None = None) -> dict[str, int]:
     skipped = 0
     with _connect() as conn:
         rows = conn.execute(query, params).fetchall()
-        for report_id, row_ticker, source_url, report_text in rows:
+        for report_id, row_ticker, source_url, source_type, report_date, metrics_json, report_text in rows:
             try:
-                metrics = extract_10q_data(row_ticker, report_text, source_url)
+                stored_metrics = json.loads(metrics_json)
+                xbrl = stored_metrics.get("xbrl") or {}
+                accession = stored_metrics.get("accession") or xbrl.get("accession")
+                cik = xbrl.get("cik") or _cik_from_accession(accession) or _cik_from_ticker(row_ticker)
+                if source_type == "sec_xbrl_import" and accession and cik:
+                    companyfacts = _load_sec_companyfacts(cik)
+                    if not companyfacts:
+                        raise RuntimeError("SEC companyfacts unavailable.")
+                    form_type = stored_metrics.get("form_type", "")
+                    form = "10-K" if str(form_type).startswith("10-K") else "10-Q"
+                    payload = _sec_payload_from_filing(
+                        row_ticker,
+                        cik,
+                        companyfacts,
+                        {
+                            "accession": accession,
+                            "form": form,
+                            "report_date": report_date or stored_metrics.get("report_date"),
+                            "primary_document": stored_metrics.get("filename") or "",
+                        },
+                    )
+                    metrics = payload["metrics"]
+                    report_text = payload["report_text"]
+                    source_url = payload["source_url"]
+                elif report_text:
+                    metrics = extract_10q_data(row_ticker, report_text, source_url)
+                else:
+                    skipped += 1
+                    continue
             except Exception:
                 skipped += 1
                 continue
             conn.execute(
                 f"""
                 UPDATE quarter_reports
-                SET ticker = {ph}, fiscal_quarter = {ph}, report_date = {ph}, company_name = {ph}, metrics_json = {ph}
+                SET ticker = {ph}, fiscal_quarter = {ph}, report_date = {ph}, source_url = {ph}, company_name = {ph}, metrics_json = {ph}, report_text = {ph}
                 WHERE id = {ph}
                 """,
                 (
                     metrics.get("ticker") or row_ticker,
                     metrics.get("fiscal_quarter"),
                     metrics.get("report_date"),
+                    source_url,
                     metrics.get("company_name") or row_ticker,
                     json.dumps(metrics),
+                    report_text,
                     report_id,
                 ),
             )
