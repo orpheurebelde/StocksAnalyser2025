@@ -189,7 +189,7 @@ function EvolutionCharts({ history, ticker }) {
       <h3>{ticker || 'Selected ticker'} quarterly evolution</h3>
       <div className="evolution-grid">
         <div className="chart-box">
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={320}>
             <ReLineChart data={rows}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
               <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
@@ -203,7 +203,7 @@ function EvolutionCharts({ history, ticker }) {
           </ResponsiveContainer>
         </div>
         <div className="chart-box">
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={320}>
             <ReLineChart data={rows}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
               <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
