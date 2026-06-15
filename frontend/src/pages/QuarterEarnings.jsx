@@ -27,6 +27,12 @@ const money = (value) => {
 
 const pct = (value) => (value === null || value === undefined ? 'N/A' : `${(value * 100).toFixed(1)}%`);
 
+const qualityValue = (value) => {
+  if (typeof value === 'number') return pct(value);
+  if (value === null || value === undefined || value === '') return 'N/A';
+  return value;
+};
+
 const valueChange = (current, previous) => {
   if (current === null || current === undefined || previous === null || previous === undefined || previous === 0) return null;
   return (current - previous) / Math.abs(previous);
@@ -102,7 +108,7 @@ function FilingBoard({ report, score }) {
             <div className="score-tooltip">
               <div className="metric-label">Quality Score</div>
               {(qualityScore?.rows || []).map((item) => (
-                <p key={item.factor}><b>{item.factor}</b>: {typeof item.value === 'number' ? pct(item.value) : 'N/A'} | {item.points}/{item.weight} | {item.verdict}</p>
+                <p key={item.factor}><b>{item.factor}</b>: {qualityValue(item.value)} | {item.points}/{item.weight} | {item.verdict}</p>
               ))}
             </div>
           </div>
@@ -158,7 +164,7 @@ function FilingBoard({ report, score }) {
                 {(qualityScore.rows || []).map((row) => (
                   <tr key={row.factor}>
                     <td>{row.factor}</td>
-                    <td>{typeof row.value === 'number' ? pct(row.value) : 'N/A'}</td>
+                    <td>{qualityValue(row.value)}</td>
                     <td>{row.points}/{row.weight}</td>
                     <td>{row.verdict}</td>
                     <td>{row.meaning}</td>
@@ -392,19 +398,21 @@ export default function QuarterEarnings() {
   }, []);
 
   const openTicker = async (ticker) => {
+    const normalizedTicker = ticker.toUpperCase();
     setLoading(true);
     setError('');
     setNotice('');
     try {
-      const res = await api.get(`/api/quarter-earnings/${ticker}/reports`);
+      const res = await api.get(`/api/quarter-earnings/${normalizedTicker}/reports`);
       const rows = res.data.reports || [];
       setHistory(rows);
-      setSelectedTicker(ticker);
+      setSelectedTicker(normalizedTicker);
+      setSecTicker(normalizedTicker);
       setReport(rows[0] || null);
       setScore(rows[0]?.score || null);
       setAnalysis('');
       setShowTickerModal(false);
-      setNotice(`Loaded ${rows.length} stored 10-Q filings for ${ticker}.`);
+      setNotice(`Loaded ${rows.length} stored 10-Q filings for ${normalizedTicker}.`);
     } catch (err) {
       setError(apiError(err));
     }

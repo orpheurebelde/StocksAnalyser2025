@@ -1405,6 +1405,7 @@ def _business_quality_score(metrics: dict[str, Any], previous_metrics: dict[str,
     total_liabilities = _statement_value(metrics, "total_liabilities")
     total_debt = _statement_value(metrics, "total_debt")
     operating_cash_flow = _statement_value(metrics, "operating_cash_flow")
+    no_debt_reported = total_debt in (None, 0) and cash is not None and total_assets is not None
 
     revenue_growth = statements.get("revenue", {}).get("growth")
     r_and_d_growth = statements.get("research_development", {}).get("growth")
@@ -1416,23 +1417,34 @@ def _business_quality_score(metrics: dict[str, Any], previous_metrics: dict[str,
     r_and_d_efficiency = None
     if revenue_growth is not None and r_and_d_growth is not None:
         r_and_d_efficiency = revenue_growth - r_and_d_growth
-    debt_to_assets = _ratio(total_debt, total_assets)
-    cash_to_debt = _ratio(cash, total_debt)
-    ocf_to_debt = _ratio(operating_cash_flow, total_debt)
+    debt_to_assets = 0.0 if no_debt_reported else _ratio(total_debt, total_assets)
+    cash_to_debt = None if no_debt_reported else _ratio(cash, total_debt)
+    ocf_to_debt = None if no_debt_reported else _ratio(operating_cash_flow, total_debt)
     liability_to_assets = _ratio(total_liabilities, total_assets)
 
     rows = []
-    factors = [
+    factors: list[tuple[str, Any, int, float, float, bool, str]] = [
         ("R&D intensity", r_and_d_intensity, 15, 0.10, 0.04, False, "R&D / revenue"),
         ("R&D efficiency spread", r_and_d_efficiency, 15, 0.00, -0.10, False, "Revenue growth minus R&D growth"),
         ("Debt to assets", debt_to_assets, 20, 0.10, 0.35, True, "Total debt / assets"),
-        ("Cash to debt", cash_to_debt, 20, 1.50, 0.75, False, "Cash coverage of debt"),
-        ("Operating cash flow to debt", ocf_to_debt, 15, 0.25, 0.08, False, "OCF debt service capacity"),
         ("Liabilities to assets", liability_to_assets, 15, 0.45, 0.70, True, "Balance sheet leverage"),
     ]
     total = 0.0
     for factor, value, weight, strong, neutral, reverse, meaning in factors:
         points, verdict = _quality_points(value, weight, strong, neutral, reverse)
+        total += points
+        rows.append({"factor": factor, "value": value, "weight": weight, "points": points, "verdict": verdict, "meaning": meaning})
+    if no_debt_reported:
+        debt_rows = [
+            ("Cash to debt", "No debt reported", 20, 20, "Strong", "Cash coverage not stressed because no debt fact is reported"),
+            ("Operating cash flow to debt", "No debt reported", 15, 15, "Strong", "Debt service not stressed because no debt fact is reported"),
+        ]
+    else:
+        debt_rows = [
+            ("Cash to debt", cash_to_debt, 20, *_quality_points(cash_to_debt, 20, 1.50, 0.75, False), "Cash coverage of debt"),
+            ("Operating cash flow to debt", ocf_to_debt, 15, *_quality_points(ocf_to_debt, 15, 0.25, 0.08, False), "OCF debt service capacity"),
+        ]
+    for factor, value, weight, points, verdict, meaning in debt_rows:
         total += points
         rows.append({"factor": factor, "value": value, "weight": weight, "points": points, "verdict": verdict, "meaning": meaning})
 

@@ -88,12 +88,18 @@ def _snippet(text: str, term: str, radius: int = 700) -> str | None:
 
 def build_concern_review(report: dict, score: dict) -> dict:
     rows = score.get("rows", [])
+    quality_rows = score.get("quality_score", {}).get("rows", [])
     confidence = score.get("confidence", {})
     flagged_rows = [
         row for row in rows
         if row.get("factor") != "Risk Language"
         and (row.get("verdict") in {"Weak", "Needs review"} or (isinstance(row.get("value"), (int, float)) and row.get("value") < -0.1))
     ]
+    flagged_rows.extend(
+        {**row, "factor": f"Quality: {row.get('factor')}"}
+        for row in quality_rows
+        if row.get("verdict") in {"Weak", "Needs review"}
+    )
     if confidence.get("score", 100) < 80:
         flagged_rows.append({"factor": "Data Confidence", "value": confidence.get("score"), "verdict": confidence.get("level")})
 
@@ -110,7 +116,8 @@ def build_concern_review(report: dict, score: dict) -> dict:
     seen = set()
     for row in flagged_rows:
         factor = row.get("factor")
-        terms = CONCERN_TERMS.get(factor, [str(factor or "")])
+        base_factor = str(factor or "").replace("Quality: ", "")
+        terms = CONCERN_TERMS.get(base_factor, [base_factor])
         for term in terms:
             found = _snippet(text, term)
             if found and found not in seen:
@@ -148,8 +155,8 @@ Required final structure:
 1. Executive summary.
 2. Filing identity: company, period, form type, extraction limits.
 3. Financial statement interpretation: revenue, gross profit, operating income, net income, operating cash flow, cash, assets, liabilities, total debt.
-4. R&D analysis: R&D intensity, R&D growth vs revenue growth, whether spend looks productive or bloated, and evidence from filings.
-5. Debt and liquidity analysis: total debt, cash-to-debt coverage, operating cash flow-to-debt coverage, liabilities/assets, refinancing or covenant risk if present.
+4. R&D analysis: R&D intensity, R&D growth vs revenue growth, operating leverage, capitalization/expense policy if visible, and whether spend looks productive or bloated.
+5. Debt and liquidity analysis: total debt, no-debt status if debt is not reported, cash-to-debt coverage, operating cash flow-to-debt coverage, liabilities/assets, refinancing/covenant risk, and cash runway if losses persist.
 6. Risk and disclosure interpretation: material weakness, liquidity, impairment, going concern, restructuring, default, legal exposure.
 7. Deterministic scores and confidence: explain total score, quality_score, confidence.score, confidence.level, coverage, and limits.
 8. Score tables in Markdown: main filing score and business-quality/debt/R&D score with Factor, Evidence from filing, Score, Risk, Analyst view.
@@ -164,6 +171,8 @@ Rating guardrail:
 - If concern review has flagged_rows, analyze those SEC excerpts before giving rating. Do not ignore weak score board items.
 - If quality_score is below 50, cap final rating at HOLD unless valuation/liquidity evidence is exceptional and explicitly stated.
 - Give debt and R&D their own professional judgment; do not merge them into generic operating-expense comments.
+- When debt value is missing but SEC data reports cash/assets/liabilities and no debt concept, treat it as "no debt reported"; positive for leverage, but still verify notes for leases, commitments, convertible notes, credit facilities, and off-balance-sheet obligations.
+- Separate data absence from business weakness. Mark extraction gaps explicitly.
 
 Company: {report.get("company_name")} ({report.get("ticker")})
 Quarter: {report.get("fiscal_quarter")}
@@ -275,8 +284,8 @@ Return Markdown only:
 2. Confidence score: 0-100, level, and whether data is good enough for action.
 3. Executive summary.
 4. Financial trend analysis.
-5. R&D productivity and operating leverage analysis.
-6. Debt, liquidity, refinancing, and balance-sheet risk analysis.
+5. R&D productivity and operating leverage analysis: intensity, efficiency spread, trend, peer-style interpretation.
+6. Debt, liquidity, refinancing, and balance-sheet risk analysis: no-debt status if applicable, leverage, cash coverage, cash runway, obligations noted in filing.
 7. Quarter-to-quarter comparison.
 8. Bull case.
 9. Bear case.
@@ -290,6 +299,8 @@ Strict guardrail:
 - If concern review has flagged_rows, discuss each flagged factor and use those SEC excerpts to moderate rating.
 - Use quality_score as a separate risk lens. If main score and quality_score diverge, explain why.
 - Discuss R&D intensity and debt coverage with professional skepticism.
+- Never call a debt metric weak only because debt is absent; distinguish "no debt reported" from "debt extraction missing."
+- Use professional analyst language: quantify, compare, explain cause, then state investment implication.
 
 SEC/XBRL dataset:
 {json.dumps(compact, indent=2)}
