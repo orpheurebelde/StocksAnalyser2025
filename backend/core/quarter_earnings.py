@@ -22,11 +22,30 @@ XBRL_TAGS = {
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss"],
     "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
-    "research_development": ["ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"],
+    "research_development": [
+        "ResearchAndDevelopmentExpense",
+        "ResearchAndDevelopmentInProcess",
+        "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost",
+        "ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost",
+        "ResearchAndDevelopmentExpenseSoftware",
+        "ResearchDevelopmentAndEngineeringExpense",
+    ],
     "cash": ["CashAndCashEquivalentsAtCarryingValue"],
     "total_assets": ["Assets"],
     "total_liabilities": ["Liabilities"],
     "total_debt": ["LongTermDebtAndFinanceLeaseObligations", "LongTermDebt", "DebtCurrent", "LongTermDebtAndFinanceLeaseObligationsCurrent"],
+}
+XBRL_TAG_PATTERNS = {
+    "research_development": [
+        re.compile(r"research.*development.*expense", re.I),
+        re.compile(r"research.*development.*in.*process", re.I),
+        re.compile(r"research.*development.*engineering", re.I),
+        re.compile(r"product.*development.*expense", re.I),
+    ],
+    "total_debt": [
+        re.compile(r"(longterm|long.term|shortterm|short.term|current).*debt", re.I),
+        re.compile(r"debt.*(obligation|liabilit|current)", re.I),
+    ],
 }
 SEC_FORMS = {"10-Q", "10-K"}
 FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow", "research_development"}
@@ -356,6 +375,45 @@ def _xbrl_facts_all_accessions(companyfacts: dict[str, Any], tag: str) -> list[d
     return rows
 
 
+def _iter_companyfacts_concepts(companyfacts: dict[str, Any]):
+    for taxonomy, concepts in companyfacts.get("facts", {}).items():
+        if not isinstance(concepts, dict):
+            continue
+        for tag, fact in concepts.items():
+            yield taxonomy, tag, fact
+
+
+def _matching_xbrl_tags(companyfacts: dict[str, Any], key: str) -> list[tuple[str, str]]:
+    matches: list[tuple[str, str]] = []
+    seen = set()
+    facts = companyfacts.get("facts", {})
+    for tag in XBRL_TAGS.get(key, []):
+        for taxonomy, concepts in facts.items():
+            if isinstance(concepts, dict) and tag in concepts and (taxonomy, tag) not in seen:
+                matches.append((taxonomy, tag))
+                seen.add((taxonomy, tag))
+    for pattern in XBRL_TAG_PATTERNS.get(key, []):
+        for taxonomy, tag, fact in _iter_companyfacts_concepts(companyfacts):
+            if (taxonomy, tag) in seen:
+                continue
+            label = " ".join(str(fact.get(field) or "") for field in ("label", "description"))
+            haystack = f"{tag} {label}"
+            if pattern.search(haystack):
+                matches.append((taxonomy, tag))
+                seen.add((taxonomy, tag))
+    return matches
+
+
+def _xbrl_facts_for_concept(companyfacts: dict[str, Any], taxonomy: str, tag: str, accession: str) -> list[dict[str, Any]]:
+    fact = companyfacts.get("facts", {}).get(taxonomy, {}).get(tag)
+    if not fact:
+        return []
+    rows = []
+    for unit_rows in fact.get("units", {}).values():
+        rows.extend(row for row in unit_rows if row.get("accn") == accession and row.get("val") is not None)
+    return rows
+
+
 def _duration_days(row: dict[str, Any]) -> int | None:
     if not row.get("start") or not row.get("end"):
         return None
@@ -379,7 +437,14 @@ def _derive_10k_q4_statements(companyfacts: dict[str, Any], statements: dict[str
         tag = item.get("label")
         if not tag:
             continue
-        all_rows = _xbrl_facts_all_accessions(companyfacts, tag)
+        taxonomy = item.get("taxonomy") or "us-gaap"
+        fact = companyfacts.get("facts", {}).get(taxonomy, {}).get(tag)
+        all_rows = []
+        if fact:
+            for unit_rows in fact.get("units", {}).values():
+                all_rows.extend(row for row in unit_rows if row.get("val") is not None)
+        if not all_rows:
+            all_rows = _xbrl_facts_all_accessions(companyfacts, tag)
         q3_candidates = [
             row for row in all_rows
             if row.get("form") == "10-Q"
@@ -457,8 +522,8 @@ def _select_xbrl_prior(rows: list[dict[str, Any]], current: dict[str, Any], pref
 
 def _xbrl_item(companyfacts: dict[str, Any], accession: str, key: str, report_date: str | None) -> dict[str, Any] | None:
     prefer_longest = key == "operating_cash_flow"
-    for tag in XBRL_TAGS[key]:
-        rows = _xbrl_facts_for_tag(companyfacts, tag, accession)
+    for taxonomy, tag in _matching_xbrl_tags(companyfacts, key):
+        rows = _xbrl_facts_for_concept(companyfacts, taxonomy, tag, accession)
         current = _select_xbrl_current(rows, report_date, prefer_longest)
         if not current:
             continue
@@ -472,6 +537,7 @@ def _xbrl_item(companyfacts: dict[str, Any], accession: str, key: str, report_da
             "growth": _growth(current_value, prior_value),
             "confidence": "xbrl_sec_companyfacts",
             "accession": accession,
+            "taxonomy": taxonomy,
             "xbrl_end": current.get("end"),
             "xbrl_start": current.get("start"),
         }
@@ -875,6 +941,7 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
     if xbrl_meta and xbrl_meta.get("accession"):
         accession = xbrl_meta["accession"]
     statements.update(xbrl_statements)
+    statements = _merge_statement_fallbacks(statements, report_text)
 
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
@@ -898,6 +965,43 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
         },
     }
     return filing
+
+
+def _text_statement_fallbacks(report_text: str) -> dict[str, dict[str, Any]]:
+    text = _clean_pdf_text(report_text)
+    return {
+        "research_development": _extract_line_item(text, [
+            "Research and development",
+            "Research and development expense",
+            "Research and product development",
+            "Product development",
+            "Technology and development",
+            "Research & development",
+            "R&D",
+        ]),
+        "total_debt": _extract_line_item(text, [
+            "Total debt",
+            "Total borrowings",
+            "Long-term debt",
+            "Short-term debt",
+            "Current portion of debt",
+            "Debt",
+        ]),
+    }
+
+
+def _merge_statement_fallbacks(statements: dict[str, Any], report_text: str) -> dict[str, Any]:
+    if not report_text:
+        return statements
+    updated = dict(statements)
+    for key, item in _text_statement_fallbacks(report_text).items():
+        if _is_missing_value(updated.get(key)) and not _is_missing_value(item):
+            updated[key] = {
+                **item,
+                "confidence": "filing_text_fallback",
+                "source_note": "Extracted from filing text because SEC companyfacts did not expose a matching XBRL concept.",
+            }
+    return updated
 
 
 def _sec_get_text(url: str) -> str | None:
@@ -995,6 +1099,7 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
             statements[key] = item
     if filing["form"] == "10-K":
         statements = _derive_10k_q4_statements(companyfacts, statements)
+    statements = _merge_statement_fallbacks(statements, report_text)
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
 
@@ -1426,6 +1531,18 @@ def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | Non
         scored.append({"factor": label, "value": value, "weight": weight, "points": points, "verdict": verdict})
     scored.append({"factor": "Risk Language", "value": risk_count, "weight": 10, "points": risk_points, "verdict": "Clean" if risk_count == 0 else "Review"})
     confidence = _confidence_score(metrics, previous_metrics)
+    quality_score = _business_quality_score(metrics, previous_metrics)
+    missing_trends = sum(1 for _, value, *_ in rows if value is None)
+    cap = 97.0
+    if previous_metrics is None:
+        cap = min(cap, 88.0)
+    if missing_trends:
+        cap = min(cap, max(58.0, 90.0 - (missing_trends * 7.0)))
+    if confidence["score"] < 90:
+        cap = min(cap, 92.0)
+    if quality_score["total"] < 80:
+        cap = min(cap, 89.0)
+    total = min(total, cap)
     if confidence["score"] < 70:
         label = "Needs Review"
         suggestion = "HOLD"
@@ -1455,7 +1572,7 @@ def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | Non
         "label": label,
         "suggestion": suggestion,
         "basis": "stored-quarter comparison" if previous_metrics else "filing internal comparison",
-        "quality_score": _business_quality_score(metrics, previous_metrics),
+        "quality_score": quality_score,
         "confidence": confidence,
         "legend": legend,
         "rows": scored,
