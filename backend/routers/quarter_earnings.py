@@ -35,6 +35,11 @@ CONCERN_TERMS = {
     "Operating Income Trend": ["loss from operations", "operating income", "operating expenses", "sales and marketing", "research and development"],
     "Net Income Trend": ["net loss", "net income", "income taxes", "interest expense", "other income"],
     "Operating Cash Flow Trend": ["operating activities", "accounts receivable", "deferred revenue", "deferred contract acquisition costs"],
+    "R&D intensity": ["research and development", "product development", "engineering", "innovation"],
+    "Debt to assets": ["debt", "convertible notes", "credit facility", "borrowings"],
+    "Cash to debt": ["cash and cash equivalents", "debt", "liquidity", "capital resources"],
+    "Operating cash flow to debt": ["operating cash flow", "debt", "cash provided by operating activities"],
+    "Liabilities to assets": ["total liabilities", "total assets", "balance sheet"],
 }
 
 
@@ -142,19 +147,23 @@ Interpret the SEC filing using only supplied filing text and extracted filing me
 Required final structure:
 1. Executive summary.
 2. Filing identity: company, period, form type, extraction limits.
-3. Financial statement interpretation: revenue, profit, operating income, net income, cash, assets, liabilities, operating cash flow.
-4. Risk and disclosure interpretation: material weakness, liquidity, impairment, going concern, restructuring, default, legal exposure.
-5. Deterministic score and confidence: explain total score, confidence.score, confidence.level, coverage, and limits.
-6. Score table in Markdown with Factor, Evidence from 10-Q, Score, Risk, Analyst view.
-7. Quarter-to-quarter comparison using prior stored filings when available.
-8. Management discussion and future guidance if present in the filing text.
-9. Analyst guidance: bullish case, bearish case, watchlist, conclusion.
+3. Financial statement interpretation: revenue, gross profit, operating income, net income, operating cash flow, cash, assets, liabilities, total debt.
+4. R&D analysis: R&D intensity, R&D growth vs revenue growth, whether spend looks productive or bloated, and evidence from filings.
+5. Debt and liquidity analysis: total debt, cash-to-debt coverage, operating cash flow-to-debt coverage, liabilities/assets, refinancing or covenant risk if present.
+6. Risk and disclosure interpretation: material weakness, liquidity, impairment, going concern, restructuring, default, legal exposure.
+7. Deterministic scores and confidence: explain total score, quality_score, confidence.score, confidence.level, coverage, and limits.
+8. Score tables in Markdown: main filing score and business-quality/debt/R&D score with Factor, Evidence from filing, Score, Risk, Analyst view.
+9. Quarter-to-quarter comparison using prior stored filings when available.
+10. Management discussion and future guidance if present in the filing text.
+11. Analyst guidance: bullish case, bearish case, watchlist, conclusion.
 
 Rating guardrail:
 - Treat deterministic score and confidence as source of truth.
 - If confidence.level is Low, final action must be HOLD / REVIEW, never BUY or SELL.
 - If confidence.score is below 70, state that manual review is required before any trade action.
 - If concern review has flagged_rows, analyze those SEC excerpts before giving rating. Do not ignore weak score board items.
+- If quality_score is below 50, cap final rating at HOLD unless valuation/liquidity evidence is exceptional and explicitly stated.
+- Give debt and R&D their own professional judgment; do not merge them into generic operating-expense comments.
 
 Company: {report.get("company_name")} ({report.get("ticker")})
 Quarter: {report.get("fiscal_quarter")}
@@ -223,7 +232,7 @@ def build_unified_optimization_prompt(report: dict, score: dict, prior_reports: 
             "confidence": value.get("confidence"),
         }
         for key, value in statements.items()
-        if key in {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow", "cash", "total_assets", "total_liabilities"}
+        if key in {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow", "research_development", "cash", "total_assets", "total_liabilities", "total_debt"}
     }
     compact = {
         "company": report.get("company_name"),
@@ -233,6 +242,7 @@ def build_unified_optimization_prompt(report: dict, score: dict, prior_reports: 
             "total": score.get("total"),
             "label": score.get("label"),
             "suggestion": score.get("suggestion"),
+            "quality_score": score.get("quality_score"),
             "confidence": score.get("confidence"),
             "rows": score.get("rows"),
         },
@@ -248,7 +258,7 @@ def build_unified_optimization_prompt(report: dict, score: dict, prior_reports: 
                         "confidence": value.get("confidence"),
                     }
                     for key, value in item.get("metrics", {}).get("statements", {}).items()
-                    if key in {"revenue", "operating_income", "net_income", "operating_cash_flow"}
+                    if key in {"revenue", "operating_income", "net_income", "operating_cash_flow", "research_development", "total_debt", "cash"}
                 },
             }
             for item in (prior_reports or [])[:3]
@@ -265,17 +275,21 @@ Return Markdown only:
 2. Confidence score: 0-100, level, and whether data is good enough for action.
 3. Executive summary.
 4. Financial trend analysis.
-5. Quarter-to-quarter comparison.
-6. Bull case.
-7. Bear case.
-8. Watchlist.
-9. Final conclusion.
+5. R&D productivity and operating leverage analysis.
+6. Debt, liquidity, refinancing, and balance-sheet risk analysis.
+7. Quarter-to-quarter comparison.
+8. Bull case.
+9. Bear case.
+10. Watchlist.
+11. Final conclusion.
 
 Strict guardrail:
 - SEC/XBRL data and deterministic score override Mistral draft.
 - Never upgrade to BUY/STRONG BUY when confidence.score < 70.
 - Never issue a high-conviction rating without naming the specific metrics that support it.
 - If concern review has flagged_rows, discuss each flagged factor and use those SEC excerpts to moderate rating.
+- Use quality_score as a separate risk lens. If main score and quality_score diverge, explain why.
+- Discuss R&D intensity and debt coverage with professional skepticism.
 
 SEC/XBRL dataset:
 {json.dumps(compact, indent=2)}

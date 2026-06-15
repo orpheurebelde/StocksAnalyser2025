@@ -10,7 +10,9 @@ const statementKeys = [
   ['operating_income', 'Operating Income'],
   ['net_income', 'Net Income'],
   ['operating_cash_flow', 'Operating Cash Flow'],
+  ['research_development', 'R&D'],
   ['cash', 'Cash'],
+  ['total_debt', 'Total Debt'],
   ['total_assets', 'Total Assets'],
   ['total_liabilities', 'Total Liabilities'],
 ];
@@ -67,6 +69,7 @@ function FilingBoard({ report, score }) {
   if (!report) return null;
   const filing = report.metrics || {};
   const statements = filing.statements || {};
+  const qualityScore = score?.quality_score;
   return (
     <>
       <div className="filing-hero glass-panel">
@@ -75,19 +78,34 @@ function FilingBoard({ report, score }) {
           <h2>{filing.company_name || report.company_name}</h2>
           <p>{filing.form_type || '10-Q'} | {filing.fiscal_quarter || 'Period not extracted'} | {filing.filename || 'PDF'}</p>
         </div>
-        <div className="filing-score">
-          <span>{score?.total ?? 'N/A'}</span>
-          <small>{score?.label || 'Not scored'}</small>
-          {score?.confidence && <small>Confidence {score.confidence.score}/100 | {score.confidence.level}</small>}
-          <strong>{score?.suggestion || 'NO RATING'}</strong>
-          {score?.legend && (
+        <div className="filing-score-pair">
+          <div className="filing-score">
+            <div className="metric-label">Filing Trend</div>
+            <span>{score?.total ?? 'N/A'}</span>
+            <small>{score?.label || 'Not scored'}</small>
+            {score?.confidence && <small>Confidence {score.confidence.score}/100 | {score.confidence.level}</small>}
+            <strong>{score?.suggestion || 'NO RATING'}</strong>
+            {score?.legend && (
+              <div className="score-tooltip">
+                <div className="metric-label">Score Legend</div>
+                {score.legend.map((item) => (
+                  <p key={item.range}><b>{item.range}</b> {item.label} | {item.suggestion}: {item.meaning}</p>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="filing-score quality-score">
+            <div className="metric-label">R&D / Debt Quality</div>
+            <span>{qualityScore?.total ?? 'N/A'}</span>
+            <small>{qualityScore?.label || 'Not scored'}</small>
+            <strong>{qualityScore?.suggestion || 'REVIEW'}</strong>
             <div className="score-tooltip">
-              <div className="metric-label">Score Legend</div>
-              {score.legend.map((item) => (
-                <p key={item.range}><b>{item.range}</b> {item.label} | {item.suggestion}: {item.meaning}</p>
+              <div className="metric-label">Quality Score</div>
+              {(qualityScore?.rows || []).map((item) => (
+                <p key={item.factor}><b>{item.factor}</b>: {typeof item.value === 'number' ? pct(item.value) : 'N/A'} | {item.points}/{item.weight} | {item.verdict}</p>
               ))}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -99,7 +117,9 @@ function FilingBoard({ report, score }) {
       </div>
 
       <div className="grid-3" style={{ marginBottom: '2rem' }}>
+        <FilingMetricCard label="R&D Expense" item={statements.research_development} />
         <FilingMetricCard label="Cash" item={statements.cash} />
+        <FilingMetricCard label="Total Debt" item={statements.total_debt} />
         <FilingMetricCard label="Total Assets" item={statements.total_assets} />
         <FilingMetricCard label="Total Liabilities" item={statements.total_liabilities} />
       </div>
@@ -125,6 +145,30 @@ function FilingBoard({ report, score }) {
           </table>
         </div>
       </div>
+      {qualityScore && (
+        <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+            <BarChart3 size={20} color="var(--status-green)" />
+            <h3>R&D, Debt & Balance Sheet Quality</h3>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="earnings-table">
+              <thead><tr><th>Factor</th><th>Metric</th><th>Points</th><th>Verdict</th><th>Meaning</th></tr></thead>
+              <tbody>
+                {(qualityScore.rows || []).map((row) => (
+                  <tr key={row.factor}>
+                    <td>{row.factor}</td>
+                    <td>{typeof row.value === 'number' ? pct(row.value) : 'N/A'}</td>
+                    <td>{row.points}/{row.weight}</td>
+                    <td>{row.verdict}</td>
+                    <td>{row.meaning}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -178,44 +222,132 @@ function EvolutionCharts({ history, ticker }) {
     .map((item) => ({
       period: item.fiscal_quarter || `#${item.id}`,
       revenue: item.metrics?.statements?.revenue?.current ?? null,
+      operatingIncome: item.metrics?.statements?.operating_income?.current ?? null,
       netIncome: item.metrics?.statements?.net_income?.current ?? null,
       operatingCashFlow: item.metrics?.statements?.operating_cash_flow?.current ?? null,
+      researchDevelopment: item.metrics?.statements?.research_development?.current ?? null,
+      cash: item.metrics?.statements?.cash?.current ?? null,
+      totalDebt: item.metrics?.statements?.total_debt?.current ?? null,
+      totalLiabilities: item.metrics?.statements?.total_liabilities?.current ?? null,
       score: item.score?.total ?? null,
+      qualityScore: item.score?.quality_score?.total ?? null,
     }));
   if (rows.length < 2) return null;
+
+  const ChartPanel = ({ title, children }) => (
+    <div className="chart-box">
+      <div className="metric-label">{title}</div>
+      <ResponsiveContainer width="100%" height={300}>
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+
   return (
-    <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+    <section className="evolution-section" style={{ marginBottom: '2rem' }}>
       <div className="metric-label">Evolution Graphics</div>
       <h3>{ticker || 'Selected ticker'} quarterly evolution</h3>
       <div className="evolution-grid">
-        <div className="chart-box">
-          <ResponsiveContainer width="100%" height={320}>
-            <ReLineChart data={rows}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
-              <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
-              <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
-              <Legend />
-              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--accent-cyan)" strokeWidth={2} connectNulls />
-              <Line type="monotone" dataKey="netIncome" name="Net Income" stroke="var(--status-green)" strokeWidth={2} connectNulls />
-              <Line type="monotone" dataKey="operatingCashFlow" name="Op Cash Flow" stroke="var(--accent-purple)" strokeWidth={2} connectNulls />
-            </ReLineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="chart-box">
-          <ResponsiveContainer width="100%" height={320}>
-            <ReLineChart data={rows}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
-              <YAxis stroke="var(--text-secondary)" domain={[0, 100]} />
-              <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
-              <Legend />
-              <Line type="monotone" dataKey="score" name="Score" stroke="var(--accent-blue)" strokeWidth={3} connectNulls />
-            </ReLineChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartPanel title="Revenue">
+          <ReLineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
+            <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--accent-cyan)" strokeWidth={3} connectNulls />
+          </ReLineChart>
+        </ChartPanel>
+        <ChartPanel title="Profitability">
+          <ReLineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
+            <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="operatingIncome" name="Operating Income" stroke="var(--accent-blue)" strokeWidth={2} connectNulls />
+            <Line type="monotone" dataKey="netIncome" name="Net Income" stroke="var(--status-green)" strokeWidth={2} connectNulls />
+          </ReLineChart>
+        </ChartPanel>
+        <ChartPanel title="Operating Cash Flow">
+          <ReLineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
+            <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="operatingCashFlow" name="Op Cash Flow" stroke="var(--accent-purple)" strokeWidth={3} connectNulls />
+          </ReLineChart>
+        </ChartPanel>
+        <ChartPanel title="R&D Investment">
+          <ReLineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
+            <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="researchDevelopment" name="R&D Expense" stroke="var(--status-orange)" strokeWidth={3} connectNulls />
+          </ReLineChart>
+        </ChartPanel>
+        <ChartPanel title="Debt & Liquidity">
+          <ReLineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
+            <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="totalDebt" name="Total Debt" stroke="var(--status-red)" strokeWidth={3} connectNulls />
+            <Line type="monotone" dataKey="cash" name="Cash" stroke="var(--status-green)" strokeWidth={2} connectNulls />
+            <Line type="monotone" dataKey="totalLiabilities" name="Total Liabilities" stroke="var(--text-secondary)" strokeWidth={2} connectNulls />
+          </ReLineChart>
+        </ChartPanel>
+        <ChartPanel title="Scores">
+          <ReLineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" domain={[0, 100]} />
+            <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="score" name="Filing Trend" stroke="var(--accent-blue)" strokeWidth={3} connectNulls />
+            <Line type="monotone" dataKey="qualityScore" name="R&D / Debt Quality" stroke="var(--status-green)" strokeWidth={3} connectNulls />
+          </ReLineChart>
+        </ChartPanel>
       </div>
-    </div>
+    </section>
+  );
+}
+
+function StoredFilingsCard({ history, visibleHistory, onOpen }) {
+  if (!history.length) return null;
+  return (
+    <details className="stored-filings-card glass-panel" style={{ marginBottom: '2rem' }}>
+      <summary>
+        <span>
+          <RefreshCw size={18} color="var(--accent-blue)" />
+          <strong>Stored 10-Q Filings</strong>
+        </span>
+        <small>{visibleHistory.length} visible / {history.length} stored</small>
+      </summary>
+      <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
+        <table className="earnings-table">
+          <thead><tr><th>ID</th><th>Ticker</th><th>Form</th><th>Period</th><th>Score</th><th>Quality</th><th>Company</th><th>Action</th></tr></thead>
+          <tbody>
+            {visibleHistory.map((item) => (
+              <tr key={item.id}>
+                <td>{item.id}</td>
+                <td>{item.ticker}</td>
+                <td>{item.metrics?.form_type || 'N/A'}</td>
+                <td>{item.fiscal_quarter || 'N/A'}</td>
+                <td>{item.score?.total ?? 'N/A'} / 100</td>
+                <td>{item.score?.quality_score?.total ?? 'N/A'} / 100</td>
+                <td>{item.company_name || 'N/A'}</td>
+                <td><button className="table-action" onClick={() => onOpen(item)}>Open</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
 
@@ -490,36 +622,14 @@ export default function QuarterEarnings() {
       {notice && <p style={{ color: 'var(--status-green)', marginBottom: '2rem' }}>{notice}</p>}
       {error && <p style={{ color: 'var(--status-red)', marginBottom: '2rem' }}>{error}</p>}
 
+      <StoredFilingsCard
+        history={history}
+        visibleHistory={visibleHistory}
+        onOpen={(item) => { setSelectedTicker(item.ticker); setReport(item); setScore(item.score); setAnalysis(''); }}
+      />
       <FilingBoard report={report} score={score} />
       <QuarterComparison report={report} history={history} />
       <EvolutionCharts history={history} ticker={selectedTicker || report?.ticker} />
-
-      {history.length > 0 && (
-        <div className="glass-panel" style={{ marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <RefreshCw size={18} color="var(--accent-blue)" />
-            <h3>Stored 10-Q Filings</h3>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="earnings-table">
-              <thead><tr><th>ID</th><th>Ticker</th><th>Form</th><th>Period</th><th>Score</th><th>Company</th><th>Action</th></tr></thead>
-              <tbody>
-                {visibleHistory.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.id}</td>
-                    <td>{item.ticker}</td>
-                    <td>{item.metrics?.form_type || 'N/A'}</td>
-                    <td>{item.fiscal_quarter || 'N/A'}</td>
-                    <td>{item.score?.total ?? 'N/A'} / 100</td>
-                    <td>{item.company_name || 'N/A'}</td>
-                    <td><button className="table-action" onClick={() => { setSelectedTicker(item.ticker); setReport(item); setScore(item.score); setAnalysis(''); }}>Open</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {analysis && (
         <div className="glass-panel">

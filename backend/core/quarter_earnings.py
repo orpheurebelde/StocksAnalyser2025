@@ -22,12 +22,14 @@ XBRL_TAGS = {
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss"],
     "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
+    "research_development": ["ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"],
     "cash": ["CashAndCashEquivalentsAtCarryingValue"],
     "total_assets": ["Assets"],
     "total_liabilities": ["Liabilities"],
+    "total_debt": ["LongTermDebtAndFinanceLeaseObligations", "LongTermDebt", "DebtCurrent", "LongTermDebtAndFinanceLeaseObligationsCurrent"],
 }
 SEC_FORMS = {"10-Q", "10-K"}
-FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow"}
+FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow", "research_development"}
 
 try:
     import psycopg
@@ -848,9 +850,11 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
         "gross_profit": _extract_line_item(text, ["Gross profit", "Gross margin"]),
         "operating_income": _extract_line_item(text, ["Income from operations", "Loss from operations", "Operating income", "Operating loss"]),
         "net_income": _extract_line_item(text, ["Net income", "Net loss", "Net earnings", "Net income (loss)", "Net loss attributable"]),
+        "research_development": _extract_line_item(text, ["Research and development", "Research and development expense", "Research & development", "R&D"]),
         "cash": _extract_line_item(text, ["Cash and cash equivalents", "Cash, cash equivalents and restricted cash"]),
         "total_assets": _extract_line_item(text, ["Total assets"]),
         "total_liabilities": _extract_line_item(text, ["Total liabilities"]),
+        "total_debt": _extract_line_item(text, ["Total debt", "Long-term debt", "Short-term debt", "Debt"]),
         "operating_cash_flow": _extract_line_item(text, [
             "Net cash provided by operating activities",
             "Net cash used in operating activities",
@@ -1178,32 +1182,43 @@ def list_tickers() -> list[dict[str, Any]]:
     with _connect(row_factory=True) as conn:
         rows = conn.execute(
             """
-            SELECT latest.*, counts.filing_count
-            FROM quarter_reports latest
-            JOIN (
-                SELECT ticker, COUNT(*) AS filing_count, MAX(id) AS latest_id
-                FROM quarter_reports
-                GROUP BY ticker
-            ) counts
-            ON latest.ticker = counts.ticker AND latest.id = counts.latest_id
+            SELECT * FROM quarter_reports
+            ORDER BY ticker ASC, id DESC
             """
         ).fetchall()
-    items = []
+
+    by_ticker: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         data = _row_to_dict(row)
         try:
-            metrics = json.loads(data.get("metrics_json") or "{}")
+            data["metrics"] = json.loads(data.get("metrics_json") or "{}")
         except Exception:
-            metrics = {}
-        score = score_report(metrics)
+            data["metrics"] = {}
+        ticker = str(data.get("ticker") or "").upper()
+        if ticker:
+            by_ticker.setdefault(ticker, []).append(data)
+
+    items = []
+    for ticker, reports in by_ticker.items():
+        sorted_reports = sorted(reports, key=_report_date_key, reverse=True)
+        latest = sorted_reports[0]
+        latest_group = _metrics_form_group(latest.get("metrics") or {})
+        previous = next(
+            (
+                item for item in sorted_reports[1:]
+                if _metrics_form_group(item.get("metrics") or {}) == latest_group
+            ),
+            None,
+        )
+        score = score_report(latest.get("metrics") or {}, previous.get("metrics") if previous else None)
         items.append(
             {
-                "ticker": data.get("ticker"),
-                "filing_count": data.get("filing_count"),
-                "latest_id": data.get("id"),
-                "latest_created_at": data.get("created_at"),
-                "latest_period": data.get("fiscal_quarter"),
-                "company_name": data.get("company_name"),
+                "ticker": ticker,
+                "filing_count": len(reports),
+                "latest_id": latest.get("id"),
+                "latest_created_at": latest.get("created_at"),
+                "latest_period": latest.get("fiscal_quarter"),
+                "company_name": latest.get("company_name"),
                 "score": score,
                 "score_total": score.get("total"),
                 "score_label": score.get("label"),
@@ -1243,8 +1258,99 @@ def _report_date_key(report: dict[str, Any]) -> str:
     return str(value)
 
 
+def _metrics_form_group(metrics: dict[str, Any]) -> str:
+    form = str(metrics.get("form_type") or "")
+    if form.startswith("10-Q") or form.startswith("10-K (Q4 derived)"):
+        return "quarter"
+    return form
+
+
 def _statement_value(metrics: dict[str, Any], key: str) -> float | None:
     return metrics.get("statements", {}).get(key, {}).get("current")
+
+
+def _ratio(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator in (None, 0):
+        return None
+    return numerator / abs(denominator)
+
+
+def _quality_points(value: float | None, weight: int, strong: float, neutral: float, reverse: bool = False) -> tuple[float, str]:
+    if value is None:
+        return round(weight * 0.35, 1), "Needs review"
+    if reverse:
+        if value <= strong:
+            return weight, "Strong"
+        if value <= neutral:
+            return round(weight * 0.65, 1), "Acceptable"
+        return round(weight * 0.25, 1), "Weak"
+    if value >= strong:
+        return weight, "Strong"
+    if value >= neutral:
+        return round(weight * 0.65, 1), "Acceptable"
+    return round(weight * 0.25, 1), "Weak"
+
+
+def _business_quality_score(metrics: dict[str, Any], previous_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
+    statements = metrics.get("statements", {})
+    revenue = _statement_value(metrics, "revenue")
+    r_and_d = _statement_value(metrics, "research_development")
+    cash = _statement_value(metrics, "cash")
+    total_assets = _statement_value(metrics, "total_assets")
+    total_liabilities = _statement_value(metrics, "total_liabilities")
+    total_debt = _statement_value(metrics, "total_debt")
+    operating_cash_flow = _statement_value(metrics, "operating_cash_flow")
+
+    revenue_growth = statements.get("revenue", {}).get("growth")
+    r_and_d_growth = statements.get("research_development", {}).get("growth")
+    if previous_metrics:
+        revenue_growth = _growth(revenue, _statement_value(previous_metrics, "revenue"))
+        r_and_d_growth = _growth(r_and_d, _statement_value(previous_metrics, "research_development"))
+
+    r_and_d_intensity = _ratio(r_and_d, revenue)
+    r_and_d_efficiency = None
+    if revenue_growth is not None and r_and_d_growth is not None:
+        r_and_d_efficiency = revenue_growth - r_and_d_growth
+    debt_to_assets = _ratio(total_debt, total_assets)
+    cash_to_debt = _ratio(cash, total_debt)
+    ocf_to_debt = _ratio(operating_cash_flow, total_debt)
+    liability_to_assets = _ratio(total_liabilities, total_assets)
+
+    rows = []
+    factors = [
+        ("R&D intensity", r_and_d_intensity, 15, 0.10, 0.04, False, "R&D / revenue"),
+        ("R&D efficiency spread", r_and_d_efficiency, 15, 0.00, -0.10, False, "Revenue growth minus R&D growth"),
+        ("Debt to assets", debt_to_assets, 20, 0.10, 0.35, True, "Total debt / assets"),
+        ("Cash to debt", cash_to_debt, 20, 1.50, 0.75, False, "Cash coverage of debt"),
+        ("Operating cash flow to debt", ocf_to_debt, 15, 0.25, 0.08, False, "OCF debt service capacity"),
+        ("Liabilities to assets", liability_to_assets, 15, 0.45, 0.70, True, "Balance sheet leverage"),
+    ]
+    total = 0.0
+    for factor, value, weight, strong, neutral, reverse, meaning in factors:
+        points, verdict = _quality_points(value, weight, strong, neutral, reverse)
+        total += points
+        rows.append({"factor": factor, "value": value, "weight": weight, "points": points, "verdict": verdict, "meaning": meaning})
+
+    if total >= 80:
+        label = "Durable"
+        suggestion = "QUALITY SUPPORT"
+    elif total >= 65:
+        label = "Healthy"
+        suggestion = "WATCH"
+    elif total >= 50:
+        label = "Mixed"
+        suggestion = "REVIEW"
+    else:
+        label = "Fragile"
+        suggestion = "RISK"
+    return {
+        "total": round(total, 1),
+        "max": 100,
+        "label": label,
+        "suggestion": suggestion,
+        "basis": "R&D productivity, debt burden, liquidity, and operating cash coverage",
+        "rows": rows,
+    }
 
 
 def _confidence_score(metrics: dict[str, Any], previous_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1349,6 +1455,7 @@ def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | Non
         "label": label,
         "suggestion": suggestion,
         "basis": "stored-quarter comparison" if previous_metrics else "filing internal comparison",
+        "quality_score": _business_quality_score(metrics, previous_metrics),
         "confidence": confidence,
         "legend": legend,
         "rows": scored,
