@@ -1178,13 +1178,39 @@ def list_tickers() -> list[dict[str, Any]]:
     with _connect(row_factory=True) as conn:
         rows = conn.execute(
             """
-            SELECT ticker, COUNT(*) AS filing_count, MAX(id) AS latest_id, MAX(created_at) AS latest_created_at
-            FROM quarter_reports
-            GROUP BY ticker
-            ORDER BY latest_id DESC
+            SELECT latest.*, counts.filing_count
+            FROM quarter_reports latest
+            JOIN (
+                SELECT ticker, COUNT(*) AS filing_count, MAX(id) AS latest_id
+                FROM quarter_reports
+                GROUP BY ticker
+            ) counts
+            ON latest.ticker = counts.ticker AND latest.id = counts.latest_id
             """
         ).fetchall()
-    return [_row_to_dict(row) for row in rows]
+    items = []
+    for row in rows:
+        data = _row_to_dict(row)
+        try:
+            metrics = json.loads(data.get("metrics_json") or "{}")
+        except Exception:
+            metrics = {}
+        score = score_report(metrics)
+        items.append(
+            {
+                "ticker": data.get("ticker"),
+                "filing_count": data.get("filing_count"),
+                "latest_id": data.get("id"),
+                "latest_created_at": data.get("created_at"),
+                "latest_period": data.get("fiscal_quarter"),
+                "company_name": data.get("company_name"),
+                "score": score,
+                "score_total": score.get("total"),
+                "score_label": score.get("label"),
+                "score_suggestion": score.get("suggestion"),
+            }
+        )
+    return sorted(items, key=lambda item: item.get("score_total") or -1, reverse=True)
 
 
 def delete_all_reports() -> dict[str, int]:

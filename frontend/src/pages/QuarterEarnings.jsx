@@ -240,6 +240,11 @@ export default function QuarterEarnings() {
   const [searchTimeout, setSearchTimeout] = useState(null);
 
   const visibleHistory = selectedTicker ? history.filter((item) => item.ticker === selectedTicker) : history;
+  const sortedAvailableTickers = [...availableTickers].sort((a, b) => {
+    const scoreA = a.score?.total ?? a.score_total ?? -1;
+    const scoreB = b.score?.total ?? b.score_total ?? -1;
+    return scoreB - scoreA;
+  });
 
   const loadDbStatus = async () => {
     try {
@@ -539,13 +544,25 @@ export default function QuarterEarnings() {
               <button className="table-action" onClick={() => setShowTickerModal(false)}>Close</button>
             </div>
             <div className="ticker-list">
-              {availableTickers.length ? availableTickers.map((group) => (
+              {sortedAvailableTickers.length ? sortedAvailableTickers.map((group) => {
+                const total = group.score?.total ?? group.score_total;
+                const label = group.score?.label ?? group.score_label ?? 'No score';
+                const suggestion = group.score?.suggestion ?? group.score_suggestion ?? '';
+                return (
                 <button className="ticker-choice" key={group.ticker} onClick={() => openTicker(group.ticker)}>
-                  <strong>{group.ticker}</strong>
-                  <span>{group.filing_count} filings</span>
-                  <small>Latest DB record #{group.latest_id}</small>
+                  <div className="ticker-choice-main">
+                    <strong>{group.ticker}</strong>
+                    <span>{group.company_name || 'Stored ticker'}</span>
+                    <small>{group.filing_count} filings | {group.latest_period || `Latest DB record #${group.latest_id}`}</small>
+                  </div>
+                  <div className="ticker-score-pill">
+                    <strong>{total ?? 'N/A'}</strong>
+                    <span>{label}</span>
+                    {suggestion && <small>{suggestion}</small>}
+                  </div>
                 </button>
-              )) : (
+                );
+              }) : (
                 <div className="empty-state">
                   <strong>No tickers stored yet</strong>
                   <span>Import SEC filings to create first stored filing.</span>
