@@ -19,7 +19,7 @@ SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "StocksAnalyser2025 quarter-earning
 XBRL_TAGS = {
     "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues"],
     "gross_profit": ["GrossProfit"],
-    "cost_of_revenue": ["CostOfRevenue"],
+    "cost_of_revenue": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss"],
     "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
@@ -59,6 +59,14 @@ except ImportError:
     dict_row = None
 
 
+class _ClosingSQLiteConnection(sqlite3.Connection):
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 def _using_postgres() -> bool:
     return bool(POSTGRES_URL)
 
@@ -72,7 +80,7 @@ def _connect(row_factory: bool = False):
         if psycopg is None:
             raise RuntimeError("DATABASE_URL is set, but psycopg is not installed. Add psycopg[binary] to backend requirements.")
         return psycopg.connect(POSTGRES_URL, row_factory=dict_row if row_factory else None)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, factory=_ClosingSQLiteConnection)
     if row_factory:
         conn.row_factory = sqlite3.Row
     return conn
@@ -569,7 +577,7 @@ def _derive_gross_profit(statements: dict[str, Any]) -> dict[str, Any]:
         "prior": prior,
         "growth": _growth(current, prior),
         "confidence": "xbrl_sec_companyfacts_derived",
-        "derived_from": "Revenue minus CostOfRevenue",
+        "derived_from": f"Revenue minus {cost.get('label') or 'cost of revenue'}",
         "accession": revenue.get("accession"),
         "taxonomy": revenue.get("taxonomy") or "us-gaap",
         "xbrl_start": revenue.get("xbrl_start"),
@@ -1377,6 +1385,34 @@ def delete_all_reports() -> dict[str, int]:
         conn.execute("DELETE FROM quarter_analyses")
         conn.execute("DELETE FROM quarter_reports")
     return {"deleted_reports": report_count, "deleted_analyses": analysis_count}
+
+
+def delete_ticker_reports(ticker: str) -> dict[str, Any]:
+    init_db()
+    normalized_ticker = ticker.upper().strip()
+    ph = _placeholder()
+    with _connect() as conn:
+        report_count = conn.execute(
+            f"SELECT COUNT(*) FROM quarter_reports WHERE ticker = {ph}",
+            (normalized_ticker,),
+        ).fetchone()[0]
+        analysis_count = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM quarter_analyses
+            WHERE report_id IN (SELECT id FROM quarter_reports WHERE ticker = {ph})
+            """,
+            (normalized_ticker,),
+        ).fetchone()[0]
+        conn.execute(
+            f"DELETE FROM quarter_analyses WHERE report_id IN (SELECT id FROM quarter_reports WHERE ticker = {ph})",
+            (normalized_ticker,),
+        )
+        conn.execute(f"DELETE FROM quarter_reports WHERE ticker = {ph}", (normalized_ticker,))
+    return {
+        "ticker": normalized_ticker,
+        "deleted_reports": report_count,
+        "deleted_analyses": analysis_count,
+    }
 
 
 def get_report(report_id: int) -> dict[str, Any] | None:

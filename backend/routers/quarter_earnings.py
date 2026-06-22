@@ -11,6 +11,7 @@ from slowapi.util import get_remote_address
 from core.quarter_earnings import (
     build_pdf_payload,
     delete_all_reports,
+    delete_ticker_reports,
     get_db_status,
     get_report,
     get_sec_filing_text,
@@ -442,6 +443,15 @@ def import_from_sec(request: Request, body: SecImportRequest):
 @limiter.limit("20/minute")
 def tickers(request: Request):
     return {"tickers": list_tickers()}
+
+
+@router.delete("/tickers/{ticker}")
+@limiter.limit("10/minute")
+def delete_ticker(request: Request, ticker: str):
+    result = delete_ticker_reports(ticker)
+    if result["deleted_reports"] == 0:
+        raise HTTPException(status_code=404, detail=f"No stored filings found for {result['ticker']}.")
+    return result
 
 
 @router.get("/{ticker}/reports")

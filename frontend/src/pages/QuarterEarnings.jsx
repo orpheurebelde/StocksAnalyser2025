@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { BarChart3, Brain, Database, Landmark, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { BarChart3, Brain, Database, Landmark, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
 import { LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../api';
 
@@ -363,6 +363,8 @@ export default function QuarterEarnings() {
   const [score, setScore] = useState(null);
   const [analysis, setAnalysis] = useState('');
   const [loading, setLoading] = useState(false);
+  const [updatingTickers, setUpdatingTickers] = useState(false);
+  const [deletingTicker, setDeletingTicker] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -462,6 +464,52 @@ export default function QuarterEarnings() {
       setError(apiError(err));
     }
     setLoading(false);
+  };
+
+  const updateStoredTickers = async () => {
+    setUpdatingTickers(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await api.post('/api/quarter-earnings/reports/reprocess');
+      const tickerRes = await api.get('/api/quarter-earnings/tickers');
+      setAvailableTickers(tickerRes.data.tickers || []);
+      if (selectedTicker) {
+        const reportRes = await api.get(`/api/quarter-earnings/${selectedTicker}/reports`);
+        const rows = reportRes.data.reports || [];
+        setHistory(rows);
+        setReport(rows[0] || null);
+        setScore(rows[0]?.score || null);
+      }
+      await loadDbStatus();
+      setNotice(`Updated ${res.data.updated_reports} stored filings. Skipped ${res.data.skipped_reports}.`);
+    } catch (err) {
+      setError(apiError(err));
+    }
+    setUpdatingTickers(false);
+  };
+
+  const deleteStoredTicker = async (ticker) => {
+    if (!window.confirm(`Delete all stored filings and analyses for ${ticker}?`)) return;
+    setDeletingTicker(ticker);
+    setError('');
+    setNotice('');
+    try {
+      const res = await api.delete(`/api/quarter-earnings/tickers/${encodeURIComponent(ticker)}`);
+      setAvailableTickers((items) => items.filter((item) => item.ticker !== ticker));
+      if (selectedTicker === ticker) {
+        setHistory([]);
+        setReport(null);
+        setScore(null);
+        setAnalysis('');
+        setSelectedTicker('');
+      }
+      await loadDbStatus();
+      setNotice(`Deleted ${ticker}: ${res.data.deleted_reports} filings and ${res.data.deleted_analyses} analyses.`);
+    } catch (err) {
+      setError(apiError(err));
+    }
+    setDeletingTicker('');
   };
 
   const importSec = async () => {
@@ -598,16 +646,19 @@ export default function QuarterEarnings() {
             <option value="last_year_quarters">Last year quarters</option>
             <option value="last_4_quarters_plus_10k">Last 4 + 10-K</option>
           </select>
-          <button className="btn-primary" onClick={importSec} disabled={loading} style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}>
-            <Database size={18} /> {loading ? 'Importing...' : 'Import SEC'}
+          <button className="btn-primary compact-control" onClick={importSec} disabled={loading || updatingTickers} title="Import SEC filings for selected ticker" style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}>
+            <Upload size={18} /> {loading ? 'Importing...' : 'Import SEC'}
           </button>
-          <button className="pdf-icon-button" onClick={loadExisting} disabled={loading} title="Load existing filings" type="button">
-            <RefreshCw size={22} />
+          <button className="btn-primary compact-control update-tickers-button" onClick={updateStoredTickers} disabled={loading || updatingTickers || !dbStatus?.report_count} title="Refresh every stored filing from SEC using current extraction rules" type="button">
+            <RefreshCw size={18} className={updatingTickers ? 'spin-icon' : ''} /> {updatingTickers ? 'Updating...' : 'Update Tickers'}
           </button>
-          <button className="pdf-icon-button" onClick={cleanExisting} disabled={loading} title="Clean DB" type="button" style={{ color: 'var(--status-red)' }}>
+          <button className="pdf-icon-button" onClick={loadExisting} disabled={loading || updatingTickers} title="Open stored tickers" type="button">
+            <Database size={22} />
+          </button>
+          <button className="pdf-icon-button" onClick={cleanExisting} disabled={loading || updatingTickers} title="Clean DB" type="button" style={{ color: 'var(--status-red)' }}>
             <Trash2 size={22} />
           </button>
-          <button className="btn-primary" onClick={analyze} disabled={!report || aiLoading} style={{ background: 'linear-gradient(135deg, var(--status-green), var(--accent-blue))' }}>
+          <button className="btn-primary" onClick={analyze} disabled={!report || aiLoading || updatingTickers} style={{ background: 'linear-gradient(135deg, var(--status-green), var(--accent-blue))' }}>
             <Brain size={18} /> {aiLoading ? 'Analyzing...' : 'Unified AI Analysis'}
           </button>
         </div>
@@ -667,18 +718,30 @@ export default function QuarterEarnings() {
                 const label = group.score?.label ?? group.score_label ?? 'No score';
                 const suggestion = group.score?.suggestion ?? group.score_suggestion ?? '';
                 return (
-                <button className="ticker-choice" key={group.ticker} onClick={() => openTicker(group.ticker)}>
-                  <div className="ticker-choice-main">
-                    <strong>{group.ticker}</strong>
-                    <span>{group.company_name || 'Stored ticker'}</span>
-                    <small>{group.filing_count} filings | {group.latest_period || `Latest DB record #${group.latest_id}`}</small>
-                  </div>
-                  <div className="ticker-score-pill">
-                    <strong>{total ?? 'N/A'}</strong>
-                    <span>{label}</span>
-                    {suggestion && <small>{suggestion}</small>}
-                  </div>
-                </button>
+                <div className="ticker-choice-row" key={group.ticker}>
+                  <button className="ticker-choice" onClick={() => openTicker(group.ticker)} disabled={deletingTicker === group.ticker}>
+                    <div className="ticker-choice-main">
+                      <strong>{group.ticker}</strong>
+                      <span>{group.company_name || 'Stored ticker'}</span>
+                      <small>{group.filing_count} filings | {group.latest_period || `Latest DB record #${group.latest_id}`}</small>
+                    </div>
+                    <div className="ticker-score-pill">
+                      <strong>{total ?? 'N/A'}</strong>
+                      <span>{label}</span>
+                      {suggestion && <small>{suggestion}</small>}
+                    </div>
+                  </button>
+                  <button
+                    className="ticker-delete-button"
+                    onClick={() => deleteStoredTicker(group.ticker)}
+                    disabled={Boolean(deletingTicker)}
+                    title={`Delete ${group.ticker} from DB`}
+                    aria-label={`Delete ${group.ticker} from DB`}
+                    type="button"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
                 );
               }) : (
                 <div className="empty-state">

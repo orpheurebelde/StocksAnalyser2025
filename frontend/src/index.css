@@ -237,9 +237,28 @@ button {
 
 .filing-controls {
   display: grid;
-  grid-template-columns: auto minmax(220px, 1.2fr) minmax(120px, 0.65fr) auto auto auto auto;
-  gap: 1rem;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(200px, 1.1fr) auto auto auto auto auto;
+  gap: 0.75rem;
   align-items: center;
+}
+
+.compact-control {
+  min-width: max-content;
+  padding-inline: 1rem;
+}
+
+.update-tickers-button {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(0, 153, 255, 0.95));
+}
+
+.spin-icon {
+  animation: refresh-spin 0.9s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pdf-icon-button {
@@ -500,6 +519,13 @@ button {
   gap: 0.75rem;
 }
 
+.ticker-choice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 0.65rem;
+  align-items: stretch;
+}
+
 .ticker-choice {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -520,6 +546,27 @@ button {
   border-color: rgba(0, 242, 254, 0.5);
   background: rgba(0, 242, 254, 0.08);
   transform: translateY(-1px);
+}
+
+.ticker-delete-button {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--status-red);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.ticker-delete-button:hover:not(:disabled) {
+  border-color: var(--status-red);
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.ticker-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .ticker-choice-main {

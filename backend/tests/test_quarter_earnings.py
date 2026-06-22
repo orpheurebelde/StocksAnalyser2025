@@ -1,5 +1,9 @@
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from core import quarter_earnings
 from core.quarter_earnings import _derive_gross_profit
 
 
@@ -57,6 +61,40 @@ class DeriveGrossProfitTests(unittest.TestCase):
         result = _derive_gross_profit(statements)
 
         self.assertNotIn("gross_profit", result)
+
+
+class DeleteTickerReportsTests(unittest.TestCase):
+    def test_deletes_only_selected_ticker_and_its_analyses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "quarter-earnings.sqlite")
+            with patch.object(quarter_earnings, "DB_PATH", db_path), patch.object(quarter_earnings, "POSTGRES_URL", None):
+                quarter_earnings.init_db()
+                with quarter_earnings._connect() as conn:
+                    conn.execute(
+                        """
+                        INSERT INTO quarter_reports
+                        (ticker, fiscal_quarter, source_type, metrics_json, created_at)
+                        VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)
+                        """,
+                        ("AAA", "2025-Q1", "test", "{}", "now", "BBB", "2025-Q1", "test", "{}", "now"),
+                    )
+                    aaa_id = conn.execute("SELECT id FROM quarter_reports WHERE ticker = ?", ("AAA",)).fetchone()[0]
+                    conn.execute(
+                        """
+                        INSERT INTO quarter_analyses
+                        (report_id, provider, model, score_json, analysis_markdown, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (aaa_id, "test", "test", "{}", "test", "now"),
+                    )
+
+                result = quarter_earnings.delete_ticker_reports("aaa")
+
+                self.assertEqual(result["deleted_reports"], 1)
+                self.assertEqual(result["deleted_analyses"], 1)
+                with quarter_earnings._connect() as conn:
+                    self.assertEqual(conn.execute("SELECT COUNT(*) FROM quarter_reports WHERE ticker = 'AAA'").fetchone()[0], 0)
+                    self.assertEqual(conn.execute("SELECT COUNT(*) FROM quarter_reports WHERE ticker = 'BBB'").fetchone()[0], 1)
 
 
 if __name__ == "__main__":
