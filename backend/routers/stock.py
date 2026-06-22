@@ -4,6 +4,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from core.yfinance_client import get_ticker_info, download_data
 from core.technical import analyze_price_action
+from core.auth import ensure_analysis_quota, record_analysis_use
 import os
 import requests
 from dotenv import load_dotenv
@@ -98,10 +99,20 @@ def get_history(request: Request, ticker: str, period: str = "6mo", interval: st
 @limiter.limit("5/minute")
 def ai_analysis(request: Request, ticker: str, body: AIPrompt):
     try:
+        user = request.state.user
+        if not (user.get("is_admin") or user.get("analysis_authorized")):
+            raise HTTPException(status_code=403, detail="AI analysis requires administrator authorization.")
+        try:
+            ensure_analysis_quota(user)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         from core.ai.orchestrator import AnalysisOrchestrator
         orchestrator = AnalysisOrchestrator()
         result = orchestrator.run_analysis(ticker, body.prompt)
+        record_analysis_use(user["id"], "stock")
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

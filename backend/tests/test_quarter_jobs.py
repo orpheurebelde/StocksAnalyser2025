@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from routers import quarter_earnings
+from core import quarter_earnings
 
 
 class ReprocessJobTests(unittest.TestCase):
@@ -9,16 +9,17 @@ class ReprocessJobTests(unittest.TestCase):
         job_id = "test-job"
         quarter_earnings._reprocess_jobs[job_id] = {
             "job_id": job_id,
+            "user_id": 7,
             "ticker": None,
             "status": "queued",
         }
 
-        def fake_reprocess(_ticker, callback):
+        def fake_reprocess(_user_id, _ticker, callback):
             callback({"processed_reports": 2, "total_reports": 3, "updated_reports": 2, "skipped_reports": 0})
             return {"updated_reports": 3, "skipped_reports": 0}
 
         with patch.object(quarter_earnings, "reprocess_stored_reports", side_effect=fake_reprocess):
-            quarter_earnings._run_reprocess_job(job_id, None)
+            quarter_earnings.run_reprocess_job(job_id, 7, None)
 
         job = quarter_earnings._reprocess_jobs.pop(job_id)
         self.assertEqual(job["status"], "completed")

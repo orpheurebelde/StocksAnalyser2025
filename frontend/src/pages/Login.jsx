@@ -4,11 +4,24 @@ import api from '../api';
 
 const GOOGLE_SCRIPT_ID = 'google-identity-services';
 const GOOGLE_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
+const DEVICE_STORAGE_KEY = 'stocks_analyser_device_id';
+
+const getDeviceId = () => {
+  let value = window.localStorage.getItem(DEVICE_STORAGE_KEY);
+  if (!value) {
+    value = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(DEVICE_STORAGE_KEY, value);
+  }
+  return value;
+};
 
 export default function Login({ onAuthenticated }) {
   const buttonRef = useRef(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [blockedCredential, setBlockedCredential] = useState('');
+  const [requestMessage, setRequestMessage] = useState('');
+  const [requestStatus, setRequestStatus] = useState('');
   const embeddedClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
   const [clientId, setClientId] = useState(embeddedClientId);
   const [configChecked, setConfigChecked] = useState(Boolean(embeddedClientId));
@@ -43,10 +56,12 @@ export default function Login({ onAuthenticated }) {
           setLoading(true);
           setError('');
           try {
-            const response = await api.post('/api/auth/google', { credential });
+            const response = await api.post('/api/auth/google', { credential, device_id: getDeviceId() });
             onAuthenticated(response.data.user);
           } catch (requestError) {
-            setError(requestError.response?.data?.detail || 'Google login failed. Please try again.');
+            const detail = requestError.response?.data?.detail || 'Google login failed. Please try again.';
+            setError(detail);
+            if (detail.includes('Registration limit reached')) setBlockedCredential(credential);
           } finally {
             setLoading(false);
           }
@@ -81,6 +96,25 @@ export default function Login({ onAuthenticated }) {
     };
   }, [clientId, onAuthenticated]);
 
+  const submitAccessRequest = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setRequestStatus('');
+    try {
+      const response = await api.post('/api/auth/registration-access/request', {
+        credential: blockedCredential,
+        device_id: getDeviceId(),
+        message: requestMessage,
+      });
+      setRequestStatus(response.data.message || 'Access request submitted to administrator.');
+      setBlockedCredential('');
+    } catch (requestError) {
+      setRequestStatus(requestError.response?.data?.detail || 'Could not submit access request.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="login-page">
       <section className="login-card glass-panel">
@@ -101,6 +135,14 @@ export default function Login({ onAuthenticated }) {
         )}
         {loading && <p className="metric-label">Creating secure session...</p>}
         {error && <p className="login-error" role="alert">{error}</p>}
+        {blockedCredential && (
+          <form className="registration-request-form" onSubmit={submitAccessRequest}>
+            <label htmlFor="registration-message">Request access from administrator</label>
+            <textarea id="registration-message" value={requestMessage} onChange={(event) => setRequestMessage(event.target.value)} maxLength={1000} placeholder="Explain why you need access." />
+            <button className="btn-primary" type="submit" disabled={loading}>Send access request</button>
+          </form>
+        )}
+        {requestStatus && <p className="metric-label" role="status">{requestStatus}</p>}
         <small className="login-privacy">Only basic profile identity is requested. Passwords and Google access tokens are never stored.</small>
       </section>
     </main>

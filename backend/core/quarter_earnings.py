@@ -3,7 +3,9 @@ import json
 import os
 import re
 import sqlite3
+import threading
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -50,6 +52,8 @@ XBRL_TAG_PATTERNS = {
 }
 SEC_FORMS = {"10-Q", "10-K"}
 FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "cost_of_revenue", "operating_income", "net_income", "operating_cash_flow", "research_development"}
+_reprocess_jobs: dict[str, dict[str, Any]] = {}
+_reprocess_jobs_lock = threading.Lock()
 
 try:
     import psycopg
@@ -97,6 +101,7 @@ def init_db():
                 """
                 CREATE TABLE IF NOT EXISTS quarter_reports (
                     id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
                     ticker TEXT NOT NULL,
                     fiscal_quarter TEXT,
                     report_date TEXT,
@@ -124,6 +129,8 @@ def init_db():
                 )
                 """
             )
+            conn.execute("ALTER TABLE quarter_reports ADD COLUMN IF NOT EXISTS user_id BIGINT")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_quarter_reports_user_ticker ON quarter_reports(user_id, ticker)")
         return
 
     db_dir = os.path.dirname(DB_PATH)
@@ -134,6 +141,7 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS quarter_reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 ticker TEXT NOT NULL,
                 fiscal_quarter TEXT,
                 report_date TEXT,
@@ -162,13 +170,21 @@ def init_db():
             )
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(quarter_reports)").fetchall()}
+        if "user_id" not in columns:
+            conn.execute("ALTER TABLE quarter_reports ADD COLUMN user_id INTEGER")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_quarter_reports_user_ticker ON quarter_reports(user_id, ticker)")
 
 
-def get_db_status() -> dict[str, Any]:
+def get_db_status(user_id: int) -> dict[str, Any]:
     init_db()
     with _connect() as conn:
-        report_count = conn.execute("SELECT COUNT(*) FROM quarter_reports").fetchone()[0]
-        analysis_count = conn.execute("SELECT COUNT(*) FROM quarter_analyses").fetchone()[0]
+        ph = _placeholder()
+        report_count = conn.execute(f"SELECT COUNT(*) FROM quarter_reports WHERE user_id = {ph}", (user_id,)).fetchone()[0]
+        analysis_count = conn.execute(
+            f"SELECT COUNT(*) FROM quarter_analyses WHERE report_id IN (SELECT id FROM quarter_reports WHERE user_id = {ph})",
+            (user_id,),
+        ).fetchone()[0]
     if _using_postgres():
         configured_env = "DATABASE_URL" if os.getenv("DATABASE_URL") else "POSTGRES_URL"
         return {
@@ -831,24 +847,26 @@ def enrich_missing_operating_cash_flow(metrics: dict[str, Any], ticker: str, rep
     return metrics, True
 
 
-def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
+def backfill_missing_operating_cash_flow(user_id: int, ticker: str | None = None) -> int:
     init_db()
     ph = _placeholder()
     query = """
         SELECT id, ticker, metrics_json, report_date, report_text
         FROM quarter_reports
-        WHERE id IN (SELECT MAX(id) FROM quarter_reports GROUP BY ticker)
+        WHERE user_id = {ph}
+          AND id IN (SELECT MAX(id) FROM quarter_reports WHERE user_id = {ph} GROUP BY ticker)
     """
-    params: tuple[Any, ...] = ()
+    query = query.format(ph=ph)
+    params: tuple[Any, ...] = (user_id, user_id)
     if ticker:
         query = f"""
             SELECT id, ticker, metrics_json, report_date, report_text
             FROM quarter_reports
-            WHERE ticker = {ph}
+            WHERE user_id = {ph} AND ticker = {ph}
             ORDER BY id DESC
             LIMIT 1
         """
-        params = (ticker.upper(),)
+        params = (user_id, ticker.upper())
     changed = 0
     with _connect() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -873,6 +891,7 @@ def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
 
 
 def reprocess_stored_reports(
+    user_id: int,
     ticker: str | None = None,
     progress_callback: Callable[[dict[str, int]], None] | None = None,
 ) -> dict[str, int]:
@@ -881,17 +900,19 @@ def reprocess_stored_reports(
     query = """
         SELECT id, ticker, source_url, source_type, report_date, metrics_json, report_text
         FROM quarter_reports
+        WHERE user_id = {ph}
         ORDER BY id DESC
     """
-    params: tuple[Any, ...] = ()
+    query = query.format(ph=ph)
+    params: tuple[Any, ...] = (user_id,)
     if ticker:
         query = """
             SELECT id, ticker, source_url, source_type, report_date, metrics_json, report_text
             FROM quarter_reports
-            WHERE ticker = {ph}
+            WHERE user_id = {ph} AND ticker = {ph}
             ORDER BY id DESC
         """.format(ph=ph)
-        params = (ticker.upper(),)
+        params = (user_id, ticker.upper())
     updated = 0
     skipped = 0
     with _connect() as conn:
@@ -933,7 +954,7 @@ def reprocess_stored_reports(
                     f"""
                     UPDATE quarter_reports
                     SET ticker = {ph}, fiscal_quarter = {ph}, report_date = {ph}, source_url = {ph}, company_name = {ph}, metrics_json = {ph}, report_text = {ph}
-                    WHERE id = {ph}
+                    WHERE id = {ph} AND user_id = {ph}
                     """,
                     (
                         metrics.get("ticker") or row_ticker,
@@ -944,6 +965,7 @@ def reprocess_stored_reports(
                         json.dumps(metrics),
                         report_text,
                         report_id,
+                        user_id,
                     ),
                 )
             updated += 1
@@ -958,6 +980,62 @@ def reprocess_stored_reports(
                     "skipped_reports": skipped,
                 })
     return {"updated_reports": updated, "skipped_reports": skipped}
+
+
+def create_reprocess_job(user_id: int, ticker: str | None = None) -> tuple[dict[str, Any], bool]:
+    normalized_ticker = ticker.upper() if ticker else None
+    with _reprocess_jobs_lock:
+        active_job = next(
+            (
+                job for job in _reprocess_jobs.values()
+                if job.get("status") in {"queued", "running"}
+                and job.get("user_id") == user_id and job.get("ticker") == normalized_ticker
+            ),
+            None,
+        )
+        if active_job:
+            return dict(active_job), False
+        job_id = uuid.uuid4().hex
+        job = {
+            "job_id": job_id,
+            "user_id": user_id,
+            "ticker": normalized_ticker,
+            "status": "queued",
+            "processed_reports": 0,
+            "total_reports": 0,
+            "updated_reports": 0,
+            "skipped_reports": 0,
+        }
+        _reprocess_jobs[job_id] = job
+        if len(_reprocess_jobs) > 20:
+            completed_ids = [key for key, value in _reprocess_jobs.items() if value.get("status") in {"completed", "failed"}]
+            for old_job_id in completed_ids[:-10]:
+                _reprocess_jobs.pop(old_job_id, None)
+    return dict(job), True
+
+
+def get_reprocess_job(job_id: str) -> dict[str, Any] | None:
+    with _reprocess_jobs_lock:
+        job = _reprocess_jobs.get(job_id)
+        return dict(job) if job else None
+
+
+def _set_reprocess_job(job_id: str, **changes) -> None:
+    with _reprocess_jobs_lock:
+        _reprocess_jobs[job_id] = {**_reprocess_jobs[job_id], **changes}
+
+
+def run_reprocess_job(job_id: str, user_id: int, ticker: str | None) -> None:
+    _set_reprocess_job(job_id, status="running")
+
+    def update_progress(progress: dict[str, int]):
+        _set_reprocess_job(job_id, **progress)
+
+    try:
+        result = reprocess_stored_reports(user_id, ticker, update_progress)
+        _set_reprocess_job(job_id, status="completed", result=result)
+    except Exception as exc:
+        _set_reprocess_job(job_id, status="failed", error=str(exc)[:500])
 
 
 def extract_10q_data(ticker: str, report_text: str, filename: str | None = None) -> dict[str, Any]:
@@ -1191,7 +1269,7 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
     }
 
 
-def import_sec_filings(ticker: str, mode: str = "last_4_quarters") -> dict[str, Any]:
+def import_sec_filings(user_id: int, ticker: str, mode: str = "last_4_quarters") -> dict[str, Any]:
     ticker = ticker.upper().strip()
     cik = _cik_from_ticker(ticker)
     if not cik:
@@ -1206,7 +1284,7 @@ def import_sec_filings(ticker: str, mode: str = "last_4_quarters") -> dict[str, 
     saved = []
     for filing in reversed(filings):
         payload = _sec_payload_from_filing(ticker, cik, companyfacts, filing)
-        saved.append(save_report(payload))
+        saved.append(save_report(user_id, payload))
     return {
         "ticker": ticker,
         "cik": cik,
@@ -1234,7 +1312,7 @@ def build_pdf_payload(ticker: str, file_bytes: bytes, filename: str | None = Non
     }
 
 
-def save_report(payload: dict[str, Any]) -> dict[str, Any]:
+def save_report(user_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     init_db()
     ph = _placeholder()
     returning = " RETURNING id" if _using_postgres() else ""
@@ -1242,18 +1320,18 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
         existing = None
         if payload.get("fiscal_quarter"):
             existing = conn.execute(
-                f"SELECT id FROM quarter_reports WHERE ticker = {ph} AND fiscal_quarter = {ph} ORDER BY id DESC LIMIT 1",
-                (payload["ticker"], payload.get("fiscal_quarter")),
+                f"SELECT id FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph} AND fiscal_quarter = {ph} ORDER BY id DESC LIMIT 1",
+                (user_id, payload["ticker"], payload.get("fiscal_quarter")),
             ).fetchone()
         if not existing and payload.get("report_date"):
             existing = conn.execute(
-                f"SELECT id FROM quarter_reports WHERE ticker = {ph} AND report_date = {ph} ORDER BY id DESC LIMIT 1",
-                (payload["ticker"], payload.get("report_date")),
+                f"SELECT id FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph} AND report_date = {ph} ORDER BY id DESC LIMIT 1",
+                (user_id, payload["ticker"], payload.get("report_date")),
             ).fetchone()
         if not existing and payload.get("source_url"):
             existing = conn.execute(
-                f"SELECT id FROM quarter_reports WHERE ticker = {ph} AND source_url = {ph} ORDER BY id DESC LIMIT 1",
-                (payload["ticker"], payload.get("source_url")),
+                f"SELECT id FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph} AND source_url = {ph} ORDER BY id DESC LIMIT 1",
+                (user_id, payload["ticker"], payload.get("source_url")),
             ).fetchone()
 
         if existing:
@@ -1271,7 +1349,7 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
                     metrics_json = {ph},
                     report_text = {ph},
                     created_at = {ph}
-                WHERE id = {ph}
+                WHERE id = {ph} AND user_id = {ph}
                 """,
                 (
                     payload.get("fiscal_quarter"),
@@ -1285,6 +1363,7 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
                     payload.get("report_text"),
                     _now(),
                     report_id,
+                    user_id,
                 ),
             )
             return {**payload, "id": report_id, "updated": True}
@@ -1292,11 +1371,12 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
         cur = conn.execute(
             f"""
             INSERT INTO quarter_reports (
-                ticker, fiscal_quarter, report_date, source_url, source_type, company_name,
+                user_id, ticker, fiscal_quarter, report_date, source_url, source_type, company_name,
                 sector, industry, metrics_json, report_text, created_at
-            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}){returning}
+            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}){returning}
             """,
             (
+                user_id,
                 payload["ticker"],
                 payload.get("fiscal_quarter"),
                 payload.get("report_date"),
@@ -1314,38 +1394,42 @@ def save_report(payload: dict[str, Any]) -> dict[str, Any]:
     return {**payload, "id": report_id, "updated": False}
 
 
-def list_reports(ticker: str) -> list[dict[str, Any]]:
+def list_reports(user_id: int, ticker: str) -> list[dict[str, Any]]:
     init_db()
-    backfill_missing_operating_cash_flow(ticker)
+    backfill_missing_operating_cash_flow(user_id, ticker)
     ph = _placeholder()
     with _connect(row_factory=True) as conn:
         rows = conn.execute(
-            f"SELECT * FROM quarter_reports WHERE ticker = {ph} ORDER BY id DESC LIMIT 100",
-            (ticker.upper(),),
+            f"SELECT * FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph} ORDER BY id DESC LIMIT 100",
+            (user_id, ticker.upper()),
         ).fetchall()
     reports = [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
     return sorted(reports, key=_report_date_key, reverse=True)[:20]
 
 
-def list_all_reports(limit: int = 50) -> list[dict[str, Any]]:
+def list_all_reports(user_id: int, limit: int = 50) -> list[dict[str, Any]]:
     init_db()
-    backfill_missing_operating_cash_flow()
+    backfill_missing_operating_cash_flow(user_id)
+    ph = _placeholder()
     with _connect(row_factory=True) as conn:
         rows = conn.execute(
-            "SELECT * FROM quarter_reports ORDER BY id DESC LIMIT 200",
+            f"SELECT * FROM quarter_reports WHERE user_id = {ph} ORDER BY id DESC LIMIT 200",
+            (user_id,),
         ).fetchall()
     reports = [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
     return sorted(reports, key=_report_date_key, reverse=True)[:limit]
 
 
-def list_tickers() -> list[dict[str, Any]]:
+def list_tickers(user_id: int) -> list[dict[str, Any]]:
     init_db()
+    ph = _placeholder()
     with _connect(row_factory=True) as conn:
         rows = conn.execute(
             """
-            SELECT * FROM quarter_reports
+            SELECT * FROM quarter_reports WHERE user_id = {ph}
             ORDER BY ticker ASC, id DESC
-            """
+            """.format(ph=ph),
+            (user_id,),
         ).fetchall()
 
     by_ticker: dict[str, list[dict[str, Any]]] = {}
@@ -1389,37 +1473,44 @@ def list_tickers() -> list[dict[str, Any]]:
     return sorted(items, key=lambda item: item.get("score_total") or -1, reverse=True)
 
 
-def delete_all_reports() -> dict[str, int]:
+def delete_all_reports(user_id: int) -> dict[str, int]:
     init_db()
+    ph = _placeholder()
     with _connect() as conn:
-        analysis_count = conn.execute("SELECT COUNT(*) FROM quarter_analyses").fetchone()[0]
-        report_count = conn.execute("SELECT COUNT(*) FROM quarter_reports").fetchone()[0]
-        conn.execute("DELETE FROM quarter_analyses")
-        conn.execute("DELETE FROM quarter_reports")
+        analysis_count = conn.execute(
+            f"SELECT COUNT(*) FROM quarter_analyses WHERE report_id IN (SELECT id FROM quarter_reports WHERE user_id = {ph})",
+            (user_id,),
+        ).fetchone()[0]
+        report_count = conn.execute(f"SELECT COUNT(*) FROM quarter_reports WHERE user_id = {ph}", (user_id,)).fetchone()[0]
+        conn.execute(
+            f"DELETE FROM quarter_analyses WHERE report_id IN (SELECT id FROM quarter_reports WHERE user_id = {ph})",
+            (user_id,),
+        )
+        conn.execute(f"DELETE FROM quarter_reports WHERE user_id = {ph}", (user_id,))
     return {"deleted_reports": report_count, "deleted_analyses": analysis_count}
 
 
-def delete_ticker_reports(ticker: str) -> dict[str, Any]:
+def delete_ticker_reports(user_id: int, ticker: str) -> dict[str, Any]:
     init_db()
     normalized_ticker = ticker.upper().strip()
     ph = _placeholder()
     with _connect() as conn:
         report_count = conn.execute(
-            f"SELECT COUNT(*) FROM quarter_reports WHERE ticker = {ph}",
-            (normalized_ticker,),
+            f"SELECT COUNT(*) FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph}",
+            (user_id, normalized_ticker),
         ).fetchone()[0]
         analysis_count = conn.execute(
             f"""
             SELECT COUNT(*) FROM quarter_analyses
-            WHERE report_id IN (SELECT id FROM quarter_reports WHERE ticker = {ph})
+            WHERE report_id IN (SELECT id FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph})
             """,
-            (normalized_ticker,),
+            (user_id, normalized_ticker),
         ).fetchone()[0]
         conn.execute(
-            f"DELETE FROM quarter_analyses WHERE report_id IN (SELECT id FROM quarter_reports WHERE ticker = {ph})",
-            (normalized_ticker,),
+            f"DELETE FROM quarter_analyses WHERE report_id IN (SELECT id FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph})",
+            (user_id, normalized_ticker),
         )
-        conn.execute(f"DELETE FROM quarter_reports WHERE ticker = {ph}", (normalized_ticker,))
+        conn.execute(f"DELETE FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph}", (user_id, normalized_ticker))
     return {
         "ticker": normalized_ticker,
         "deleted_reports": report_count,
@@ -1427,16 +1518,25 @@ def delete_ticker_reports(ticker: str) -> dict[str, Any]:
     }
 
 
-def get_report(report_id: int) -> dict[str, Any] | None:
+def get_report(user_id: int, report_id: int) -> dict[str, Any] | None:
     init_db()
     ph = _placeholder()
     with _connect(row_factory=True) as conn:
-        row = conn.execute(f"SELECT * FROM quarter_reports WHERE id = {ph}", (report_id,)).fetchone()
+        row = conn.execute(f"SELECT * FROM quarter_reports WHERE user_id = {ph} AND id = {ph}", (user_id, report_id)).fetchone()
     if not row:
         return None
     data = _row_to_dict(row)
     data["metrics"] = json.loads(data.pop("metrics_json"))
     return data
+
+
+def claim_unowned_reports(user_id: int) -> int:
+    """Assign pre-authentication filings to admin once, preserving existing data."""
+    init_db()
+    ph = _placeholder()
+    with _connect() as conn:
+        cursor = conn.execute(f"UPDATE quarter_reports SET user_id = {ph} WHERE user_id IS NULL", (user_id,))
+        return max(cursor.rowcount or 0, 0)
 
 
 def _report_date_key(report: dict[str, Any]) -> str:

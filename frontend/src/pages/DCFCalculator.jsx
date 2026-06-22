@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import api from '../api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -9,6 +9,8 @@ export default function DCFCalculator() {
   const [fetching, setFetching] = useState(false);
   const [modelType, setModelType] = useState('Standard');
   const [infoData, setInfoData] = useState(null);
+  const [quotaBlocked, setQuotaBlocked] = useState(false);
+  const [quotaRequested, setQuotaRequested] = useState(false);
 
   const [inputs, setInputs] = useState({
     // Shared
@@ -92,9 +94,16 @@ export default function DCFCalculator() {
       setResults(res.data);
     } catch (err) {
       console.error(err);
-      alert("Error calculating DCF: " + (err.response?.data?.detail || err.message));
+      const detail = err.response?.data?.detail || err.message;
+      if (err.response?.status === 403 && detail.includes('Daily analysis limit')) setQuotaBlocked(true);
+      else alert("Error calculating DCF: " + detail);
     }
     setLoading(false);
+  };
+
+  const requestQuota = async () => {
+    await api.post('/api/auth/analysis-quota/request');
+    setQuotaRequested(true);
   };
 
   const getChartData = () => {
@@ -113,6 +122,7 @@ export default function DCFCalculator() {
 
   return (
     <div>
+      {quotaBlocked && <div className="glass-panel quota-warning"><p>Daily shared limit of 5 DCF/Stock analyses reached.</p><button type="button" onClick={requestQuota} disabled={quotaRequested}>{quotaRequested ? 'Authorization pending' : 'Request admin authorization'}</button></div>}
       <h2 style={{ marginBottom: '2rem' }}>📉 Dual-Model DCF Valuation</h2>
       
       <div className="glass-panel" style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', alignItems: 'center' }}>

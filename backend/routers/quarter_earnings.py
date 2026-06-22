@@ -1,8 +1,5 @@
 import json
 import os
-import threading
-import uuid
-
 import requests
 from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
@@ -12,16 +9,18 @@ from slowapi.util import get_remote_address
 
 from core.quarter_earnings import (
     build_pdf_payload,
+    create_reprocess_job,
     delete_all_reports,
     delete_ticker_reports,
     get_db_status,
     get_report,
+    get_reprocess_job,
     get_sec_filing_text,
     import_sec_filings,
     list_all_reports,
     list_reports,
     list_tickers,
-    reprocess_stored_reports,
+    run_reprocess_job,
     save_report,
     score_report,
 )
@@ -30,26 +29,6 @@ load_dotenv()
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-_reprocess_jobs: dict[str, dict] = {}
-_reprocess_jobs_lock = threading.Lock()
-
-
-def _set_reprocess_job(job_id: str, **changes):
-    with _reprocess_jobs_lock:
-        _reprocess_jobs[job_id] = {**_reprocess_jobs[job_id], **changes}
-
-
-def _run_reprocess_job(job_id: str, ticker: str | None):
-    _set_reprocess_job(job_id, status="running")
-
-    def update_progress(progress: dict[str, int]):
-        _set_reprocess_job(job_id, **progress)
-
-    try:
-        result = reprocess_stored_reports(ticker, update_progress)
-        _set_reprocess_job(job_id, status="completed", result=result)
-    except Exception as exc:
-        _set_reprocess_job(job_id, status="failed", error=str(exc)[:500])
 MAX_GROQ_DRAFT_CHARS = 6000
 MAX_CONCERN_CONTEXT_CHARS = 9000
 CONCERN_TERMS = {
@@ -97,6 +76,17 @@ class AnalyzeRequest(BaseModel):
 class SecImportRequest(BaseModel):
     ticker: str
     mode: str = "last_4_quarters"
+
+
+def _user(request: Request) -> dict:
+    return request.state.user
+
+
+def _require_analysis_access(request: Request) -> dict:
+    user = _user(request)
+    if not (user.get("is_admin") or user.get("analysis_authorized")):
+        raise HTTPException(status_code=403, detail="AI analysis requires administrator authorization.")
+    return user
 
 
 def _snippet(text: str, term: str, radius: int = 700) -> str | None:
@@ -389,8 +379,9 @@ async def ingest_quarter_pdf(
     try:
         pdf_bytes = await file.read()
         payload = build_pdf_payload(ticker, pdf_bytes, file.filename)
-        saved = save_report(payload)
-        history = attach_evolution_scores(list_reports(saved["ticker"]))
+        user_id = _user(request)["id"]
+        saved = save_report(user_id, payload)
+        history = attach_evolution_scores(list_reports(user_id, saved["ticker"]))
         saved_from_history = next((item for item in history if item["id"] == saved["id"]), None)
         saved["score"] = saved_from_history["score"] if saved_from_history else score_report(saved["metrics"])
         saved["history"] = history
@@ -408,7 +399,7 @@ async def ingest_quarter_pdf_auto(request: Request, file: UploadFile = File(...)
 @router.get("/reports")
 @limiter.limit("20/minute")
 def all_reports(request: Request):
-    items = list_all_reports()
+    items = list_all_reports(_user(request)["id"])
     return {
         "reports": attach_evolution_scores(items),
     }
@@ -417,56 +408,34 @@ def all_reports(request: Request):
 @router.delete("/reports")
 @limiter.limit("4/minute")
 def clear_reports(request: Request):
-    return delete_all_reports()
+    return delete_all_reports(_user(request)["id"])
 
 
 @router.get("/db-status")
 @limiter.limit("20/minute")
 def db_status(request: Request):
-    return get_db_status()
+    return get_db_status(_user(request)["id"])
 
 
 @router.post("/reports/reprocess")
 @limiter.limit("2/minute")
 def reprocess_reports(request: Request, background_tasks: BackgroundTasks, ticker: str | None = None):
-    normalized_ticker = ticker.upper() if ticker else None
-    with _reprocess_jobs_lock:
-        active_job = next(
-            (
-                job for job in _reprocess_jobs.values()
-                if job.get("status") in {"queued", "running"} and job.get("ticker") == normalized_ticker
-            ),
-            None,
-        )
-        if active_job:
-            return active_job
-        job_id = uuid.uuid4().hex
-        job = {
-            "job_id": job_id,
-            "ticker": normalized_ticker,
-            "status": "queued",
-            "processed_reports": 0,
-            "total_reports": 0,
-            "updated_reports": 0,
-            "skipped_reports": 0,
-        }
-        _reprocess_jobs[job_id] = job
-        if len(_reprocess_jobs) > 20:
-            completed_ids = [key for key, value in _reprocess_jobs.items() if value.get("status") in {"completed", "failed"}]
-            for old_job_id in completed_ids[:-10]:
-                _reprocess_jobs.pop(old_job_id, None)
-    background_tasks.add_task(_run_reprocess_job, job_id, normalized_ticker)
+    user_id = _user(request)["id"]
+    job, created = create_reprocess_job(user_id, ticker)
+    if created:
+        background_tasks.add_task(run_reprocess_job, job["job_id"], user_id, job["ticker"])
     return job
 
 
 @router.get("/reports/reprocess/{job_id}")
 @limiter.limit("60/minute")
 def reprocess_status(request: Request, job_id: str):
-    with _reprocess_jobs_lock:
-        job = _reprocess_jobs.get(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Update job not found or backend restarted.")
-        return dict(job)
+    job = get_reprocess_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Update job not found or backend restarted.")
+    if job.get("user_id") != _user(request)["id"]:
+        raise HTTPException(status_code=404, detail="Update job not found or backend restarted.")
+    return job
 
 
 @router.post("/sec/import")
@@ -485,8 +454,9 @@ def import_from_sec(request: Request, body: SecImportRequest):
     if body.mode not in allowed_modes:
         raise HTTPException(status_code=400, detail="Invalid SEC import mode.")
     try:
-        result = import_sec_filings(body.ticker, body.mode)
-        history = attach_evolution_scores(list_reports(result["ticker"]))
+        user_id = _user(request)["id"]
+        result = import_sec_filings(user_id, body.ticker, body.mode)
+        history = attach_evolution_scores(list_reports(user_id, result["ticker"]))
         latest = history[0] if history else None
         return {
             **result,
@@ -501,13 +471,13 @@ def import_from_sec(request: Request, body: SecImportRequest):
 @router.get("/tickers")
 @limiter.limit("20/minute")
 def tickers(request: Request):
-    return {"tickers": list_tickers()}
+    return {"tickers": list_tickers(_user(request)["id"])}
 
 
 @router.delete("/tickers/{ticker}")
 @limiter.limit("10/minute")
 def delete_ticker(request: Request, ticker: str):
-    result = delete_ticker_reports(ticker)
+    result = delete_ticker_reports(_user(request)["id"], ticker)
     if result["deleted_reports"] == 0:
         raise HTTPException(status_code=404, detail=f"No stored filings found for {result['ticker']}.")
     return result
@@ -516,7 +486,7 @@ def delete_ticker(request: Request, ticker: str):
 @router.get("/{ticker}/reports")
 @limiter.limit("20/minute")
 def reports(request: Request, ticker: str):
-    items = list_reports(ticker)
+    items = list_reports(_user(request)["id"], ticker)
     return {
         "ticker": ticker.upper(),
         "reports": attach_evolution_scores(items),
@@ -526,11 +496,12 @@ def reports(request: Request, ticker: str):
 @router.post("/{report_id}/analyze")
 @limiter.limit("4/minute")
 def analyze_report(request: Request, report_id: int, body: AnalyzeRequest):
-    report = get_report(report_id)
+    user = _require_analysis_access(request)
+    report = get_report(user["id"], report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Quarter report not found.")
 
-    prior_reports = list_reports(report["ticker"])
+    prior_reports = list_reports(user["id"], report["ticker"])
     current_index = next((index for index, item in enumerate(prior_reports) if item["id"] == report["id"]), -1)
     report_form = _score_form_group(report)
     previous = next(

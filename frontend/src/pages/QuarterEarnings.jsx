@@ -371,6 +371,8 @@ export default function QuarterEarnings() {
   const [showTickerModal, setShowTickerModal] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState('');
   const [availableTickers, setAvailableTickers] = useState([]);
+  const [batchTickers, setBatchTickers] = useState([]);
+  const [updateProgress, setUpdateProgress] = useState({ processed: 0, total: 0 });
   const [dbStatus, setDbStatus] = useState(null);
   const [secTicker, setSecTicker] = useState('ZS');
   const [secMode, setSecMode] = useState('last_8_quarters');
@@ -467,27 +469,37 @@ export default function QuarterEarnings() {
   };
 
   const updateStoredTickers = async () => {
+    if (!batchTickers.length) return;
     setUpdatingTickers(true);
     setError('');
     setNotice('');
     try {
-      const startRes = await api.post('/api/quarter-earnings/reports/reprocess');
-      const jobId = startRes.data.job_id;
-      if (!jobId) throw new Error('Backend did not return an update job ID.');
-      let result = null;
-      for (let attempt = 0; attempt < 900; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const statusRes = await api.get(`/api/quarter-earnings/reports/reprocess/${jobId}`);
-        const job = statusRes.data;
-        if (job.status === 'completed') {
-          result = job.result || job;
-          break;
+      const totalReports = availableTickers.filter((item) => batchTickers.includes(item.ticker)).reduce((sum, item) => sum + item.filing_count, 0);
+      let processedBefore = 0;
+      let updatedReports = 0;
+      let skippedReports = 0;
+      setUpdateProgress({ processed: 0, total: totalReports });
+      for (const ticker of batchTickers) {
+        const startRes = await api.post(`/api/quarter-earnings/reports/reprocess?ticker=${encodeURIComponent(ticker)}`);
+        const jobId = startRes.data.job_id;
+        if (!jobId) throw new Error('Backend did not return an update job ID.');
+        let result = null;
+        for (let attempt = 0; attempt < 900; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const statusRes = await api.get(`/api/quarter-earnings/reports/reprocess/${jobId}`);
+          const job = statusRes.data;
+          setUpdateProgress({ processed: processedBefore + (job.processed_reports || 0), total: totalReports });
+          if (job.status === 'completed') {
+            result = job.result || job;
+            break;
+          }
+          if (job.status === 'failed') throw new Error(job.error || `Update failed for ${ticker}.`);
         }
-        if (job.status === 'failed') throw new Error(job.error || 'Ticker update failed on backend.');
-        const progress = job.total_reports ? ` ${job.processed_reports}/${job.total_reports}` : '';
-        setNotice(`Updating stored filings...${progress}`);
+        if (!result) throw new Error(`Update for ${ticker} exceeded 30 minutes. Check Render logs.`);
+        processedBefore += result.updated_reports + result.skipped_reports;
+        updatedReports += result.updated_reports;
+        skippedReports += result.skipped_reports;
       }
-      if (!result) throw new Error('Ticker update exceeded 30 minutes. Check Render logs.');
       const tickerRes = await api.get('/api/quarter-earnings/tickers');
       setAvailableTickers(tickerRes.data.tickers || []);
       if (selectedTicker) {
@@ -498,7 +510,8 @@ export default function QuarterEarnings() {
         setScore(rows[0]?.score || null);
       }
       await loadDbStatus();
-      setNotice(`Updated ${result.updated_reports} stored filings. Skipped ${result.skipped_reports}.`);
+      setUpdateProgress({ processed: totalReports, total: totalReports });
+      setNotice(`Updated ${updatedReports} stored filings. Skipped ${skippedReports}.`);
     } catch (err) {
       setError(apiError(err));
     }
@@ -513,6 +526,7 @@ export default function QuarterEarnings() {
     try {
       const res = await api.delete(`/api/quarter-earnings/tickers/${encodeURIComponent(ticker)}`);
       setAvailableTickers((items) => items.filter((item) => item.ticker !== ticker));
+      setBatchTickers((items) => items.filter((item) => item !== ticker));
       if (selectedTicker === ticker) {
         setHistory([]);
         setReport(null);
@@ -665,9 +679,6 @@ export default function QuarterEarnings() {
           <button className="btn-primary compact-control" onClick={importSec} disabled={loading || updatingTickers} title="Import SEC filings for selected ticker" style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' }}>
             <Upload size={18} /> {loading ? 'Importing...' : 'Import SEC'}
           </button>
-          <button className="btn-primary compact-control update-tickers-button" onClick={updateStoredTickers} disabled={loading || updatingTickers || !dbStatus?.report_count} title="Refresh every stored filing from SEC using current extraction rules" type="button">
-            <RefreshCw size={18} className={updatingTickers ? 'spin-icon' : ''} /> {updatingTickers ? 'Updating...' : 'Update Tickers'}
-          </button>
           <button className="pdf-icon-button" onClick={loadExisting} disabled={loading || updatingTickers} title="Open stored tickers" type="button">
             <Database size={22} />
           </button>
@@ -729,12 +740,19 @@ export default function QuarterEarnings() {
               <button className="table-action" onClick={() => setShowTickerModal(false)}>Close</button>
             </div>
             <div className="ticker-list">
+              {sortedAvailableTickers.length > 0 && <div className="ticker-batch-controls">
+                <button type="button" className="table-action" onClick={() => setBatchTickers(sortedAvailableTickers.map((item) => item.ticker))}>Select all</button>
+                <button type="button" className="table-action" onClick={() => setBatchTickers([])}>Clear</button>
+                <button type="button" className="btn-primary" onClick={updateStoredTickers} disabled={updatingTickers || !batchTickers.length}><RefreshCw size={17} className={updatingTickers ? 'spin-icon' : ''} /> Update selected ({batchTickers.length})</button>
+              </div>}
+              {updatingTickers && <div className="ticker-update-progress"><progress value={updateProgress.processed} max={Math.max(updateProgress.total, 1)} /><span>{updateProgress.processed}/{updateProgress.total} filings</span></div>}
               {sortedAvailableTickers.length ? sortedAvailableTickers.map((group) => {
                 const total = group.score?.total ?? group.score_total;
                 const label = group.score?.label ?? group.score_label ?? 'No score';
                 const suggestion = group.score?.suggestion ?? group.score_suggestion ?? '';
                 return (
                 <div className="ticker-choice-row" key={group.ticker}>
+                  <input type="checkbox" checked={batchTickers.includes(group.ticker)} onChange={(event) => setBatchTickers((current) => event.target.checked ? [...current, group.ticker] : current.filter((ticker) => ticker !== group.ticker))} aria-label={`Select ${group.ticker} for update`} />
                   <button className="ticker-choice" onClick={() => openTicker(group.ticker)} disabled={deletingTicker === group.ticker}>
                     <div className="ticker-choice-main">
                       <strong>{group.ticker}</strong>

@@ -179,7 +179,7 @@ button {
 
 .sidebar-user {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 34px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.65rem;
   margin-top: auto;
@@ -229,8 +229,9 @@ button {
 }
 
 .sidebar-user button {
-  width: 34px;
+  width: auto;
   height: 34px;
+  padding: 0 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
@@ -242,6 +243,91 @@ button {
   border-color: rgba(239, 68, 68, 0.45);
   color: var(--status-red);
 }
+
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.profile-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.profile-logout {
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 9px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.profile-card > img,
+.profile-avatar-fallback {
+  width: 88px;
+  height: 88px;
+  border: 2px solid rgba(0, 242, 254, 0.45);
+  border-radius: 50%;
+}
+
+.profile-card > img { object-fit: cover; }
+
+.profile-avatar-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--accent-cyan);
+}
+
+.profile-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.profile-identity span,
+.profile-identity strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+}
+
+.profile-identity .admin-role { color: var(--status-green); }
+
+.profile-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.profile-facts > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.75rem;
+  align-items: center;
+}
+
+.profile-facts > div > svg { grid-row: 1 / 3; color: var(--accent-cyan); }
+.profile-facts span { color: var(--text-secondary); }
+
+.profile-activity-title {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.profile-activity-table-wrap { overflow-x: auto; }
 
 .login-page {
   min-height: 100vh;
@@ -830,13 +916,21 @@ button {
 
   .sidebar-user,
   .sidebar-user.collapsed {
-    grid-template-columns: 38px minmax(0, 1fr) 34px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
     justify-items: stretch;
   }
 
   .login-card {
     padding: 2rem 1.25rem;
   }
+
+  .profile-heading,
+  .profile-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-facts { grid-template-columns: 1fr; }
 
   .main-content {
     padding: 1.25rem;
@@ -979,4 +1073,14 @@ button {
 .glow-blue {
   animation: pulse-blue 3s infinite;
 }
+
+.quota-warning { border: 1px solid rgba(245, 158, 11, 0.55); padding: 1rem; margin-bottom: 1rem; border-radius: 10px; }
+.profile-modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1rem; background: rgba(0, 0, 0, 0.75); }
+.profile-modal { width: min(960px, 100%); max-height: 85vh; overflow: auto; padding: 1.5rem; }
+.registration-request-form { display: grid; gap: 0.75rem; width: 100%; margin-top: 1rem; text-align: left; }
+.registration-request-form textarea { min-height: 100px; resize: vertical; }
+.ticker-batch-controls { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+.ticker-update-progress { display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+.ticker-update-progress progress { width: 100%; height: 12px; accent-color: var(--accent-cyan); }
+.ticker-choice-row > input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--accent-cyan); flex: 0 0 auto; }
 

@@ -73,10 +73,10 @@ class DeleteTickerReportsTests(unittest.TestCase):
                     conn.execute(
                         """
                         INSERT INTO quarter_reports
-                        (ticker, fiscal_quarter, source_type, metrics_json, created_at)
-                        VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)
+                        (user_id, ticker, fiscal_quarter, source_type, metrics_json, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
                         """,
-                        ("AAA", "2025-Q1", "test", "{}", "now", "BBB", "2025-Q1", "test", "{}", "now"),
+                        (1, "AAA", "2025-Q1", "test", "{}", "now", 1, "BBB", "2025-Q1", "test", "{}", "now", 2, "AAA", "2025-Q1", "test", "{}", "now"),
                     )
                     aaa_id = conn.execute("SELECT id FROM quarter_reports WHERE ticker = ?", ("AAA",)).fetchone()[0]
                     conn.execute(
@@ -88,13 +88,17 @@ class DeleteTickerReportsTests(unittest.TestCase):
                         (aaa_id, "test", "test", "{}", "test", "now"),
                     )
 
-                result = quarter_earnings.delete_ticker_reports("aaa")
+                result = quarter_earnings.delete_ticker_reports(1, "aaa")
 
                 self.assertEqual(result["deleted_reports"], 1)
                 self.assertEqual(result["deleted_analyses"], 1)
                 with quarter_earnings._connect() as conn:
-                    self.assertEqual(conn.execute("SELECT COUNT(*) FROM quarter_reports WHERE ticker = 'AAA'").fetchone()[0], 0)
+                    self.assertEqual(conn.execute("SELECT COUNT(*) FROM quarter_reports WHERE user_id = 1 AND ticker = 'AAA'").fetchone()[0], 0)
                     self.assertEqual(conn.execute("SELECT COUNT(*) FROM quarter_reports WHERE ticker = 'BBB'").fetchone()[0], 1)
+                    self.assertEqual(conn.execute("SELECT COUNT(*) FROM quarter_reports WHERE user_id = 2 AND ticker = 'AAA'").fetchone()[0], 1)
+
+                self.assertEqual(len(quarter_earnings.list_reports(1, "AAA")), 0)
+                self.assertEqual(len(quarter_earnings.list_reports(2, "AAA")), 1)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Link, Navigate, Route, Routes } from 'react-router-dom';
-import { Activity, Briefcase, Calculator, FileText, GitCompare, LayoutDashboard, LineChart, LogOut, Menu } from 'lucide-react';
+import { Activity, Briefcase, Calculator, FileText, GitCompare, LayoutDashboard, LineChart, LogOut, Menu, UserCircle } from 'lucide-react';
 import api from './api';
 import Dashboard from './pages/Dashboard';
 import DCFCalculator from './pages/DCFCalculator';
 import Login from './pages/Login';
 import MonteCarlo from './pages/MonteCarlo';
 import Portfolio from './pages/Portfolio';
+import Profile from './pages/Profile';
 import QuarterEarnings from './pages/QuarterEarnings';
 import StockComparison from './pages/StockComparison';
 import StockInfo from './pages/StockInfo';
@@ -62,6 +63,10 @@ function AuthenticatedApp({ user, onLogout }) {
             <FileText size={20} style={{ flexShrink: 0 }} />
             {!isSidebarCollapsed && <span>Quarter Earnings</span>}
           </Link>
+          <Link to="/profile" className="nav-link" title="Profile">
+            <UserCircle size={20} style={{ flexShrink: 0 }} />
+            {!isSidebarCollapsed && <span>Profile</span>}
+          </Link>
         </nav>
 
         <div className={`sidebar-user ${isSidebarCollapsed ? 'collapsed' : ''}`}>
@@ -72,7 +77,9 @@ function AuthenticatedApp({ user, onLogout }) {
               <small>{user.email}{user.is_admin ? ' | Admin' : ''}</small>
             </div>
           )}
-          <button onClick={onLogout} title="Sign out" aria-label="Sign out"><LogOut size={18} /></button>
+          <button onClick={onLogout} title="Logout" aria-label="Logout">
+            <LogOut size={18} /> {!isSidebarCollapsed && <span>Logout</span>}
+          </button>
         </div>
       </aside>
 
@@ -85,6 +92,7 @@ function AuthenticatedApp({ user, onLogout }) {
           <Route path="/comparison" element={<StockComparison />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/quarter-earnings" element={<QuarterEarnings />} />
+          <Route path="/profile" element={<Profile user={user} onLogout={onLogout} />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -26,7 +26,13 @@ ALLOWED_ORIGINS = [
     for origin in os.getenv("FRONTEND_ORIGINS", ",".join(DEFAULT_FRONTEND_ORIGINS)).split(",")
     if origin.strip()
 ]
-PUBLIC_AUTH_PATHS = {"/api/auth/config", "/api/auth/google", "/api/auth/me", "/api/auth/logout"}
+PUBLIC_AUTH_PATHS = {
+    "/api/auth/config",
+    "/api/auth/google",
+    "/api/auth/me",
+    "/api/auth/logout",
+    "/api/auth/registration-access/request",
+}
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 

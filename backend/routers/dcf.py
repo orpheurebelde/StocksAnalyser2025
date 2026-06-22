@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from core.auth import ensure_analysis_quota, record_analysis_use
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -44,6 +45,10 @@ def dcf_from_fcf_list(fcf_list, discount_rate, terminal_growth=None, exit_multip
 @router.post("/calculate")
 @limiter.limit("20/minute")
 def calculate_dcf(request: Request, data: DCFInput):
+    try:
+        ensure_analysis_quota(request.state.user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     fcf_list = []
     
     if data.model_type == "Revenue":
@@ -85,4 +90,5 @@ def calculate_dcf(request: Request, data: DCFInput):
             "pv_years": res["pv_years"]
         }
         
+    record_analysis_use(request.state.user["id"], "dcf")
     return results

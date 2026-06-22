@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import api from '../api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,6 +22,8 @@ export default function StockInfo() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiRecommendation, setAiRecommendation] = useState(null);
   const [error, setError] = useState('');
+  const [quotaBlocked, setQuotaBlocked] = useState(false);
+  const [quotaRequested, setQuotaRequested] = useState(false);
 
   const fetchStock = async (event) => {
     event?.preventDefault();
@@ -169,9 +171,16 @@ export default function StockInfo() {
          }
       }
     } catch (err) {
-      setAiAnalysis({ primary_analysis: `Error fetching AI analysis: ${err.response?.data?.detail || err.message}` });
+      const detail = err.response?.data?.detail || err.message;
+      if (err.response?.status === 403 && detail.includes('Daily analysis limit')) setQuotaBlocked(true);
+      else setAiAnalysis({ primary_analysis: `Error fetching AI analysis: ${detail}` });
     }
     setAiLoading(false);
+  };
+
+  const requestQuota = async () => {
+    await api.post('/api/auth/analysis-quota/request');
+    setQuotaRequested(true);
   };
 
   // Coloring Helpers
@@ -513,6 +522,7 @@ export default function StockInfo() {
           )}
 
           <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+            {quotaBlocked && <div className="quota-warning"><p>Daily shared limit of 5 DCF/Stock analyses reached.</p><button type="button" onClick={requestQuota} disabled={quotaRequested}>{quotaRequested ? 'Authorization pending' : 'Request admin authorization'}</button></div>}
             <h3 className="metric-label" style={{ marginBottom: '1rem', fontSize: '1.2rem', color: 'var(--accent-blue)' }}>🤖 Ask Mistral AI</h3>
             
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
