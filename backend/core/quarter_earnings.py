@@ -1558,6 +1558,75 @@ def _statement_value(metrics: dict[str, Any], key: str) -> float | None:
     return metrics.get("statements", {}).get(key, {}).get("current")
 
 
+def calculate_filing_fair_value(report: dict[str, Any], market_info: dict[str, Any], score: dict[str, Any]) -> dict[str, Any]:
+    """Estimate earnings/OCF power from latest filing; this is not a full DCF."""
+    metrics = report.get("metrics") or {}
+    statements = metrics.get("statements") or {}
+    shares = market_info.get("sharesOutstanding") or market_info.get("impliedSharesOutstanding")
+    if not isinstance(shares, (int, float)) or shares <= 0:
+        return {"available": False, "reason": "Current shares outstanding are unavailable."}
+
+    def annualized(key: str) -> tuple[float | None, float | None]:
+        item = statements.get(key) or {}
+        value = item.get("current")
+        if not isinstance(value, (int, float)):
+            return None, None
+        factor = 4.0
+        start = _parse_period_date(item.get("xbrl_start"))
+        end = _parse_period_date(item.get("xbrl_end"))
+        if start and end and end > start:
+            factor = min(4.2, max(1.0, 365.0 / max((end - start).days, 1)))
+        return value * factor, factor
+
+    annual_net_income, earnings_factor = annualized("net_income")
+    annual_ocf, ocf_factor = annualized("operating_cash_flow")
+    cash = _statement_value(metrics, "cash") or 0.0
+    debt = _statement_value(metrics, "total_debt") or 0.0
+    net_cash = cash - debt
+    score_total = score.get("total") if isinstance(score.get("total"), (int, float)) else 50.0
+    earnings_multiple = round(8.0 + 16.0 * min(100.0, max(0.0, score_total)) / 100.0, 1)
+    ocf_multiple = round(earnings_multiple * 0.75, 1)
+
+    methods = []
+    if annual_net_income is not None and annual_net_income > 0:
+        methods.append({
+            "method": "Annualized earnings power",
+            "equity_value": annual_net_income * earnings_multiple + net_cash,
+            "multiple": earnings_multiple,
+            "annualized_value": annual_net_income,
+            "annualization_factor": earnings_factor,
+            "weight": 0.6,
+        })
+    if annual_ocf is not None and annual_ocf > 0:
+        methods.append({
+            "method": "Annualized operating cash flow proxy",
+            "equity_value": annual_ocf * ocf_multiple + net_cash,
+            "multiple": ocf_multiple,
+            "annualized_value": annual_ocf,
+            "annualization_factor": ocf_factor,
+            "weight": 0.4,
+        })
+    if not methods:
+        return {"available": False, "reason": "Latest filing has no positive net income or operating cash flow valuation base."}
+
+    weight_total = sum(item["weight"] for item in methods)
+    equity_value = sum(item["equity_value"] * item["weight"] for item in methods) / weight_total
+    fair_value = equity_value / shares
+    current_price = market_info.get("currentPrice") or market_info.get("regularMarketPrice")
+    upside = (fair_value / current_price - 1.0) if isinstance(current_price, (int, float)) and current_price > 0 else None
+    return {
+        "available": True,
+        "fair_value_per_share": round(fair_value, 2),
+        "current_price": current_price,
+        "upside": upside,
+        "shares_outstanding": shares,
+        "net_cash": net_cash,
+        "methods": methods,
+        "confidence": "medium" if len(methods) == 2 else "low",
+        "methodology": "Blended annualized earnings and operating-cash-flow proxy, adjusted for filing cash and debt. Not a full DCF.",
+    }
+
+
 def _ratio(numerator: float | None, denominator: float | None) -> float | None:
     if numerator is None or denominator in (None, 0):
         return None

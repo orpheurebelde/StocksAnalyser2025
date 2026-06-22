@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core import quarter_earnings
-from core.quarter_earnings import _derive_gross_profit
+from core.quarter_earnings import _derive_gross_profit, calculate_filing_fair_value
 
 
 def statement(current, prior, start="2025-01-01", end="2025-03-31"):
@@ -62,6 +62,31 @@ class DeriveGrossProfitTests(unittest.TestCase):
 
         self.assertNotIn("gross_profit", result)
 
+
+class FilingFairValueTests(unittest.TestCase):
+    def test_blends_annualized_filing_earnings_and_cash_flow(self):
+        report = {"metrics": {"statements": {
+            "net_income": statement(100.0, 80.0),
+            "operating_cash_flow": statement(200.0, 150.0),
+            "cash": {"current": 50.0},
+            "total_debt": {"current": 10.0},
+        }}}
+        result = calculate_filing_fair_value(
+            report,
+            {"sharesOutstanding": 100.0, "currentPrice": 70.0},
+            {"total": 50.0},
+        )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(len(result["methods"]), 2)
+        self.assertEqual(result["methods"][0]["multiple"], 16.0)
+        self.assertGreater(result["fair_value_per_share"], 70.0)
+        self.assertEqual(result["confidence"], "medium")
+
+    def test_requires_positive_valuation_base(self):
+        report = {"metrics": {"statements": {"net_income": {"current": -1.0}}}}
+        result = calculate_filing_fair_value(report, {"sharesOutstanding": 100.0}, {"total": 50.0})
+        self.assertFalse(result["available"])
 
 class DeleteTickerReportsTests(unittest.TestCase):
     def test_deletes_only_selected_ticker_and_its_analyses(self):

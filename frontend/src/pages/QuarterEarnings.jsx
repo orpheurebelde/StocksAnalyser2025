@@ -26,6 +26,7 @@ const money = (value) => {
 };
 
 const pct = (value) => (value === null || value === undefined ? 'N/A' : `${(value * 100).toFixed(1)}%`);
+const price = (value) => (typeof value === 'number' ? `$${value.toFixed(2)}` : 'N/A');
 
 const qualityValue = (value) => {
   if (typeof value === 'number') return pct(value);
@@ -71,7 +72,7 @@ function FilingMetricCard({ label, item }) {
   );
 }
 
-function FilingBoard({ report, score }) {
+function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuation }) {
   if (!report) return null;
   const filing = report.metrics || {};
   const statements = filing.statements || {};
@@ -83,6 +84,24 @@ function FilingBoard({ report, score }) {
           <div className="metric-label">SEC Filing</div>
           <h2>{filing.company_name || report.company_name}</h2>
           <p>{filing.form_type || '10-Q'} | {filing.fiscal_quarter || 'Period not extracted'} | {filing.filename || 'PDF'}</p>
+        </div>
+        <div className="filing-valuation-panel">
+          <div className="metric-label">Fair Value & Analyst Consensus</div>
+          {!valuation && <button className="table-action" type="button" onClick={onLoadValuation} disabled={valuationLoading}>{valuationLoading ? 'Calculating...' : 'Calculate latest view'}</button>}
+          {valuation && (
+            <>
+              <div className="filing-valuation-values">
+                <div><small>Filing fair value</small><strong>{valuation.fair_value?.available ? price(valuation.fair_value.fair_value_per_share) : 'N/A'}</strong>{valuation.fair_value?.available && <small>{pct(valuation.fair_value.upside)} vs market</small>}</div>
+                <div><small>Current</small><strong>{price(valuation.analyst_consensus?.current_price)}</strong></div>
+                <div><small>Analyst mean target</small><strong>{price(valuation.analyst_consensus?.target_mean)}</strong></div>
+              </div>
+              <p className="valuation-consensus">{valuation.analyst_consensus?.recommendation || 'No rating'} {valuation.analyst_consensus?.recommendation_mean ? `(${valuation.analyst_consensus.recommendation_mean}/5)` : ''} | {valuation.analyst_consensus?.analyst_count ?? 'N/A'} analysts | Range {price(valuation.analyst_consensus?.target_low)}–{price(valuation.analyst_consensus?.target_high)}</p>
+              <small>Consensus source: {valuation.analyst_consensus?.source}.</small>
+              {valuation.fair_value?.available ? <small>{valuation.fair_value.methodology} Confidence: {valuation.fair_value.confidence}.</small> : <small>{valuation.fair_value?.reason}</small>}
+              {valuation.mistral_summary && <p className="mistral-valuation"><b>Mistral:</b> {valuation.mistral_summary}</p>}
+              {!valuation.mistral_summary && valuation.mistral_error && <small>Mistral summary unavailable. Market and fair-value data still shown.</small>}
+            </>
+          )}
         </div>
         <div className="filing-score-pair">
           <div className="filing-score">
@@ -362,6 +381,8 @@ export default function QuarterEarnings() {
   const [history, setHistory] = useState([]);
   const [score, setScore] = useState(null);
   const [analysis, setAnalysis] = useState('');
+  const [valuation, setValuation] = useState(null);
+  const [valuationLoading, setValuationLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [updatingTickers, setUpdatingTickers] = useState(false);
   const [deletingTicker, setDeletingTicker] = useState('');
@@ -610,6 +631,19 @@ export default function QuarterEarnings() {
     setAiLoading(false);
   };
 
+  const loadValuation = async () => {
+    if (!report?.id) return;
+    setValuationLoading(true);
+    setError('');
+    try {
+      const res = await api.post(`/api/quarter-earnings/${report.id}/valuation`);
+      setValuation(res.data);
+    } catch (err) {
+      setError(apiError(err));
+    }
+    setValuationLoading(false);
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '2rem' }}>
@@ -713,7 +747,7 @@ export default function QuarterEarnings() {
         visibleHistory={visibleHistory}
         onOpen={(item) => { setSelectedTicker(item.ticker); setReport(item); setScore(item.score); setAnalysis(''); }}
       />
-      <FilingBoard report={report} score={score} />
+      <FilingBoard report={report} score={score} valuation={valuation?.report_id === report?.id ? valuation : null} valuationLoading={valuationLoading} onLoadValuation={loadValuation} />
       <QuarterComparison report={report} history={history} />
       <EvolutionCharts history={history} ticker={selectedTicker || report?.ticker} />
 
