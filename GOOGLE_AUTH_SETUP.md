@@ -51,6 +51,8 @@ VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 
 Set `VITE_GOOGLE_CLIENT_ID` in production frontend environment. Leave `VITE_API_URL` unset when using Vercel rewrite. Redeploy after changing `VITE_*` variables.
 
+If `VITE_GOOGLE_CLIENT_ID` is absent from Vercel build, login page falls back to `GOOGLE_CLIENT_ID` exposed by backend `/api/auth/config`. Client IDs are public identifiers; client secrets remain prohibited in frontend.
+
 ## Database Tables
 
 - `app_users`: Google identity and profile.

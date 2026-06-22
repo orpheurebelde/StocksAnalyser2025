@@ -9,7 +9,25 @@ export default function Login({ onAuthenticated }) {
   const buttonRef = useRef(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const embeddedClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  const [clientId, setClientId] = useState(embeddedClientId);
+  const [configChecked, setConfigChecked] = useState(Boolean(embeddedClientId));
+
+  useEffect(() => {
+    if (embeddedClientId) return undefined;
+    let active = true;
+    api.get('/api/auth/config')
+      .then((response) => {
+        if (active) setClientId(response.data.google_client_id || '');
+      })
+      .catch(() => {
+        if (active) setError('Could not load Google login configuration.');
+      })
+      .finally(() => {
+        if (active) setConfigChecked(true);
+      });
+    return () => { active = false; };
+  }, [embeddedClientId]);
 
   useEffect(() => {
     if (!clientId) return undefined;
@@ -76,8 +94,10 @@ export default function Login({ onAuthenticated }) {
           <span><LockKeyhole size={16} /> Secure server session</span>
         </div>
 
-        {clientId ? <div className="google-login-button" ref={buttonRef} /> : (
-          <div className="login-config-error">Set <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google login.</div>
+        {clientId ? <div className="google-login-button" ref={buttonRef} /> : configChecked ? (
+          <div className="login-config-error">Set <code>GOOGLE_CLIENT_ID</code> on backend or <code>VITE_GOOGLE_CLIENT_ID</code> on frontend.</div>
+        ) : (
+          <p className="metric-label">Loading Google login configuration...</p>
         )}
         {loading && <p className="metric-label">Creating secure session...</p>}
         {error && <p className="login-error" role="alert">{error}</p>}

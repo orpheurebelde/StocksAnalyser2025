@@ -8,6 +8,7 @@ from core.auth import (
     COOKIE_DOMAIN,
     COOKIE_SAMESITE,
     COOKIE_SECURE,
+    GOOGLE_CLIENT_ID,
     SESSION_COOKIE_NAME,
     SESSION_DAYS,
     create_session,
@@ -42,6 +43,12 @@ def _delete_session_cookie(response: Response) -> None:
         httponly=True,
         samesite=COOKIE_SAMESITE,
     )
+
+
+@router.get("/config")
+@limiter.limit("60/minute")
+def auth_config(request: Request):
+    return {"google_client_id": GOOGLE_CLIENT_ID}
 
 
 @router.post("/google")
