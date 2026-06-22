@@ -72,6 +72,10 @@ def _row_dict(row: Any) -> dict[str, Any]:
     return row if isinstance(row, dict) else dict(row)
 
 
+def _first_value(row: Any) -> Any:
+    return next(iter(row.values())) if isinstance(row, dict) else row[0]
+
+
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -279,7 +283,7 @@ def upsert_google_user(claims: dict[str, Any]) -> dict[str, Any]:
                     now,
                 ),
             )
-            user_id = cursor.fetchone()[0] if _using_postgres() else cursor.lastrowid
+            user_id = _first_value(cursor.fetchone()) if _using_postgres() else cursor.lastrowid
         else:
             existing = _row_dict(row)
             if not existing.get("is_active"):

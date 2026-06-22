@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -22,6 +24,7 @@ from core.auth import (
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 
 class GoogleLoginRequest(BaseModel):
@@ -68,6 +71,7 @@ def google_login(request: Request, body: GoogleLoginRequest):
             email=user.get("email"),
         )
     except Exception as exc:
+        logger.exception("Google login failed")
         try:
             log_login_event("login_failure", False, ip_address, user_agent, failure_reason=str(exc))
         except Exception:

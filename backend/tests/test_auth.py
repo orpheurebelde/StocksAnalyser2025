@@ -7,6 +7,9 @@ from core import auth
 
 
 class AuthPersistenceTests(unittest.TestCase):
+    def test_reads_postgres_returning_id_from_dict_row(self):
+        self.assertEqual(auth._first_value({"id": 42}), 42)
+
     def test_user_session_login_and_activity_lifecycle(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = str(Path(directory) / "auth.sqlite")
