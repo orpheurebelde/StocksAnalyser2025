@@ -19,6 +19,7 @@ SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "StocksAnalyser2025 quarter-earning
 XBRL_TAGS = {
     "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues"],
     "gross_profit": ["GrossProfit"],
+    "cost_of_revenue": ["CostOfRevenue"],
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss"],
     "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
@@ -48,7 +49,7 @@ XBRL_TAG_PATTERNS = {
     ],
 }
 SEC_FORMS = {"10-Q", "10-K"}
-FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow", "research_development"}
+FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "cost_of_revenue", "operating_income", "net_income", "operating_cash_flow", "research_development"}
 
 try:
     import psycopg
@@ -544,6 +545,39 @@ def _xbrl_item(companyfacts: dict[str, Any], accession: str, key: str, report_da
     return None
 
 
+def _derive_gross_profit(statements: dict[str, Any]) -> dict[str, Any]:
+    if not _is_missing_value(statements.get("gross_profit")):
+        return statements
+
+    revenue = statements.get("revenue") or {}
+    cost = statements.get("cost_of_revenue") or {}
+    if revenue.get("current") is None or cost.get("current") is None:
+        return statements
+    if not revenue.get("xbrl_start") or not revenue.get("xbrl_end"):
+        return statements
+    if (revenue.get("xbrl_start"), revenue.get("xbrl_end")) != (cost.get("xbrl_start"), cost.get("xbrl_end")):
+        return statements
+
+    current = float(revenue["current"]) - float(cost["current"])
+    prior = None
+    if revenue.get("prior") is not None and cost.get("prior") is not None:
+        prior = float(revenue["prior"]) - float(cost["prior"])
+    updated = dict(statements)
+    updated["gross_profit"] = {
+        "label": "GrossProfitDerived",
+        "current": current,
+        "prior": prior,
+        "growth": _growth(current, prior),
+        "confidence": "xbrl_sec_companyfacts_derived",
+        "derived_from": "Revenue minus CostOfRevenue",
+        "accession": revenue.get("accession"),
+        "taxonomy": revenue.get("taxonomy") or "us-gaap",
+        "xbrl_start": revenue.get("xbrl_start"),
+        "xbrl_end": revenue.get("xbrl_end"),
+    }
+    return updated
+
+
 def _xbrl_statements(accession: str | None, ticker: str | None, report_date: str | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
     cik = _cik_from_accession(accession) or _cik_from_ticker(ticker)
     if not cik:
@@ -560,6 +594,7 @@ def _xbrl_statements(accession: str | None, ticker: str | None, report_date: str
         item = _xbrl_item(companyfacts, accession, key, report_date_iso)
         if item:
             statements[key] = item
+    statements = _derive_gross_profit(statements)
     return statements, {
         "accession": accession,
         "cik": cik,
@@ -1099,6 +1134,7 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
             statements[key] = item
     if filing["form"] == "10-K":
         statements = _derive_10k_q4_statements(companyfacts, statements)
+    statements = _derive_gross_profit(statements)
     statements = _merge_statement_fallbacks(statements, report_text)
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
