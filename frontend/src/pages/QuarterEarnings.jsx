@@ -471,7 +471,23 @@ export default function QuarterEarnings() {
     setError('');
     setNotice('');
     try {
-      const res = await api.post('/api/quarter-earnings/reports/reprocess');
+      const startRes = await api.post('/api/quarter-earnings/reports/reprocess');
+      const jobId = startRes.data.job_id;
+      if (!jobId) throw new Error('Backend did not return an update job ID.');
+      let result = null;
+      for (let attempt = 0; attempt < 900; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const statusRes = await api.get(`/api/quarter-earnings/reports/reprocess/${jobId}`);
+        const job = statusRes.data;
+        if (job.status === 'completed') {
+          result = job.result || job;
+          break;
+        }
+        if (job.status === 'failed') throw new Error(job.error || 'Ticker update failed on backend.');
+        const progress = job.total_reports ? ` ${job.processed_reports}/${job.total_reports}` : '';
+        setNotice(`Updating stored filings...${progress}`);
+      }
+      if (!result) throw new Error('Ticker update exceeded 30 minutes. Check Render logs.');
       const tickerRes = await api.get('/api/quarter-earnings/tickers');
       setAvailableTickers(tickerRes.data.tickers || []);
       if (selectedTicker) {
@@ -482,7 +498,7 @@ export default function QuarterEarnings() {
         setScore(rows[0]?.score || null);
       }
       await loadDbStatus();
-      setNotice(`Updated ${res.data.updated_reports} stored filings. Skipped ${res.data.skipped_reports}.`);
+      setNotice(`Updated ${result.updated_reports} stored filings. Skipped ${result.skipped_reports}.`);
     } catch (err) {
       setError(apiError(err));
     }

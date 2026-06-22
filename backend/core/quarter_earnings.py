@@ -5,7 +5,7 @@ import re
 import sqlite3
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from core.yfinance_client import get_statement
 
@@ -872,7 +872,10 @@ def backfill_missing_operating_cash_flow(ticker: str | None = None) -> int:
     return changed
 
 
-def reprocess_stored_reports(ticker: str | None = None) -> dict[str, int]:
+def reprocess_stored_reports(
+    ticker: str | None = None,
+    progress_callback: Callable[[dict[str, int]], None] | None = None,
+) -> dict[str, int]:
     init_db()
     ph = _placeholder()
     query = """
@@ -893,58 +896,67 @@ def reprocess_stored_reports(ticker: str | None = None) -> dict[str, int]:
     skipped = 0
     with _connect() as conn:
         rows = conn.execute(query, params).fetchall()
-        for report_id, row_ticker, source_url, source_type, report_date, metrics_json, report_text in rows:
-            try:
-                stored_metrics = json.loads(metrics_json)
-                xbrl = stored_metrics.get("xbrl") or {}
-                accession = stored_metrics.get("accession") or xbrl.get("accession")
-                cik = xbrl.get("cik") or _cik_from_accession(accession) or _cik_from_ticker(row_ticker)
-                if source_type == "sec_xbrl_import" and accession and cik:
-                    companyfacts = _load_sec_companyfacts(cik)
-                    if not companyfacts:
-                        raise RuntimeError("SEC companyfacts unavailable.")
-                    form_type = stored_metrics.get("form_type", "")
-                    form = "10-K" if str(form_type).startswith("10-K") else "10-Q"
-                    payload = _sec_payload_from_filing(
-                        row_ticker,
-                        cik,
-                        companyfacts,
-                        {
-                            "accession": accession,
-                            "form": form,
-                            "report_date": report_date or stored_metrics.get("report_date"),
-                            "primary_document": stored_metrics.get("filename") or "",
-                        },
-                    )
-                    metrics = payload["metrics"]
-                    report_text = payload["report_text"]
-                    source_url = payload["source_url"]
-                elif report_text:
-                    metrics = extract_10q_data(row_ticker, report_text, source_url)
-                else:
-                    skipped += 1
-                    continue
-            except Exception:
+    total = len(rows)
+    for processed, (report_id, row_ticker, source_url, source_type, report_date, metrics_json, report_text) in enumerate(rows, start=1):
+        try:
+            stored_metrics = json.loads(metrics_json)
+            xbrl = stored_metrics.get("xbrl") or {}
+            accession = stored_metrics.get("accession") or xbrl.get("accession")
+            cik = xbrl.get("cik") or _cik_from_accession(accession) or _cik_from_ticker(row_ticker)
+            if source_type == "sec_xbrl_import" and accession and cik:
+                companyfacts = _load_sec_companyfacts(cik)
+                if not companyfacts:
+                    raise RuntimeError("SEC companyfacts unavailable.")
+                form_type = stored_metrics.get("form_type", "")
+                form = "10-K" if str(form_type).startswith("10-K") else "10-Q"
+                payload = _sec_payload_from_filing(
+                    row_ticker,
+                    cik,
+                    companyfacts,
+                    {
+                        "accession": accession,
+                        "form": form,
+                        "report_date": report_date or stored_metrics.get("report_date"),
+                        "primary_document": stored_metrics.get("filename") or "",
+                    },
+                )
+                metrics = payload["metrics"]
+                report_text = payload["report_text"]
+                source_url = payload["source_url"]
+            elif report_text:
+                metrics = extract_10q_data(row_ticker, report_text, source_url)
+            else:
                 skipped += 1
                 continue
-            conn.execute(
-                f"""
-                UPDATE quarter_reports
-                SET ticker = {ph}, fiscal_quarter = {ph}, report_date = {ph}, source_url = {ph}, company_name = {ph}, metrics_json = {ph}, report_text = {ph}
-                WHERE id = {ph}
-                """,
-                (
-                    metrics.get("ticker") or row_ticker,
-                    metrics.get("fiscal_quarter"),
-                    metrics.get("report_date"),
-                    source_url,
-                    metrics.get("company_name") or row_ticker,
-                    json.dumps(metrics),
-                    report_text,
-                    report_id,
-                ),
-            )
+            with _connect() as conn:
+                conn.execute(
+                    f"""
+                    UPDATE quarter_reports
+                    SET ticker = {ph}, fiscal_quarter = {ph}, report_date = {ph}, source_url = {ph}, company_name = {ph}, metrics_json = {ph}, report_text = {ph}
+                    WHERE id = {ph}
+                    """,
+                    (
+                        metrics.get("ticker") or row_ticker,
+                        metrics.get("fiscal_quarter"),
+                        metrics.get("report_date"),
+                        source_url,
+                        metrics.get("company_name") or row_ticker,
+                        json.dumps(metrics),
+                        report_text,
+                        report_id,
+                    ),
+                )
             updated += 1
+        except Exception:
+            skipped += 1
+        finally:
+            if progress_callback:
+                progress_callback({
+                    "processed_reports": processed,
+                    "total_reports": total,
+                    "updated_reports": updated,
+                    "skipped_reports": skipped,
+                })
     return {"updated_reports": updated, "skipped_reports": skipped}
 
 

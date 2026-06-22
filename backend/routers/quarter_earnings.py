@@ -1,9 +1,11 @@
 import json
 import os
+import threading
+import uuid
 
 import requests
 from dotenv import load_dotenv
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -28,6 +30,26 @@ load_dotenv()
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+_reprocess_jobs: dict[str, dict] = {}
+_reprocess_jobs_lock = threading.Lock()
+
+
+def _set_reprocess_job(job_id: str, **changes):
+    with _reprocess_jobs_lock:
+        _reprocess_jobs[job_id] = {**_reprocess_jobs[job_id], **changes}
+
+
+def _run_reprocess_job(job_id: str, ticker: str | None):
+    _set_reprocess_job(job_id, status="running")
+
+    def update_progress(progress: dict[str, int]):
+        _set_reprocess_job(job_id, **progress)
+
+    try:
+        result = reprocess_stored_reports(ticker, update_progress)
+        _set_reprocess_job(job_id, status="completed", result=result)
+    except Exception as exc:
+        _set_reprocess_job(job_id, status="failed", error=str(exc)[:500])
 MAX_GROQ_DRAFT_CHARS = 6000
 MAX_CONCERN_CONTEXT_CHARS = 9000
 CONCERN_TERMS = {
@@ -406,8 +428,45 @@ def db_status(request: Request):
 
 @router.post("/reports/reprocess")
 @limiter.limit("2/minute")
-def reprocess_reports(request: Request, ticker: str | None = None):
-    return reprocess_stored_reports(ticker)
+def reprocess_reports(request: Request, background_tasks: BackgroundTasks, ticker: str | None = None):
+    normalized_ticker = ticker.upper() if ticker else None
+    with _reprocess_jobs_lock:
+        active_job = next(
+            (
+                job for job in _reprocess_jobs.values()
+                if job.get("status") in {"queued", "running"} and job.get("ticker") == normalized_ticker
+            ),
+            None,
+        )
+        if active_job:
+            return active_job
+        job_id = uuid.uuid4().hex
+        job = {
+            "job_id": job_id,
+            "ticker": normalized_ticker,
+            "status": "queued",
+            "processed_reports": 0,
+            "total_reports": 0,
+            "updated_reports": 0,
+            "skipped_reports": 0,
+        }
+        _reprocess_jobs[job_id] = job
+        if len(_reprocess_jobs) > 20:
+            completed_ids = [key for key, value in _reprocess_jobs.items() if value.get("status") in {"completed", "failed"}]
+            for old_job_id in completed_ids[:-10]:
+                _reprocess_jobs.pop(old_job_id, None)
+    background_tasks.add_task(_run_reprocess_job, job_id, normalized_ticker)
+    return job
+
+
+@router.get("/reports/reprocess/{job_id}")
+@limiter.limit("60/minute")
+def reprocess_status(request: Request, job_id: str):
+    with _reprocess_jobs_lock:
+        job = _reprocess_jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Update job not found or backend restarted.")
+        return dict(job)
 
 
 @router.post("/sec/import")
