@@ -80,7 +80,7 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
   return (
     <>
       <div className="filing-hero glass-panel">
-        <div>
+        <div className="filing-identity">
           <div className="metric-label">SEC Filing</div>
           <h2>{filing.company_name || report.company_name}</h2>
           <p>{filing.form_type || '10-Q'} | {filing.fiscal_quarter || 'Period not extracted'} | {filing.filename || 'PDF'}</p>
@@ -91,14 +91,13 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
           {valuation && (
             <>
               <div className="filing-valuation-values">
-                <div><small>Filing fair value</small><strong>{valuation.fair_value?.available ? price(valuation.fair_value.fair_value_per_share) : 'N/A'}</strong>{valuation.fair_value?.available && <small>{pct(valuation.fair_value.upside)} vs market</small>}</div>
-                <div><small>Current</small><strong>{price(valuation.analyst_consensus?.current_price)}</strong></div>
-                <div><small>Analyst mean target</small><strong>{price(valuation.analyst_consensus?.target_mean)}</strong></div>
+                <div className="valuation-stat"><small>Filing fair value</small><strong>{valuation.fair_value?.available ? price(valuation.fair_value.fair_value_per_share) : 'N/A'}</strong><small>{valuation.fair_value?.available ? `${pct(valuation.fair_value.upside)} vs market` : 'Unavailable'}</small></div>
+                <div className="valuation-stat"><small>Current price</small><strong>{price(valuation.analyst_consensus?.current_price)}</strong><small>Market reference</small></div>
+                <div className="valuation-stat"><small>Analyst mean target</small><strong>{price(valuation.analyst_consensus?.target_mean)}</strong><small>{valuation.analyst_consensus?.analyst_count ?? 'N/A'} analysts</small></div>
               </div>
-              <p className="valuation-consensus">{valuation.analyst_consensus?.recommendation || 'No rating'} {valuation.analyst_consensus?.recommendation_mean ? `(${valuation.analyst_consensus.recommendation_mean}/5)` : ''} | {valuation.analyst_consensus?.analyst_count ?? 'N/A'} analysts | Range {price(valuation.analyst_consensus?.target_low)}–{price(valuation.analyst_consensus?.target_high)}</p>
-              <small>Consensus source: {valuation.analyst_consensus?.source}.</small>
-              {valuation.fair_value?.available ? <small>{valuation.fair_value.methodology} Confidence: {valuation.fair_value.confidence}.</small> : <small>{valuation.fair_value?.reason}</small>}
-              {valuation.mistral_summary && <p className="mistral-valuation"><b>Mistral:</b> {valuation.mistral_summary}</p>}
+              <div className="valuation-consensus"><span>{valuation.analyst_consensus?.recommendation || 'No rating'} {valuation.analyst_consensus?.recommendation_mean ? `(${valuation.analyst_consensus.recommendation_mean}/5)` : ''}</span><span>Target range {price(valuation.analyst_consensus?.target_low)} - {price(valuation.analyst_consensus?.target_high)}</span></div>
+              <div className="valuation-note"><span>Source: {valuation.analyst_consensus?.source}.</span>{valuation.fair_value?.available ? <span>{valuation.fair_value.methodology} Confidence: {valuation.fair_value.confidence}.</span> : <span>{valuation.fair_value?.reason}</span>}</div>
+              {valuation.mistral_summary && <details className="mistral-valuation"><summary>Mistral view</summary><ReactMarkdown remarkPlugins={[remarkGfm]}>{valuation.mistral_summary}</ReactMarkdown></details>}
               {!valuation.mistral_summary && valuation.mistral_error && <small>Mistral summary unavailable. Market and fair-value data still shown.</small>}
             </>
           )}
