@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BarChart3, Brain, Database, Landmark, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
-import { LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../api';
 
 const statementKeys = [
@@ -49,6 +49,16 @@ const formGroup = (item) => {
   const form = item?.metrics?.form_type || '';
   if (form.startsWith('10-Q') || form.startsWith('10-K (Q4 derived)')) return 'quarter';
   return form;
+};
+
+const quarterLabel = (item) => {
+  const stored = item?.fiscal_quarter || item?.metrics?.fiscal_quarter || '';
+  const match = stored.match(/\b(Q[1-4])\s*[-/]?\s*(\d{4})\b/i);
+  if (match) return `${match[1].toUpperCase()} ${match[2]}`;
+  const raw = item?.report_date || item?.metrics?.report_date || stored;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return stored || `#${item.id}`;
+  return `Q${Math.floor(parsed.getUTCMonth() / 3) + 1} ${parsed.getUTCFullYear()}`;
 };
 
 const apiError = (err) => {
@@ -244,7 +254,7 @@ function EvolutionCharts({ history, ticker }) {
     .slice()
     .sort((a, b) => periodTime(a) - periodTime(b))
     .map((item) => ({
-      period: item.fiscal_quarter || `#${item.id}`,
+      period: quarterLabel(item),
       revenue: item.metrics?.statements?.revenue?.current ?? null,
       operatingIncome: item.metrics?.statements?.operating_income?.current ?? null,
       netIncome: item.metrics?.statements?.net_income?.current ?? null,
@@ -273,68 +283,68 @@ function EvolutionCharts({ history, ticker }) {
       <h3>{ticker || 'Selected ticker'} quarterly evolution</h3>
       <div className="evolution-grid">
         <ChartPanel title="Revenue">
-          <ReLineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
             <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--accent-cyan)" strokeWidth={3} connectNulls />
-          </ReLineChart>
+            <Bar dataKey="revenue" name="Revenue" fill="var(--accent-cyan)" />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="Profitability">
-          <ReLineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
             <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="operatingIncome" name="Operating Income" stroke="var(--accent-blue)" strokeWidth={2} connectNulls />
-            <Line type="monotone" dataKey="netIncome" name="Net Income" stroke="var(--status-green)" strokeWidth={2} connectNulls />
-          </ReLineChart>
+            <Bar dataKey="operatingIncome" name="Operating Income" fill="var(--accent-blue)" />
+            <Bar dataKey="netIncome" name="Net Income" fill="var(--status-green)" />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="Operating Cash Flow">
-          <ReLineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
             <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="operatingCashFlow" name="Op Cash Flow" stroke="var(--accent-purple)" strokeWidth={3} connectNulls />
-          </ReLineChart>
+            <Bar dataKey="operatingCashFlow" name="Op Cash Flow" fill="var(--accent-purple)" />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="R&D Investment">
-          <ReLineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
             <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="researchDevelopment" name="R&D Expense" stroke="var(--status-orange)" strokeWidth={3} connectNulls />
-          </ReLineChart>
+            <Bar dataKey="researchDevelopment" name="R&D Expense" fill="var(--status-orange)" />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="Debt & Liquidity">
-          <ReLineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
             <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="totalDebt" name="Total Debt" stroke="var(--status-red)" strokeWidth={3} connectNulls />
-            <Line type="monotone" dataKey="cash" name="Cash" stroke="var(--status-green)" strokeWidth={2} connectNulls />
-            <Line type="monotone" dataKey="totalLiabilities" name="Total Liabilities" stroke="var(--text-secondary)" strokeWidth={2} connectNulls />
-          </ReLineChart>
+            <Bar dataKey="totalDebt" name="Total Debt" fill="var(--status-red)" />
+            <Bar dataKey="cash" name="Cash" fill="var(--status-green)" />
+            <Bar dataKey="totalLiabilities" name="Total Liabilities" fill="var(--text-secondary)" />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="Scores">
-          <ReLineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" domain={[0, 100]} />
             <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="score" name="Filing Trend" stroke="var(--accent-blue)" strokeWidth={3} connectNulls />
-            <Line type="monotone" dataKey="qualityScore" name="R&D / Debt Quality" stroke="var(--status-green)" strokeWidth={3} connectNulls />
-          </ReLineChart>
+            <Bar dataKey="score" name="Filing Trend" fill="var(--accent-blue)" />
+            <Bar dataKey="qualityScore" name="R&D / Debt Quality" fill="var(--status-green)" />
+          </BarChart>
         </ChartPanel>
       </div>
     </section>

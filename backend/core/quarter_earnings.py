@@ -19,12 +19,21 @@ MAX_TEXT_CHARS = 90000
 FINANCIAL_NUMBER_RE = re.compile(r"\(?-?\$?\s*\d[\d,]*(?:\.\d+)?\)?")
 SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", "StocksAnalyser2025 quarter-earnings almeida1976marco@gmail.com")
 XBRL_TAGS = {
-    "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues"],
+    "revenue": [
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "SalesRevenueNet",
+        "SalesRevenueGoodsNet",
+        "Revenues",
+    ],
     "gross_profit": ["GrossProfit"],
     "cost_of_revenue": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
-    "operating_income": ["OperatingIncomeLoss"],
-    "net_income": ["NetIncomeLoss"],
-    "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
+    "operating_income": ["OperatingIncomeLoss", "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"],
+    "net_income": ["NetIncomeLoss", "ProfitLoss", "NetIncomeLossAvailableToCommonStockholdersBasic"],
+    "operating_cash_flow": [
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+    ],
     "research_development": [
         "ResearchAndDevelopmentExpense",
         "ResearchAndDevelopmentInProcess",
@@ -33,10 +42,21 @@ XBRL_TAGS = {
         "ResearchAndDevelopmentExpenseSoftware",
         "ResearchDevelopmentAndEngineeringExpense",
     ],
-    "cash": ["CashAndCashEquivalentsAtCarryingValue"],
+    "cash": [
+        "CashAndCashEquivalentsAtCarryingValue",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+        "CashAndDueFromBanks",
+    ],
     "total_assets": ["Assets"],
     "total_liabilities": ["Liabilities"],
-    "total_debt": ["LongTermDebtAndFinanceLeaseObligations", "LongTermDebt", "DebtCurrent", "LongTermDebtAndFinanceLeaseObligationsCurrent"],
+    "total_debt": [
+        "LongTermDebtAndFinanceLeaseObligations",
+        "LongTermDebtAndCapitalLeaseObligations",
+        "LongTermDebt",
+        "DebtAndCapitalLeaseObligations",
+        "DebtCurrent",
+        "LongTermDebtAndFinanceLeaseObligationsCurrent",
+    ],
 }
 XBRL_TAG_PATTERNS = {
     "research_development": [
@@ -1242,12 +1262,21 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
     risk_hits = [{"term": term, "count": len(re.findall(term, search_text, re.I))} for term in risk_terms]
     company_name = companyfacts.get("entityName") or ticker.upper()
     source_url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}/{filing.get('primary_document') or ''}"
+    period_source = next(
+        (item for item in statements.values() if item.get("fiscal_period") in {"Q1", "Q2", "Q3", "Q4"}),
+        None,
+    )
+    fiscal_quarter = (
+        f"{period_source['fiscal_period']} {period_source['fiscal_year']}"
+        if period_source and period_source.get("fiscal_year")
+        else report_date
+    )
     metrics = {
         "filename": filing.get("primary_document") or accession,
         "form_type": "10-K (Q4 derived)" if filing["form"] == "10-K" else filing["form"],
         "company_name": company_name,
         "ticker": ticker.upper(),
-        "fiscal_quarter": report_date,
+        "fiscal_quarter": fiscal_quarter,
         "report_date": report_date,
         "accession": accession,
         "xbrl": {"accession": accession, "cik": cik, "available": bool(statements), "source": "sec_companyfacts"},
@@ -1257,7 +1286,7 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
     }
     return {
         "ticker": ticker.upper(),
-        "fiscal_quarter": report_date,
+        "fiscal_quarter": fiscal_quarter,
         "report_date": report_date,
         "source_url": source_url,
         "source_type": "sec_xbrl_import",
