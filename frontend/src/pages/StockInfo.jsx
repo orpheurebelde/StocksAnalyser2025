@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import api from '../api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,7 +15,8 @@ export default function StockInfo() {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState(null);
+  const searchTimeoutRef = useRef(null);
+  const searchRequestRef = useRef(0);
   
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -57,13 +58,13 @@ export default function StockInfo() {
     const val = e.target.value;
     setTicker(val);
     
-    if (searchTimeout) clearTimeout(searchTimeout);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     
     if (val.trim().length > 0) {
       const timeoutId = setTimeout(() => {
         searchTickers(val);
       }, 500);
-      setSearchTimeout(timeoutId);
+      searchTimeoutRef.current = timeoutId;
     } else {
       setSearchResults([]);
       setShowDropdown(false);
@@ -71,21 +72,28 @@ export default function StockInfo() {
   };
 
   const searchTickers = async (query) => {
+    const requestId = ++searchRequestRef.current;
     setIsSearching(true);
     try {
       const res = await api.get(`/api/stock/search?q=${encodeURIComponent(query)}`);
+      if (requestId !== searchRequestRef.current) return;
       setSearchResults(res.data.results || []);
       setShowDropdown(true);
     } catch (err) {
       console.error(err);
     }
-    setIsSearching(false);
+    if (requestId === searchRequestRef.current) setIsSearching(false);
   };
 
   const selectTicker = (symbol) => {
-    setTicker(symbol);
+    const selectedSymbol = String(symbol || '').trim().toUpperCase();
+    if (!selectedSymbol) return;
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchRequestRef.current += 1;
+    setTicker(selectedSymbol);
     setShowDropdown(false);
     setSearchResults([]);
+    setIsSearching(false);
   };
 
   const handleAiAnalysis = async () => {
@@ -235,21 +243,33 @@ export default function StockInfo() {
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
               }}>
                 {searchResults.map((r, i) => (
-                  <li 
-                    key={i} 
-                    onClick={() => selectTicker(r.symbol)}
+                  <li
+                    key={`${r.symbol}-${i}`}
                     style={{
-                      padding: '10px 15px',
-                      cursor: 'pointer',
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      display: 'flex',
-                      flexDirection: 'column'
                     }}
-                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                    onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <strong style={{ color: 'var(--accent-cyan)' }}>{r.symbol}</strong>
-                    <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>{r.name}</span>
+                    <button
+                      type="button"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        selectTicker(r.symbol);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '10px 15px',
+                        cursor: 'pointer',
+                        border: 0,
+                        background: 'transparent',
+                        color: 'inherit',
+                        textAlign: 'left',
+                        display: 'flex',
+                        flexDirection: 'column'
+                      }}
+                    >
+                      <strong style={{ color: 'var(--accent-cyan)' }}>{r.symbol}</strong>
+                      <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>{r.name}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
