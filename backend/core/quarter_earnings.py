@@ -49,13 +49,20 @@ XBRL_TAGS = {
     ],
     "total_assets": ["Assets"],
     "total_liabilities": ["Liabilities"],
+    "current_liabilities": ["LiabilitiesCurrent"],
+    "noncurrent_liabilities": ["LiabilitiesNoncurrent"],
     "total_debt": [
         "LongTermDebtAndFinanceLeaseObligations",
         "LongTermDebtAndCapitalLeaseObligations",
         "LongTermDebt",
         "DebtAndCapitalLeaseObligations",
+    ],
+    "current_debt": [
         "DebtCurrent",
         "LongTermDebtAndFinanceLeaseObligationsCurrent",
+        "LongTermDebtAndCapitalLeaseObligationsCurrent",
+        "LongTermDebtCurrent",
+        "ShortTermBorrowings",
     ],
 }
 XBRL_TAG_PATTERNS = {
@@ -622,6 +629,51 @@ def _derive_gross_profit(statements: dict[str, Any]) -> dict[str, Any]:
     return updated
 
 
+def _sum_statement_components(
+    statements: dict[str, Any],
+    target: str,
+    component_keys: list[str],
+    label: str,
+) -> dict[str, Any]:
+    components = [statements.get(key) or {} for key in component_keys]
+    if not all(item.get("current") is not None for item in components):
+        return statements
+    current = sum(float(item["current"]) for item in components)
+    prior = None
+    if all(item.get("prior") is not None for item in components):
+        prior = sum(float(item["prior"]) for item in components)
+    updated = dict(statements)
+    updated[target] = {
+        "label": label,
+        "current": current,
+        "prior": prior,
+        "growth": _growth(current, prior),
+        "confidence": "xbrl_sec_companyfacts_derived",
+        "derived_from": " + ".join(item.get("label") or key for key, item in zip(component_keys, components)),
+        "accession": components[0].get("accession"),
+        "taxonomy": "us-gaap",
+        "xbrl_end": components[0].get("xbrl_end"),
+    }
+    return updated
+
+
+def _derive_balance_sheet_totals(statements: dict[str, Any]) -> dict[str, Any]:
+    updated = _sum_statement_components(
+        statements,
+        "total_liabilities",
+        ["current_liabilities", "noncurrent_liabilities"],
+        "LiabilitiesDerived",
+    )
+    if not _is_missing_value(updated.get("current_debt")) and not _is_missing_value(updated.get("total_debt")):
+        updated = _sum_statement_components(
+            updated,
+            "total_debt",
+            ["current_debt", "total_debt"],
+            "TotalDebtDerived",
+        )
+    return updated
+
+
 def _xbrl_statements(accession: str | None, ticker: str | None, report_date: str | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
     cik = _cik_from_accession(accession) or _cik_from_ticker(ticker)
     if not cik:
@@ -639,6 +691,7 @@ def _xbrl_statements(accession: str | None, ticker: str | None, report_date: str
         if item:
             statements[key] = item
     statements = _derive_gross_profit(statements)
+    statements = _derive_balance_sheet_totals(statements)
     return statements, {
         "accession": accession,
         "cik": cik,
@@ -1095,6 +1148,7 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
         accession = xbrl_meta["accession"]
     statements.update(xbrl_statements)
     statements = _merge_statement_fallbacks(statements, report_text)
+    statements = _derive_balance_sheet_totals(statements)
 
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
@@ -1254,6 +1308,7 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
         statements = _derive_10k_q4_statements(companyfacts, statements)
     statements = _derive_gross_profit(statements)
     statements = _merge_statement_fallbacks(statements, report_text)
+    statements = _derive_balance_sheet_totals(statements)
     for item in statements.values():
         item["growth"] = _growth(item["current"], item["prior"])
 
@@ -1687,7 +1742,7 @@ def _business_quality_score(metrics: dict[str, Any], previous_metrics: dict[str,
     total_liabilities = _statement_value(metrics, "total_liabilities")
     total_debt = _statement_value(metrics, "total_debt")
     operating_cash_flow = _statement_value(metrics, "operating_cash_flow")
-    no_debt_reported = total_debt in (None, 0) and cash is not None and total_assets is not None
+    no_debt_reported = total_debt == 0 and cash is not None and total_assets is not None
 
     revenue_growth = statements.get("revenue", {}).get("growth")
     r_and_d_growth = statements.get("research_development", {}).get("growth")
@@ -1715,7 +1770,11 @@ def _business_quality_score(metrics: dict[str, Any], previous_metrics: dict[str,
     for factor, value, weight, strong, neutral, reverse, meaning in factors:
         points, verdict = _quality_points(value, weight, strong, neutral, reverse)
         total += points
-        rows.append({"factor": factor, "value": value, "weight": weight, "points": points, "verdict": verdict, "meaning": meaning})
+        display_value = value
+        if value is None and factor.startswith("R&D"):
+            display_value = "Not separately disclosed"
+            verdict = "Not disclosed"
+        rows.append({"factor": factor, "value": display_value, "weight": weight, "points": points, "verdict": verdict, "meaning": meaning})
     if no_debt_reported:
         debt_rows = [
             ("Cash to debt", "No debt reported", 20, 20, "Strong", "Cash coverage not stressed because no debt fact is reported"),

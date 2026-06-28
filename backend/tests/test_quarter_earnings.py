@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core import quarter_earnings
-from core.quarter_earnings import _derive_gross_profit, calculate_filing_fair_value
+from core.quarter_earnings import _business_quality_score, _derive_balance_sheet_totals, _derive_gross_profit, calculate_filing_fair_value
 
 
 def statement(current, prior, start="2025-01-01", end="2025-03-31"):
@@ -54,6 +54,53 @@ class DeriveGrossProfitTests(unittest.TestCase):
         result = _derive_gross_profit(statements)
 
         self.assertNotIn("gross_profit", result)
+
+
+class DeriveBalanceSheetTests(unittest.TestCase):
+    def test_derives_acn_shaped_liabilities_and_total_debt(self):
+        statements = {
+            "current_liabilities": statement(21_609_107_000, 20_352_097_000, start=None, end="2026-05-31"),
+            "noncurrent_liabilities": statement(13_689_741_000, 12_801_833_000, start=None, end="2026-05-31"),
+            "current_debt": statement(112_816_000, 114_484_000, start=None, end="2026-05-31"),
+            "total_debt": statement(5_029_449_000, 5_034_169_000, start=None, end="2026-05-31"),
+        }
+
+        result = _derive_balance_sheet_totals(statements)
+
+        self.assertEqual(result["total_liabilities"]["current"], 35_298_848_000)
+        self.assertEqual(result["total_debt"]["current"], 5_142_265_000)
+        self.assertEqual(result["total_debt"]["confidence"], "xbrl_sec_companyfacts_derived")
+
+    def test_labels_undisclosed_research_spend_without_inventing_value(self):
+        score = _business_quality_score({
+            "statements": {
+                "revenue": {"current": 100, "growth": 0.05},
+                "cash": {"current": 20},
+                "total_assets": {"current": 100},
+                "total_liabilities": {"current": 50},
+                "total_debt": {"current": 10},
+                "operating_cash_flow": {"current": 15},
+            }
+        })
+
+        research_rows = [row for row in score["rows"] if row["factor"].startswith("R&D")]
+        self.assertTrue(all(row["value"] == "Not separately disclosed" for row in research_rows))
+        self.assertTrue(all(row["verdict"] == "Not disclosed" for row in research_rows))
+
+    def test_missing_debt_is_not_treated_as_zero_debt(self):
+        score = _business_quality_score({
+            "statements": {
+                "revenue": {"current": 100},
+                "cash": {"current": 20},
+                "total_assets": {"current": 100},
+                "total_liabilities": {"current": 50},
+                "operating_cash_flow": {"current": 15},
+            }
+        })
+
+        debt_rows = [row for row in score["rows"] if row["factor"] in {"Debt to assets", "Cash to debt", "Operating cash flow to debt"}]
+        self.assertTrue(all(row["value"] is None for row in debt_rows))
+        self.assertTrue(all(row["verdict"] == "Needs review" for row in debt_rows))
 
     def test_requires_both_source_values(self):
         statements = {"revenue": statement(100.0, 90.0)}
