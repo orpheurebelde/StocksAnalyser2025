@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { Activity, Briefcase, Calculator, FileText, GitCompare, LayoutDashboard, LineChart, LogOut, Menu, UserCircle } from 'lucide-react';
 import api from './api';
@@ -104,27 +104,35 @@ function AuthenticatedApp({ user, onLogout }) {
 function AppRoutes() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const authChangedRef = useRef(false);
 
   const onAuthenticated = useCallback((authenticatedUser) => {
+    authChangedRef.current = true;
     setUser(authenticatedUser);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     let active = true;
     api.get('/api/auth/me')
-      .then((response) => { if (active) setUser(response.data.user); })
-      .catch(() => { if (active) setUser(null); })
+      .then((response) => { if (active && !authChangedRef.current) setUser(response.data.user); })
+      .catch(() => { if (active && !authChangedRef.current) setUser(null); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    const handleUnauthorized = () => setUser(null);
+    const handleUnauthorized = () => {
+      authChangedRef.current = true;
+      setUser(null);
+      setLoading(false);
+    };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, []);
 
   const logout = async () => {
+    authChangedRef.current = true;
     try {
       await api.post('/api/auth/logout');
     } finally {
@@ -134,7 +142,11 @@ function AppRoutes() {
   };
 
   if (loading) {
-    return <div className="auth-loading"><div className="auth-loading-ring" /><span>Checking secure session...</span></div>;
+    return (
+      <Routes>
+        <Route path="*" element={<Login onAuthenticated={onAuthenticated} sessionChecking />} />
+      </Routes>
+    );
   }
   if (!user) {
     return (

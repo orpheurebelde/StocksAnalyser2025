@@ -15,7 +15,7 @@ const getDeviceId = () => {
   return value;
 };
 
-export default function Login({ onAuthenticated }) {
+export default function Login({ onAuthenticated, sessionChecking = false }) {
   const buttonRef = useRef(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -122,6 +122,7 @@ export default function Login({ onAuthenticated }) {
         <p className="metric-label">Secure financial intelligence</p>
         <h1 className="text-gradient">StocksAnalyser</h1>
         <p className="login-intro">Sign in to access saved filings, analysis tools, and your authenticated activity history.</p>
+        {sessionChecking && <p className="metric-label" role="status">Checking existing session in background...</p>}
 
         <div className="login-security-row">
           <span><ShieldCheck size={16} /> Google verified identity</span>

@@ -33,6 +33,11 @@ PUBLIC_AUTH_PATHS = {
     "/api/auth/logout",
     "/api/auth/registration-access/request",
 }
+PUBLIC_NO_SESSION_PATHS = {
+    "/api/auth/config",
+    "/api/auth/google",
+    "/api/auth/registration-access/request",
+}
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
@@ -59,12 +64,13 @@ async def authenticate_and_audit(request: Request, call_next):
         return JSONResponse({"detail": "Origin is not allowed."}, status_code=403)
 
     if request.method != "OPTIONS" and request.url.path.startswith("/api/"):
-        try:
-            user, session_id = authenticate_session(request.cookies.get(SESSION_COOKIE_NAME))
-        except Exception:
-            return JSONResponse({"detail": "Authentication service unavailable."}, status_code=503)
-        request.state.user = user
-        request.state.session_id = session_id
+        if request.url.path not in PUBLIC_NO_SESSION_PATHS:
+            try:
+                user, session_id = authenticate_session(request.cookies.get(SESSION_COOKIE_NAME))
+            except Exception:
+                return JSONResponse({"detail": "Authentication service unavailable."}, status_code=503)
+            request.state.user = user
+            request.state.session_id = session_id
         if request.url.path not in PUBLIC_AUTH_PATHS and not user:
             return JSONResponse({"detail": "Authentication required."}, status_code=401)
 
