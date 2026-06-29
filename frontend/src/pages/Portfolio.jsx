@@ -19,12 +19,33 @@ const yearlyEvolution = (values, valueKey) => {
   });
 };
 
+function HoldingRow({ holding, onSave, onRemove }) {
+  const [quantity, setQuantity] = useState(String(holding.quantity ?? 1));
+  const [acquisitionDate, setAcquisitionDate] = useState(holding.acquisition_date || '');
+
+  return (
+    <tr>
+      <td>{holding.ticker}</td>
+      <td><input type="number" min="0.000001" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} style={{ width: 130 }} /></td>
+      <td><input type="date" value={acquisitionDate} onChange={(event) => setAcquisitionDate(event.target.value)} /></td>
+      <td>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="table-action" type="button" onClick={() => onSave(holding.ticker, Number(quantity), acquisitionDate)} disabled={!Number(quantity) || Number(quantity) <= 0}>Save</button>
+          <button className="table-action" type="button" onClick={() => onRemove(holding.ticker)} style={{ color: 'var(--status-red)' }}><X size={15} /> Remove</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function Portfolio() {
   const [portfolios, setPortfolios] = useState([]);
   const [maxPortfolios, setMaxPortfolios] = useState(5);
   const [selectedId, setSelectedId] = useState(null);
   const [portfolioName, setPortfolioName] = useState('');
   const [tickerQuery, setTickerQuery] = useState('');
+  const [newQuantity, setNewQuantity] = useState('1');
+  const [newAcquisitionDate, setNewAcquisitionDate] = useState(new Date().toISOString().slice(0, 10));
   const [searchResults, setSearchResults] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -123,10 +144,28 @@ export default function Portfolio() {
     if (!selected) return;
     setError('');
     try {
-      const response = await api.post(`/api/portfolio/${selected.id}/tickers`, { ticker: symbol });
+      const response = await api.post(`/api/portfolio/${selected.id}/tickers`, {
+        ticker: symbol,
+        quantity: Number(newQuantity),
+        acquisition_date: newAcquisitionDate || null,
+      });
       replacePortfolio(response.data.portfolio);
       setTickerQuery('');
       setSearchResults([]);
+      setAnalysis(null);
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || requestError.message);
+    }
+  };
+
+  const updateHolding = async (ticker, quantity, acquisitionDate) => {
+    if (!selected) return;
+    try {
+      const response = await api.patch(`/api/portfolio/${selected.id}/tickers/${encodeURIComponent(ticker)}`, {
+        quantity,
+        acquisition_date: acquisitionDate || null,
+      });
+      replacePortfolio(response.data.portfolio);
       setAnalysis(null);
     } catch (requestError) {
       setError(requestError.response?.data?.detail || requestError.message);
@@ -208,12 +247,11 @@ export default function Portfolio() {
             </div>
 
             <div style={{ marginTop: '1.25rem', maxWidth: '620px' }}>
-              <input
-                value={tickerQuery}
-                onChange={(event) => searchTickers(event.target.value)}
-                placeholder="Search company or ticker"
-                style={{ width: '100%' }}
-              />
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 130px 170px', gap: '0.6rem' }}>
+                <input value={tickerQuery} onChange={(event) => searchTickers(event.target.value)} placeholder="Search company or ticker" />
+                <input type="number" min="0.000001" step="any" value={newQuantity} onChange={(event) => setNewQuantity(event.target.value)} placeholder="Quantity" />
+                <input type="date" value={newAcquisitionDate} onChange={(event) => setNewAcquisitionDate(event.target.value)} />
+              </div>
               {searchResults.length > 0 && (
                 <div style={{ marginTop: '0.4rem', padding: '0.4rem', border: '1px solid var(--border-color)', borderRadius: '10px', background: '#090b12' }}>
                   {searchResults.map((result) => (
@@ -222,6 +260,7 @@ export default function Portfolio() {
                       type="button"
                       className="ticker-choice"
                       onClick={() => addTicker(result.symbol)}
+                      disabled={!Number(newQuantity) || Number(newQuantity) <= 0}
                       style={{ width: '100%' }}
                     >
                       <strong>{result.symbol}</strong>
@@ -232,16 +271,17 @@ export default function Portfolio() {
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-              {selected.tickers.map((ticker) => (
-                <span key={ticker} className="table-action" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                  {ticker}
-                  <button type="button" onClick={() => removeTicker(ticker)} aria-label={`Remove ${ticker}`} style={{ border: 0, background: 'transparent', color: 'var(--status-red)', cursor: 'pointer', padding: 0 }}>
-                    <X size={15} />
-                  </button>
-                </span>
-              ))}
-              {!selected.tickers.length && <span className="metric-label">No tickers added.</span>}
+            <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
+              {selected.holdings?.length ? (
+                <table className="earnings-table">
+                  <thead><tr><th>Ticker</th><th>Stocks acquired</th><th>Acquisition date</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    {selected.holdings.map((holding) => (
+                      <HoldingRow key={holding.ticker} holding={holding} onSave={updateHolding} onRemove={removeTicker} />
+                    ))}
+                  </tbody>
+                </table>
+              ) : <span className="metric-label">No tickers added.</span>}
             </div>
 
             <button className="btn-primary" onClick={refreshAnalysis} disabled={loading || !selected.tickers.length} style={{ marginTop: '1.25rem' }}>
@@ -257,6 +297,8 @@ export default function Portfolio() {
                   <h3>{item.name}</h3>
                 </div>
                 <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                  <div><div className="metric-label">Stocks acquired</div><strong>{item.quantity}</strong></div>
+                  <div><div className="metric-label">Acquisition date</div><strong>{item.acquisition_date || 'N/A'}</strong></div>
                   <div><div className="metric-label">Current price</div><strong>{priceValue(item.current_price, item.currency)}</strong></div>
                   <div><div className="metric-label">Current P/E</div><strong>{peValue(item.trailing_pe)}</strong></div>
                   <div><div className="metric-label">Forward P/E</div><strong>{peValue(item.forward_pe)}</strong></div>

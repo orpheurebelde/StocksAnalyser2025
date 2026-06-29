@@ -1,4 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request
+from datetime import date
+
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -13,6 +15,7 @@ from core.portfolio_store import (
     list_portfolios,
     remove_ticker,
     rename_portfolio,
+    update_holding,
 )
 from core.yfinance_client import download_data, get_ticker_info
 
@@ -26,6 +29,13 @@ class PortfolioRequest(BaseModel):
 
 class TickerRequest(BaseModel):
     ticker: str = Field(min_length=1, max_length=15)
+    quantity: float = Field(default=1, gt=0)
+    acquisition_date: date | None = None
+
+
+class HoldingRequest(BaseModel):
+    quantity: float = Field(gt=0)
+    acquisition_date: date | None = None
 
 
 def _user_id(request: Request) -> int:
@@ -67,15 +77,20 @@ def _portfolio_evolution(snapshots: list[dict]) -> list[dict]:
             {pd.Timestamp(item["date"]): float(item["close"]) for item in values},
             name=snapshot["ticker"],
         ).sort_index()
-        first_valid = ticker_series.dropna()
-        if first_valid.empty or first_valid.iloc[0] == 0:
+        acquisition_date = snapshot.get("acquisition_date")
+        if acquisition_date:
+            ticker_series = ticker_series[ticker_series.index >= pd.Timestamp(acquisition_date)]
+        if ticker_series.dropna().empty:
             continue
-        series[snapshot["ticker"]] = ticker_series / first_valid.iloc[0] * 100
+        series[snapshot["ticker"]] = ticker_series * float(snapshot.get("quantity") or 0)
     if not series:
         return []
     frame = pd.concat(series.values(), axis=1).sort_index().ffill()
     frame.columns = list(series)
-    portfolio_index = frame.mean(axis=1, skipna=True).dropna()
+    portfolio_value = frame.sum(axis=1, min_count=1).dropna()
+    if portfolio_value.empty or portfolio_value.iloc[0] == 0:
+        return []
+    portfolio_index = portfolio_value / portfolio_value.iloc[0] * 100
     return [
         {"date": index.strftime("%Y-%m-%d"), "index": round(float(value), 4)}
         for index, value in portfolio_index.items()
@@ -124,11 +139,35 @@ def save_ticker(request: Request, portfolio_id: int, body: TickerRequest):
         info = get_ticker_info(body.ticker.strip().upper())
         if not info:
             raise ValueError("Ticker was not found.")
-        portfolio = add_ticker(_user_id(request), portfolio_id, body.ticker)
+        portfolio = add_ticker(
+            _user_id(request),
+            portfolio_id,
+            body.ticker,
+            body.quantity,
+            body.acquisition_date.isoformat() if body.acquisition_date else None,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(400, f"Ticker could not be validated: {exc}") from exc
+    if not portfolio:
+        raise HTTPException(404, "Portfolio not found.")
+    return {"portfolio": portfolio}
+
+
+@router.patch("/{portfolio_id}/tickers/{ticker}")
+@limiter.limit("30/minute")
+def edit_holding(request: Request, portfolio_id: int, ticker: str, body: HoldingRequest):
+    try:
+        portfolio = update_holding(
+            _user_id(request),
+            portfolio_id,
+            ticker,
+            body.quantity,
+            body.acquisition_date.isoformat() if body.acquisition_date else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if not portfolio:
         raise HTTPException(404, "Portfolio not found.")
     return {"portfolio": portfolio}
@@ -151,16 +190,17 @@ def analyze_saved_portfolio(request: Request, portfolio_id: int):
         raise HTTPException(404, "Portfolio not found.")
     snapshots = []
     errors = []
+    holdings = {item["ticker"]: item for item in portfolio["holdings"]}
     for ticker in portfolio["tickers"]:
         try:
-            snapshots.append(_ticker_snapshot(ticker))
+            snapshots.append({**_ticker_snapshot(ticker), **holdings[ticker]})
         except Exception as exc:
             errors.append({"ticker": ticker, "error": str(exc)})
     return {
         "portfolio": portfolio,
         "tickers": snapshots,
         "portfolio_evolution": _portfolio_evolution(snapshots),
-        "evolution_method": "Equal-weight index; each ticker starts at 100.",
+        "evolution_method": "Quantity-weighted market value, starting from each acquisition date; portfolio indexed to 100.",
         "errors": errors,
     }
 

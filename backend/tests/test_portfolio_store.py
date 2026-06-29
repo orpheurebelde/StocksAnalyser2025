@@ -29,11 +29,17 @@ class PortfolioStoreTests(unittest.TestCase):
                 })
 
                 first = portfolio_store.create_portfolio(user_one["id"], "Core")
-                updated = portfolio_store.add_ticker(user_one["id"], first["id"], "aapl")
+                updated = portfolio_store.add_ticker(user_one["id"], first["id"], "aapl", 12.5, "2024-06-10")
                 portfolio_store.add_ticker(user_one["id"], first["id"], "AAPL")
 
                 self.assertEqual(updated["tickers"], ["AAPL"])
+                self.assertEqual(updated["holdings"][0]["quantity"], 12.5)
+                self.assertEqual(updated["holdings"][0]["acquisition_date"], "2024-06-10")
                 self.assertIsNone(portfolio_store.get_portfolio(user_two["id"], first["id"]))
+
+                edited = portfolio_store.update_holding(user_one["id"], first["id"], "AAPL", 20, "2025-01-15")
+                self.assertEqual(edited["holdings"][0]["quantity"], 20)
+                self.assertEqual(edited["holdings"][0]["acquisition_date"], "2025-01-15")
 
                 for index in range(2, 6):
                     portfolio_store.create_portfolio(user_one["id"], f"Portfolio {index}")
