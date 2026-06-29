@@ -38,6 +38,12 @@ class HoldingRequest(BaseModel):
     acquisition_date: date | None = None
 
 
+class Trading212ImportRequest(BaseModel):
+    api_key: str = Field(min_length=10, max_length=500)
+    api_secret: str = Field(min_length=10, max_length=500)
+    environment: str = Field(default="live", pattern="^(live|demo)$")
+
+
 def _user_id(request: Request) -> int:
     return request.state.user["id"]
 
@@ -95,6 +101,49 @@ def _portfolio_evolution(snapshots: list[dict]) -> list[dict]:
         {"date": index.strftime("%Y-%m-%d"), "index": round(float(value), 4)}
         for index, value in portfolio_index.items()
     ]
+
+
+def _resolve_market_symbol(instrument: dict) -> str:
+    broker_ticker = str(instrument.get("ticker") or "").strip()
+    base_symbol = broker_ticker.split("_")[0].upper()
+    query = instrument.get("isin") or instrument.get("name") or base_symbol
+    try:
+        response = requests.get(
+            "https://query2.finance.yahoo.com/v1/finance/search",
+            params={"q": query},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        quotes = [
+            item for item in response.json().get("quotes", [])
+            if item.get("quoteType") in {"EQUITY", "ETF"} and item.get("symbol")
+        ]
+        preferred = next((item for item in quotes if str(item["symbol"]).upper().split(".")[0] == base_symbol), None)
+        if preferred:
+            return str(preferred["symbol"]).upper()
+        if quotes:
+            return str(quotes[0]["symbol"]).upper()
+    except Exception:
+        pass
+    return base_symbol
+
+
+def _trading212_positions(api_key: str, api_secret: str, environment: str) -> list[dict]:
+    base_url = "https://live.trading212.com" if environment == "live" else "https://demo.trading212.com"
+    response = requests.get(
+        f"{base_url}/api/v0/equity/positions",
+        auth=(api_key, api_secret),
+        headers={"Accept": "application/json"},
+        timeout=25,
+    )
+    if response.status_code in {401, 403}:
+        raise ValueError("Trading 212 rejected API credentials or portfolio permission.")
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, list):
+        raise ValueError("Trading 212 returned an unexpected positions response.")
+    return payload
 
 
 @router.get("")
@@ -171,6 +220,40 @@ def edit_holding(request: Request, portfolio_id: int, ticker: str, body: Holding
     if not portfolio:
         raise HTTPException(404, "Portfolio not found.")
     return {"portfolio": portfolio}
+
+
+@router.post("/{portfolio_id}/import/trading212")
+@limiter.limit("5/minute")
+def import_trading212(request: Request, portfolio_id: int, body: Trading212ImportRequest):
+    user_id = _user_id(request)
+    if not get_portfolio(user_id, portfolio_id):
+        raise HTTPException(404, "Portfolio not found.")
+    try:
+        positions = _trading212_positions(body.api_key, body.api_secret, body.environment)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(502, f"Trading 212 API unavailable: {exc}") from exc
+
+    imported = []
+    errors = []
+    for position in positions:
+        try:
+            quantity = float(position.get("quantity") or 0)
+            if quantity <= 0:
+                continue
+            ticker = _resolve_market_symbol(position.get("instrument") or {})
+            created_at = str(position.get("createdAt") or "")[:10] or None
+            add_ticker(user_id, portfolio_id, ticker, quantity, created_at)
+            imported.append({"ticker": ticker, "quantity": quantity, "acquisition_date": created_at})
+        except Exception as exc:
+            errors.append({"broker_ticker": (position.get("instrument") or {}).get("ticker"), "error": str(exc)})
+    return {
+        "portfolio": get_portfolio(user_id, portfolio_id),
+        "imported": imported,
+        "errors": errors,
+        "credentials_stored": False,
+    }
 
 
 @router.delete("/{portfolio_id}/tickers/{ticker}")

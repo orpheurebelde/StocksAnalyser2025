@@ -46,6 +46,10 @@ export default function Portfolio() {
   const [tickerQuery, setTickerQuery] = useState('');
   const [newQuantity, setNewQuantity] = useState('1');
   const [newAcquisitionDate, setNewAcquisitionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [trading212Key, setTrading212Key] = useState('');
+  const [trading212Secret, setTrading212Secret] = useState('');
+  const [trading212Environment, setTrading212Environment] = useState('live');
+  const [brokerStatus, setBrokerStatus] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -197,6 +201,29 @@ export default function Portfolio() {
     }
   };
 
+  const importTrading212 = async () => {
+    if (!selected || !trading212Key || !trading212Secret) return;
+    setLoading(true);
+    setError('');
+    setBrokerStatus('');
+    try {
+      const response = await api.post(`/api/portfolio/${selected.id}/import/trading212`, {
+        api_key: trading212Key,
+        api_secret: trading212Secret,
+        environment: trading212Environment,
+      });
+      replacePortfolio(response.data.portfolio);
+      setAnalysis(null);
+      setBrokerStatus(`Imported ${response.data.imported.length} Trading 212 positions. Credentials were not stored.`);
+      setTrading212Key('');
+      setTrading212Secret('');
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
       <h2 style={{ marginBottom: '0.5rem' }}>Portfolio Analysis</h2>
@@ -287,6 +314,23 @@ export default function Portfolio() {
             <button className="btn-primary" onClick={refreshAnalysis} disabled={loading || !selected.tickers.length} style={{ marginTop: '1.25rem' }}>
               <RefreshCw size={17} className={loading ? 'spin-icon' : ''} /> {loading ? 'Loading market data...' : 'Update analysis'}
             </button>
+          </div>
+
+          <div className="glass-panel" style={{ marginBottom: '1.5rem' }}>
+            <div className="metric-label">Direct broker import</div>
+            <h3 style={{ marginBottom: '0.5rem' }}>Trading 212</h3>
+            <p className="metric-label" style={{ marginBottom: '1rem' }}>Use read-only Portfolio permission. Key and secret are sent once and never stored.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) minmax(180px, 1fr) 120px auto', gap: '0.6rem', alignItems: 'center' }}>
+              <input value={trading212Key} onChange={(event) => setTrading212Key(event.target.value)} placeholder="API key" autoComplete="off" />
+              <input type="password" value={trading212Secret} onChange={(event) => setTrading212Secret(event.target.value)} placeholder="API secret" autoComplete="new-password" />
+              <select value={trading212Environment} onChange={(event) => setTrading212Environment(event.target.value)}>
+                <option value="live">Live</option>
+                <option value="demo">Demo</option>
+              </select>
+              <button className="btn-primary" type="button" onClick={importTrading212} disabled={loading || !trading212Key || !trading212Secret}>Import positions</button>
+            </div>
+            {brokerStatus && <p className="metric-label" role="status" style={{ marginTop: '0.8rem' }}>{brokerStatus}</p>}
+            <p className="metric-label" style={{ marginTop: '1rem' }}>Trade Republic direct API unavailable. Use official statement/CSV import; login credentials must never be entered here.</p>
           </div>
 
           {analysis?.tickers?.map((item) => (
