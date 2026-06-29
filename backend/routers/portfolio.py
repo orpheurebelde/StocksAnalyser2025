@@ -57,6 +57,31 @@ def _ticker_snapshot(ticker: str) -> dict:
     }
 
 
+def _portfolio_evolution(snapshots: list[dict]) -> list[dict]:
+    series = {}
+    for snapshot in snapshots:
+        values = snapshot.get("evolution") or []
+        if not values:
+            continue
+        ticker_series = pd.Series(
+            {pd.Timestamp(item["date"]): float(item["close"]) for item in values},
+            name=snapshot["ticker"],
+        ).sort_index()
+        first_valid = ticker_series.dropna()
+        if first_valid.empty or first_valid.iloc[0] == 0:
+            continue
+        series[snapshot["ticker"]] = ticker_series / first_valid.iloc[0] * 100
+    if not series:
+        return []
+    frame = pd.concat(series.values(), axis=1).sort_index().ffill()
+    frame.columns = list(series)
+    portfolio_index = frame.mean(axis=1, skipna=True).dropna()
+    return [
+        {"date": index.strftime("%Y-%m-%d"), "index": round(float(value), 4)}
+        for index, value in portfolio_index.items()
+    ]
+
+
 @router.get("")
 @limiter.limit("60/minute")
 def saved_portfolios(request: Request):
@@ -131,7 +156,13 @@ def analyze_saved_portfolio(request: Request, portfolio_id: int):
             snapshots.append(_ticker_snapshot(ticker))
         except Exception as exc:
             errors.append({"ticker": ticker, "error": str(exc)})
-    return {"portfolio": portfolio, "tickers": snapshots, "errors": errors}
+    return {
+        "portfolio": portfolio,
+        "tickers": snapshots,
+        "portfolio_evolution": _portfolio_evolution(snapshots),
+        "evolution_method": "Equal-weight index; each ticker starts at 100.",
+        "errors": errors,
+    }
 
 @router.post("/analyze")
 @limiter.limit("5/minute")

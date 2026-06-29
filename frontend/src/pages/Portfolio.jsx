@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import api from '../api';
 
 const peValue = (value) => (typeof value === 'number' ? value.toFixed(2) : 'N/A');
 const priceValue = (value, currency) => (typeof value === 'number' ? `${value.toFixed(2)} ${currency || ''}`.trim() : 'N/A');
+const yearlyEvolution = (values, valueKey) => {
+  const byYear = new Map();
+  (values || []).forEach((item) => byYear.set(item.date.slice(0, 4), item));
+  const rows = [...byYear.entries()].sort(([left], [right]) => left.localeCompare(right)).slice(-5);
+  return rows.map(([year, item], index) => {
+    const current = item[valueKey];
+    const previous = index > 0 ? rows[index - 1][1][valueKey] : null;
+    return {
+      year,
+      value: current,
+      change: previous && current != null ? (current / previous - 1) * 100 : null,
+    };
+  });
+};
 
 export default function Portfolio() {
   const [portfolios, setPortfolios] = useState([]);
@@ -194,7 +207,7 @@ export default function Portfolio() {
               </div>
             </div>
 
-            <div style={{ position: 'relative', marginTop: '1.25rem', maxWidth: '520px' }}>
+            <div style={{ marginTop: '1.25rem', maxWidth: '620px' }}>
               <input
                 value={tickerQuery}
                 onChange={(event) => searchTickers(event.target.value)}
@@ -202,7 +215,7 @@ export default function Portfolio() {
                 style={{ width: '100%' }}
               />
               {searchResults.length > 0 && (
-                <div className="glass-panel" style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)', zIndex: 20, padding: '0.4rem' }}>
+                <div style={{ marginTop: '0.4rem', padding: '0.4rem', border: '1px solid var(--border-color)', borderRadius: '10px', background: '#090b12' }}>
                   {searchResults.map((result) => (
                     <button
                       key={result.symbol}
@@ -249,18 +262,53 @@ export default function Portfolio() {
                   <div><div className="metric-label">Forward P/E</div><strong>{peValue(item.forward_pe)}</strong></div>
                 </div>
               </div>
-              <div style={{ width: '100%', height: 280 }}>
-                <ResponsiveContainer>
-                  <LineChart data={item.evolution}>
-                    <XAxis dataKey="date" stroke="var(--text-secondary)" minTickGap={35} tick={{ fontSize: 11 }} />
-                    <YAxis stroke="var(--text-secondary)" domain={['auto', 'auto']} tick={{ fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
-                    <Line type="monotone" dataKey="close" name="Monthly close" stroke="var(--accent-cyan)" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="earnings-table">
+                  <thead><tr><th>Year</th><th>Year-end price</th><th>Annual evolution</th></tr></thead>
+                  <tbody>
+                    {yearlyEvolution(item.evolution, 'close').map((row) => (
+                      <tr key={row.year}>
+                        <td>{row.year}</td>
+                        <td>{priceValue(row.value, item.currency)}</td>
+                        <td style={{ color: row.change == null ? 'var(--text-secondary)' : row.change >= 0 ? 'var(--status-green)' : 'var(--status-red)' }}>
+                          {row.change == null ? 'Base year' : `${row.change.toFixed(2)}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
           ))}
+
+          {analysis?.portfolio_evolution?.length > 0 && (
+            <section className="glass-panel" style={{ marginBottom: '1.5rem' }}>
+              <div className="metric-label">Portfolio evolution</div>
+              <h3 style={{ marginBottom: '0.35rem' }}>{selected.name} five-year performance</h3>
+              <p className="metric-label" style={{ marginBottom: '1rem' }}>{analysis.evolution_method}</p>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="earnings-table">
+                  <thead><tr><th>Year</th><th>Portfolio index</th><th>Annual evolution</th><th>Total evolution</th></tr></thead>
+                  <tbody>
+                    {yearlyEvolution(analysis.portfolio_evolution, 'index').map((row, index, rows) => {
+                      const base = rows[0]?.value;
+                      const total = base ? (row.value / base - 1) * 100 : null;
+                      return (
+                        <tr key={row.year}>
+                          <td>{row.year}</td>
+                          <td>{row.value.toFixed(2)}</td>
+                          <td style={{ color: row.change == null ? 'var(--text-secondary)' : row.change >= 0 ? 'var(--status-green)' : 'var(--status-red)' }}>
+                            {row.change == null ? 'Base year' : `${row.change.toFixed(2)}%`}
+                          </td>
+                          <td>{total == null ? 'N/A' : `${total.toFixed(2)}%`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </>
       )}
 
