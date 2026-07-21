@@ -135,6 +135,35 @@ class FilingFairValueTests(unittest.TestCase):
         result = calculate_filing_fair_value(report, {"sharesOutstanding": 100.0}, {"total": 50.0})
         self.assertFalse(result["available"])
 
+    def test_estimates_shares_from_market_cap_when_yahoo_shares_missing(self):
+        report = {"metrics": {"statements": {
+            "net_income": statement(100.0, 80.0),
+            "operating_cash_flow": statement(200.0, 150.0),
+        }}}
+        result = calculate_filing_fair_value(
+            report,
+            {"marketCap": 1000.0, "currentPrice": 10.0},
+            {"total": 50.0},
+        )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["shares_outstanding"], 100.0)
+        self.assertEqual(result["shares_source"], "yahoo_market_cap_price_estimate")
+        self.assertEqual(result["confidence"], "low")
+
+    def test_estimates_shares_from_filing_text_when_yahoo_market_data_is_thin(self):
+        report = {
+            "report_text": "Weighted average common shares outstanding - diluted 100,000,000",
+            "metrics": {"statements": {
+                "net_income": statement(100.0, 80.0),
+            }},
+        }
+        result = calculate_filing_fair_value(report, {"currentPrice": 10.0}, {"total": 50.0})
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["shares_outstanding"], 100_000_000.0)
+        self.assertEqual(result["shares_source"], "filing_text_weighted_average_shares")
+
 class DeleteTickerReportsTests(unittest.TestCase):
     def test_deletes_only_selected_ticker_and_its_analyses(self):
         with tempfile.TemporaryDirectory() as directory:

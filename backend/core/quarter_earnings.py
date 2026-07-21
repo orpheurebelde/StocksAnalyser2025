@@ -1642,12 +1642,66 @@ def _statement_value(metrics: dict[str, Any], key: str) -> float | None:
     return metrics.get("statements", {}).get(key, {}).get("current")
 
 
+def _parse_share_count_from_text(text: str) -> float | None:
+    if not text:
+        return None
+    patterns = [
+        r"weighted\s+average\s+(?:common\s+)?shares(?:\s+outstanding)?(?:\s+-\s+diluted)?[^0-9]{0,80}([0-9][0-9,.\s]{3,})",
+        r"diluted\s+weighted\s+average\s+(?:common\s+)?shares[^0-9]{0,80}([0-9][0-9,.\s]{3,})",
+        r"shares\s+outstanding[^0-9]{0,80}([0-9][0-9,.\s]{3,})",
+    ]
+    lower_text = text.lower()
+    scale = 1.0
+    window = lower_text[:2000]
+    if "in millions" in window or "(in millions" in window:
+        scale = 1_000_000.0
+    elif "in thousands" in window or "(in thousands" in window:
+        scale = 1_000.0
+
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            continue
+        raw = re.sub(r"[^0-9.]", "", match.group(1))
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        if value > 0:
+            if value < 10_000_000:
+                value *= scale
+            return value
+    return None
+
+
+def _resolve_shares_outstanding(report: dict[str, Any], market_info: dict[str, Any]) -> tuple[float | None, str | None]:
+    shares = market_info.get("sharesOutstanding") or market_info.get("impliedSharesOutstanding")
+    if isinstance(shares, (int, float)) and shares > 0:
+        return float(shares), "yahoo_shares_outstanding"
+
+    market_cap = market_info.get("marketCap")
+    current_price = market_info.get("currentPrice") or market_info.get("regularMarketPrice")
+    if (
+        isinstance(market_cap, (int, float))
+        and market_cap > 0
+        and isinstance(current_price, (int, float))
+        and current_price > 0
+    ):
+        return float(market_cap) / float(current_price), "yahoo_market_cap_price_estimate"
+
+    parsed = _parse_share_count_from_text(report.get("report_text") or "")
+    if parsed:
+        return parsed, "filing_text_weighted_average_shares"
+
+    return None, None
+
+
 def calculate_filing_fair_value(report: dict[str, Any], market_info: dict[str, Any], score: dict[str, Any]) -> dict[str, Any]:
     """Estimate earnings/OCF power from latest filing; this is not a full DCF."""
     metrics = report.get("metrics") or {}
     statements = metrics.get("statements") or {}
-    shares = market_info.get("sharesOutstanding") or market_info.get("impliedSharesOutstanding")
-    if not isinstance(shares, (int, float)) or shares <= 0:
+    shares, shares_source = _resolve_shares_outstanding(report, market_info)
+    if shares is None:
         return {"available": False, "reason": "Current shares outstanding are unavailable."}
 
     def annualized(key: str) -> tuple[float | None, float | None]:
@@ -1704,9 +1758,10 @@ def calculate_filing_fair_value(report: dict[str, Any], market_info: dict[str, A
         "current_price": current_price,
         "upside": upside,
         "shares_outstanding": shares,
+        "shares_source": shares_source,
         "net_cash": net_cash,
         "methods": methods,
-        "confidence": "medium" if len(methods) == 2 else "low",
+        "confidence": "medium" if len(methods) == 2 and shares_source == "yahoo_shares_outstanding" else "low",
         "methodology": "Blended annualized earnings and operating-cash-flow proxy, adjusted for filing cash and debt. Not a full DCF.",
     }
 
