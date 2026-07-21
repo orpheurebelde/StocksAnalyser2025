@@ -250,6 +250,29 @@ def _fetch_quote_info(symbol: str) -> dict:
     return _compact_quote_info(results[0], symbol) if results else {}
 
 
+def _compact_chart_meta_info(meta: dict, symbol: str) -> dict:
+    if not meta:
+        return {}
+    info = {
+        "symbol": meta.get("symbol") or symbol,
+        "shortName": meta.get("shortName") or meta.get("longName") or symbol,
+    }
+    field_map = {
+        "regularMarketPrice": "currentPrice",
+        "chartPreviousClose": "previousClose",
+        "currency": "currency",
+        "exchangeName": "exchange",
+        "instrumentType": "quoteType",
+        "regularMarketTime": "regularMarketTime",
+        "timezone": "timeZoneFullName",
+    }
+    for source, target in field_map.items():
+        value = meta.get(source)
+        if value is not None:
+            info[target] = value
+    return info
+
+
 def get_ticker_info(symbol: str):
     """Return Yahoo info with throttling, disk cache, and stale fallback."""
     symbol = _normal_symbol(symbol)
@@ -287,6 +310,15 @@ def get_ticker_info(symbol: str):
             print(f"Error fetching quote fallback for {symbol}: {e}")
 
     if not info:
+        try:
+            _wait_for_yahoo_slot()
+            chart = _download_chart_data(symbol, period="5d", interval="1d")
+            info = _compact_chart_meta_info(chart.attrs.get("meta", {}), symbol)
+        except Exception as e:
+            _record_failure(symbol, e)
+            print(f"Error fetching chart metadata fallback for {symbol}: {e}")
+
+    if not info:
         _record_failure(symbol, RuntimeError("Yahoo returned empty info."))
         return cached_info
 
@@ -319,6 +351,7 @@ def _download_chart_data(symbol: str, period: str, interval: str) -> pd.DataFram
         return pd.DataFrame()
 
     result = results[0]
+    meta = result.get("meta") or {}
     timestamps = result.get("timestamp") or []
     quote_data = (result.get("indicators", {}).get("quote") or [{}])[0]
     if not timestamps or not quote_data:
@@ -337,7 +370,9 @@ def _download_chart_data(symbol: str, period: str, interval: str) -> pd.DataFram
     adjclose = result.get("indicators", {}).get("adjclose") or []
     if adjclose and adjclose[0].get("adjclose"):
         df["Adj Close"] = adjclose[0].get("adjclose")
-    return df.dropna(how="all")
+    df = df.dropna(how="all")
+    df.attrs["meta"] = meta
+    return df
 
 
 def get_ticker(symbol: str):
