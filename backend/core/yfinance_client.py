@@ -250,6 +250,84 @@ def _fetch_quote_info(symbol: str) -> dict:
     return _compact_quote_info(results[0], symbol) if results else {}
 
 
+def _request_probe(url: str, **kwargs) -> dict:
+    started = time.monotonic()
+    try:
+        response = requests.get(url, headers=YAHOO_HEADERS, timeout=YAHOO_TIMEOUT_SECONDS, **kwargs)
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        payload = {
+            "ok": response.ok,
+            "status_code": response.status_code,
+            "elapsed_ms": elapsed_ms,
+            "content_type": response.headers.get("content-type"),
+        }
+        if not response.ok:
+            payload["body_preview"] = response.text[:300]
+        return payload
+    except Exception as exc:
+        return {
+            "ok": False,
+            "elapsed_ms": round((time.monotonic() - started) * 1000, 1),
+            "error": str(exc)[:300],
+        }
+
+
+def diagnose_yahoo(symbol: str = "AAPL") -> dict:
+    """Return lightweight Yahoo/yfinance health details for deployed debugging."""
+    symbol = _normal_symbol(symbol or "AAPL")
+    encoded_symbol = quote(symbol, safe="")
+    diagnostics = {
+        "symbol": symbol,
+        "yfinance_version": getattr(yf, "__version__", None),
+        "cache_dir": str(CACHE_DIR),
+        "recent_failure": _read_json(FAILURE_CACHE_FILE).get(_safe_cache_key(symbol)),
+    }
+
+    try:
+        _wait_for_yahoo_slot()
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        diagnostics["yfinance_info"] = {
+            "ok": bool(info),
+            "key_count": len(info or {}),
+            "has_price": bool((info or {}).get("currentPrice") or (info or {}).get("regularMarketPrice")),
+            "has_shares": bool((info or {}).get("sharesOutstanding") or (info or {}).get("impliedSharesOutstanding")),
+        }
+    except Exception as exc:
+        diagnostics["yfinance_info"] = {"ok": False, "error": str(exc)[:300]}
+
+    try:
+        _wait_for_yahoo_slot()
+        history = yf.download(symbol, period="5d", interval="1d", progress=False, threads=False)
+        columns = [str(column) for column in history.columns[:8]]
+        diagnostics["yfinance_download"] = {"ok": not history.empty, "rows": len(history), "columns": columns}
+    except Exception as exc:
+        diagnostics["yfinance_download"] = {"ok": False, "error": str(exc)[:300]}
+
+    quote_url = "https://query1.finance.yahoo.com/v7/finance/quote"
+    diagnostics["direct_quote"] = _request_probe(quote_url, params={"symbols": symbol})
+    summary_url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{encoded_symbol}"
+    diagnostics["direct_quote_summary"] = _request_probe(
+        summary_url,
+        params={"modules": "price,summaryDetail,defaultKeyStatistics,financialData"},
+    )
+    search_url = "https://query2.finance.yahoo.com/v1/finance/search"
+    diagnostics["direct_search"] = _request_probe(search_url, params={"q": symbol})
+    chart_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{encoded_symbol}"
+    diagnostics["direct_chart"] = _request_probe(chart_url, params={"range": "5d", "interval": "1d"})
+
+    info = get_ticker_info(symbol)
+    history = download_data(symbol, period="5d", interval="1d")
+    diagnostics["app_wrappers"] = {
+        "info_ok": bool(info),
+        "info_key_count": len(info or {}),
+        "has_price": bool((info or {}).get("currentPrice") or (info or {}).get("regularMarketPrice")),
+        "has_shares": bool((info or {}).get("sharesOutstanding") or (info or {}).get("impliedSharesOutstanding")),
+        "history_rows": len(history),
+    }
+    return diagnostics
+
+
 def _compact_chart_meta_info(meta: dict, symbol: str) -> dict:
     if not meta:
         return {}
