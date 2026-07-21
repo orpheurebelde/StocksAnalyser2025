@@ -6,8 +6,10 @@ import time
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 import pandas as pd
+import requests
 import yfinance as yf
 
 
@@ -21,6 +23,15 @@ FALLBACK_CACHE_MINUTES = int(os.getenv("YF_FALLBACK_CACHE_MINUTES", "30"))
 RATE_LIMIT_COOLDOWN_MINUTES = int(os.getenv("YF_RATE_LIMIT_COOLDOWN_MINUTES", "10"))
 MIN_REQUEST_INTERVAL_SECONDS = float(os.getenv("YF_MIN_REQUEST_INTERVAL_SECONDS", "1.5"))
 MAX_REQUESTS_PER_MINUTE = int(os.getenv("YF_MAX_REQUESTS_PER_MINUTE", "30"))
+YAHOO_TIMEOUT_SECONDS = float(os.getenv("YAHOO_TIMEOUT_SECONDS", "10"))
+YAHOO_HEADERS = {
+    "User-Agent": os.getenv(
+        "YAHOO_USER_AGENT",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    ),
+    "Accept": "application/json,text/plain,*/*",
+}
 
 _request_lock = threading.Lock()
 _recent_requests = deque()
@@ -193,6 +204,52 @@ def _minimal_info_from_fast_info(ticker: yf.Ticker, symbol: str) -> dict:
     }
 
 
+def _compact_quote_info(quote: dict, symbol: str) -> dict:
+    if not quote:
+        return {}
+
+    field_map = {
+        "regularMarketPrice": "currentPrice",
+        "marketCap": "marketCap",
+        "fiftyTwoWeekLow": "fiftyTwoWeekLow",
+        "fiftyTwoWeekHigh": "fiftyTwoWeekHigh",
+        "trailingPE": "trailingPE",
+        "forwardPE": "forwardPE",
+        "priceToBook": "priceToBook",
+        "sharesOutstanding": "sharesOutstanding",
+        "epsTrailingTwelveMonths": "trailingEps",
+        "epsForward": "forwardEps",
+        "shortName": "shortName",
+        "longName": "longName",
+        "quoteType": "quoteType",
+        "exchange": "exchange",
+        "currency": "currency",
+        "marketState": "marketState",
+    }
+    info = {"symbol": quote.get("symbol") or symbol}
+    for source, target in field_map.items():
+        value = quote.get(source)
+        if value is not None:
+            info[target] = value
+    if "currentPrice" not in info and quote.get("regularMarketPreviousClose") is not None:
+        info["currentPrice"] = quote.get("regularMarketPreviousClose")
+    return info
+
+
+def _fetch_quote_info(symbol: str) -> dict:
+    """Fetch compact quote data directly from Yahoo when yfinance info fails."""
+    url = "https://query1.finance.yahoo.com/v7/finance/quote"
+    response = requests.get(
+        url,
+        params={"symbols": symbol},
+        headers=YAHOO_HEADERS,
+        timeout=YAHOO_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    results = response.json().get("quoteResponse", {}).get("result", [])
+    return _compact_quote_info(results[0], symbol) if results else {}
+
+
 def get_ticker_info(symbol: str):
     """Return Yahoo info with throttling, disk cache, and stale fallback."""
     symbol = _normal_symbol(symbol)
@@ -218,12 +275,19 @@ def get_ticker_info(symbol: str):
             info = _minimal_info_from_fast_info(ticker, symbol)
     except Exception as e:
         _record_failure(symbol, e)
-        if cached_info:
-            return cached_info
         print(f"Error fetching info for {symbol}: {e}")
-        return None
+        info = {}
 
     if not info:
+        try:
+            _wait_for_yahoo_slot()
+            info = _fetch_quote_info(symbol)
+        except Exception as e:
+            _record_failure(symbol, e)
+            print(f"Error fetching quote fallback for {symbol}: {e}")
+
+    if not info:
+        _record_failure(symbol, RuntimeError("Yahoo returned empty info."))
         return cached_info
 
     cache[symbol] = {"_timestamp": datetime.now().isoformat(), "info": info}
@@ -233,6 +297,47 @@ def get_ticker_info(symbol: str):
         pass
 
     return info
+
+
+def _download_chart_data(symbol: str, period: str, interval: str) -> pd.DataFrame:
+    """Fetch price history from Yahoo chart API as a fallback to yfinance."""
+    encoded_symbol = quote(symbol, safe="")
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{encoded_symbol}"
+    response = requests.get(
+        url,
+        params={"range": period, "interval": interval},
+        headers=YAHOO_HEADERS,
+        timeout=YAHOO_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    chart = response.json().get("chart", {})
+    error = chart.get("error")
+    if error:
+        raise RuntimeError(error.get("description") or str(error))
+    results = chart.get("result") or []
+    if not results:
+        return pd.DataFrame()
+
+    result = results[0]
+    timestamps = result.get("timestamp") or []
+    quote_data = (result.get("indicators", {}).get("quote") or [{}])[0]
+    if not timestamps or not quote_data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(
+        {
+            "Open": quote_data.get("open"),
+            "High": quote_data.get("high"),
+            "Low": quote_data.get("low"),
+            "Close": quote_data.get("close"),
+            "Volume": quote_data.get("volume"),
+        },
+        index=pd.to_datetime(timestamps, unit="s"),
+    )
+    adjclose = result.get("indicators", {}).get("adjclose") or []
+    if adjclose and adjclose[0].get("adjclose"):
+        df["Adj Close"] = adjclose[0].get("adjclose")
+    return df.dropna(how="all")
 
 
 def get_ticker(symbol: str):
@@ -266,6 +371,16 @@ def download_data(symbol: str, period: str = "6mo", interval: str = "1d") -> pd.
     except Exception as e:
         _record_failure(symbol, e)
         print(f"Error downloading data for {symbol}: {e}")
+
+    try:
+        _wait_for_yahoo_slot()
+        df = _download_chart_data(symbol, period=period, interval=interval)
+        if not df.empty:
+            df.to_csv(path)
+            return df
+    except Exception as e:
+        _record_failure(symbol, e)
+        print(f"Error downloading fallback chart data for {symbol}: {e}")
 
     return stale
 
