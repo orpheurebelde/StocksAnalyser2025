@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BarChart3, Brain, Database, Landmark, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../api';
 
 const statementKeys = [
@@ -32,6 +32,12 @@ const qualityValue = (value) => {
   if (typeof value === 'number') return pct(value);
   if (value === null || value === undefined || value === '') return 'N/A';
   return value;
+};
+const scoreMetricValue = (row) => {
+  if (typeof row?.value !== 'number') return 'N/A';
+  if (['Current ratio', 'Cash to debt', 'Cash conversion', 'Interest coverage'].includes(row.factor)) return `${row.value.toFixed(2)}x`;
+  if (row.factor === 'Risk language density') return row.value.toFixed(2);
+  return pct(row.value);
 };
 
 function ChartPanel({ title, children }) {
@@ -78,17 +84,36 @@ const apiError = (err) => {
   return err.message;
 };
 
-function FilingMetricCard({ label, item }) {
+function FilingMetricCard({ label, item, format = 'money' }) {
   const growth = item?.growth;
   const color = growth === null || growth === undefined ? 'var(--text-secondary)' : growth >= 0 ? 'var(--status-green)' : 'var(--status-red)';
   const width = growth === null || growth === undefined ? 12 : Math.min(100, Math.max(8, Math.abs(growth) * 140));
+  const display = (value) => format === 'shares'
+    ? (value == null ? 'N/A' : `${(value / 1e6).toFixed(2)}M`)
+    : format === 'number'
+      ? (value == null ? 'N/A' : Number(value).toFixed(2))
+      : money(value);
   return (
     <div className="glass-panel metric-card">
       <span className="metric-label">{label}</span>
-      <span className="metric-value" style={{ fontSize: '1.45rem' }}>{money(item?.current)}</span>
+      <span className="metric-value" style={{ fontSize: '1.45rem' }}>{display(item?.current)}</span>
       <span style={{ color }}>{pct(growth)} vs prior column</span>
       <div className="filing-bar"><span style={{ width: `${width}%`, background: color }} /></div>
-      <span className="metric-label">Prior: {money(item?.prior)} | {item?.confidence || 'missing'}</span>
+      <span className="metric-label">Prior: {display(item?.prior)} | {item?.confidence || 'missing'}</span>
+    </div>
+  );
+}
+
+function DerivedMetricCard({ label, item, format = 'percent' }) {
+  const current = item?.current;
+  const change = item?.change;
+  const color = change == null ? 'var(--text-secondary)' : change >= 0 ? 'var(--status-green)' : 'var(--status-red)';
+  return (
+    <div className="glass-panel metric-card derived-metric-card">
+      <span className="metric-label">{label}</span>
+      <span className="metric-value" style={{ fontSize: '1.4rem' }}>{format === 'money' ? money(current) : format === 'ratio' ? (current == null ? 'N/A' : `${current.toFixed(2)}x`) : format === 'number' ? (current == null ? 'N/A' : current.toFixed(2)) : pct(current)}</span>
+      <span style={{ color }}>{change == null ? 'No comparable period' : `${change >= 0 ? '+' : ''}${format === 'percent' ? pct(change) : change.toFixed(2)} YoY change`}</span>
+      <small>{item?.formula || 'Derived from matching SEC facts'}</small>
     </div>
   );
 }
@@ -97,7 +122,9 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
   if (!report) return null;
   const filing = report.metrics || {};
   const statements = filing.statements || {};
+  const derived = filing.derived_metrics?.metrics || {};
   const qualityScore = score?.quality_score;
+  const scoreV2 = score?.score_v2;
   return (
     <>
       <div className="filing-hero glass-panel">
@@ -124,8 +151,19 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
           )}
         </div>
         <div className="filing-score-pair">
+          <div className="filing-score v2-score">
+            <div className="metric-label">Filing Quality V2</div>
+            <span>{scoreV2?.total ?? 'N/A'}</span>
+            <small>{scoreV2?.label || 'Not scored'}</small>
+            <small>Coverage {scoreV2?.coverage ?? 0}%</small>
+            <strong>{scoreV2?.signal || 'REVIEW'}</strong>
+            <div className="score-tooltip">
+              <div className="metric-label">Version {scoreV2?.version || '2.0'} categories</div>
+              {(scoreV2?.categories || []).map((item) => <p key={item.name}><b>{item.name}</b>: {item.score ?? 'N/A'} | coverage {item.coverage}%</p>)}
+            </div>
+          </div>
           <div className="filing-score">
-            <div className="metric-label">Filing Trend</div>
+            <div className="metric-label">Legacy Filing Trend</div>
             <span>{score?.total ?? 'N/A'}</span>
             <small>{score?.label || 'Not scored'}</small>
             {score?.confidence && <small>Confidence {score.confidence.score}/100 | {score.confidence.level}</small>}
@@ -167,6 +205,38 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
         <FilingMetricCard label="Total Debt" item={statements.total_debt} />
         <FilingMetricCard label="Total Assets" item={statements.total_assets} />
         <FilingMetricCard label="Total Liabilities" item={statements.total_liabilities} />
+      </div>
+
+      <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+        <div className="filing-panel-heading"><div><div className="metric-label">Expanded SEC facts</div><h3>Reinvestment, dilution and working capital</h3></div><small>Source facts remain unchanged</small></div>
+        <div className="grid-4">
+          <FilingMetricCard label="Capital Expenditures" item={statements.capital_expenditures} />
+          <FilingMetricCard label="Share-Based Compensation" item={statements.share_based_compensation} />
+          <FilingMetricCard label="Diluted EPS" item={statements.diluted_eps} format="number" />
+          <FilingMetricCard label="Diluted Shares" item={statements.diluted_shares} format="shares" />
+          <FilingMetricCard label="Current Assets" item={statements.current_assets} />
+          <FilingMetricCard label="Current Liabilities" item={statements.current_liabilities} />
+          <FilingMetricCard label="Stockholders' Equity" item={statements.stockholders_equity} />
+          <FilingMetricCard label="Interest Expense" item={statements.interest_expense} />
+        </div>
+      </div>
+
+      <div className="glass-panel filing-derived-panel" style={{ marginBottom: '2rem' }}>
+        <div className="filing-panel-heading"><div><div className="metric-label">SEC-derived analytics · V2</div><h3>Margins, cash conversion and capital quality</h3></div><small>Only matching XBRL periods are combined</small></div>
+        <div className="grid-4">
+          <DerivedMetricCard label="Gross Margin" item={derived.gross_margin} />
+          <DerivedMetricCard label="Operating Margin" item={derived.operating_margin} />
+          <DerivedMetricCard label="Net Margin" item={derived.net_margin} />
+          <DerivedMetricCard label="FCF Margin" item={derived.fcf_margin} />
+          <DerivedMetricCard label="Free Cash Flow" item={derived.free_cash_flow} format="money" />
+          <DerivedMetricCard label="Cash Conversion" item={derived.cash_conversion} format="ratio" />
+          <DerivedMetricCard label="SBC / Revenue" item={derived.sbc_to_revenue} />
+          <DerivedMetricCard label="Current Ratio" item={derived.current_ratio} format="ratio" />
+          <DerivedMetricCard label="Debt / Assets" item={derived.debt_to_assets} />
+          <DerivedMetricCard label="Cash / Debt" item={derived.cash_to_debt} format="ratio" />
+          <DerivedMetricCard label="Interest Coverage" item={derived.interest_coverage} format="ratio" />
+          <DerivedMetricCard label="Risk Density" item={derived.risk_density} format="number" />
+        </div>
       </div>
 
       <div className="glass-panel" style={{ marginBottom: '2rem' }}>
@@ -212,6 +282,13 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+      {scoreV2 && (
+        <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+          <div className="filing-panel-heading"><div><div className="metric-label">Score methodology 2.0</div><h3>Evidence-weighted factor audit</h3></div><small>Missing facts excluded · {scoreV2.comparison_basis}</small></div>
+          <div className="score-v2-categories">{scoreV2.categories.map((item) => <div key={item.name}><span>{item.name}</span><strong>{item.score ?? 'N/A'}</strong><small>{item.coverage}% coverage · {item.weight}% weight</small><i><b style={{ width: `${item.score || 0}%` }} /></i></div>)}</div>
+          <div style={{ overflowX: 'auto' }}><table className="earnings-table"><thead><tr><th>Category</th><th>Factor</th><th>Value</th><th>Points</th><th>Evidence</th></tr></thead><tbody>{scoreV2.rows.map((row) => <tr key={row.factor}><td>{row.category}</td><td>{row.factor}</td><td>{scoreMetricValue(row)}</td><td>{row.points ?? '—'} / {row.weight}</td><td>{row.available ? 'Available' : 'Excluded'}</td></tr>)}</tbody></table></div>
         </div>
       )}
     </>
@@ -264,7 +341,9 @@ function EvolutionCharts({ history, ticker }) {
     .filter((item) => (!ticker || item.ticker === ticker) && item.metrics?.form_type !== '10-K')
     .slice()
     .sort((a, b) => periodTime(a) - periodTime(b))
-    .map((item) => ({
+    .map((item) => {
+      const derived = item.metrics?.derived_metrics?.metrics || {};
+      return ({
       period: quarterLabel(item),
       revenue: item.metrics?.statements?.revenue?.current ?? null,
       operatingIncome: item.metrics?.statements?.operating_income?.current ?? null,
@@ -276,7 +355,18 @@ function EvolutionCharts({ history, ticker }) {
       totalLiabilities: item.metrics?.statements?.total_liabilities?.current ?? null,
       score: item.score?.total ?? null,
       qualityScore: item.score?.quality_score?.total ?? null,
-    }));
+      scoreV2: item.score?.score_v2?.total ?? null,
+      grossMargin: derived.gross_margin?.current ?? null,
+      operatingMargin: derived.operating_margin?.current ?? null,
+      netMargin: derived.net_margin?.current ?? null,
+      fcfMargin: derived.fcf_margin?.current ?? null,
+      freeCashFlow: derived.free_cash_flow?.current ?? null,
+      cashConversion: derived.cash_conversion?.current ?? null,
+      sbcToRevenue: derived.sbc_to_revenue?.current ?? null,
+      dilutedShares: item.metrics?.statements?.diluted_shares?.current ?? null,
+      dilutedEps: item.metrics?.statements?.diluted_eps?.current ?? null,
+    });
+    });
   if (rows.length < 2) return null;
 
   return (
@@ -284,6 +374,51 @@ function EvolutionCharts({ history, ticker }) {
       <div className="metric-label">Evolution Graphics</div>
       <h3>{ticker || 'Selected ticker'} quarterly evolution</h3>
       <div className="evolution-grid">
+        <ChartPanel title="Margin Evolution">
+          <LineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => pct(value)} />
+            <Tooltip formatter={(value) => pct(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="grossMargin" name="Gross Margin" stroke="var(--accent-cyan)" strokeWidth={3} connectNulls />
+            <Line type="monotone" dataKey="operatingMargin" name="Operating Margin" stroke="var(--accent-blue)" strokeWidth={3} connectNulls />
+            <Line type="monotone" dataKey="netMargin" name="Net Margin" stroke="var(--status-green)" strokeWidth={3} connectNulls />
+            <Line type="monotone" dataKey="fcfMargin" name="FCF Margin" stroke="var(--accent-purple)" strokeWidth={3} connectNulls />
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Free Cash Flow">
+          <BarChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => money(value)} />
+            <Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Bar dataKey="freeCashFlow" name="Free Cash Flow" fill="var(--status-green)" radius={[5, 5, 0, 0]} />
+          </BarChart>
+        </ChartPanel>
+        <ChartPanel title="Cash Conversion & SBC">
+          <LineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis stroke="var(--text-secondary)" />
+            <Tooltip formatter={(value, name) => name === 'SBC / Revenue' ? pct(value) : `${Number(value).toFixed(2)}x`} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line type="monotone" dataKey="cashConversion" name="Cash Conversion" stroke="var(--accent-cyan)" strokeWidth={3} connectNulls />
+            <Line type="monotone" dataKey="sbcToRevenue" name="SBC / Revenue" stroke="var(--status-orange)" strokeWidth={3} connectNulls />
+          </LineChart>
+        </ChartPanel>
+        <ChartPanel title="Dilution & EPS">
+          <LineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
+            <YAxis yAxisId="shares" stroke="var(--text-secondary)" tickFormatter={(value) => `${(value / 1e6).toFixed(0)}M`} />
+            <YAxis yAxisId="eps" orientation="right" stroke="var(--text-secondary)" />
+            <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
+            <Legend />
+            <Line yAxisId="shares" type="monotone" dataKey="dilutedShares" name="Diluted Shares" stroke="var(--status-orange)" strokeWidth={3} connectNulls />
+            <Line yAxisId="eps" type="monotone" dataKey="dilutedEps" name="Diluted EPS" stroke="var(--status-green)" strokeWidth={3} connectNulls />
+          </LineChart>
+        </ChartPanel>
         <ChartPanel title="Revenue">
           <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
@@ -346,6 +481,7 @@ function EvolutionCharts({ history, ticker }) {
             <Legend />
             <Bar dataKey="score" name="Filing Trend" fill="var(--accent-blue)" />
             <Bar dataKey="qualityScore" name="R&D / Debt Quality" fill="var(--status-green)" />
+            <Bar dataKey="scoreV2" name="Quality V2" fill="var(--accent-cyan)" />
           </BarChart>
         </ChartPanel>
       </div>
@@ -366,7 +502,7 @@ function StoredFilingsCard({ history, visibleHistory, onOpen }) {
       </summary>
       <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
         <table className="earnings-table">
-          <thead><tr><th>ID</th><th>Ticker</th><th>Form</th><th>Period</th><th>Score</th><th>Quality</th><th>Company</th><th>Action</th></tr></thead>
+          <thead><tr><th>ID</th><th>Ticker</th><th>Form</th><th>Period</th><th>Score V2</th><th>Legacy</th><th>Company</th><th>Action</th></tr></thead>
           <tbody>
             {visibleHistory.map((item) => (
               <tr key={item.id}>
@@ -374,8 +510,8 @@ function StoredFilingsCard({ history, visibleHistory, onOpen }) {
                 <td>{item.ticker}</td>
                 <td>{item.metrics?.form_type || 'N/A'}</td>
                 <td>{item.fiscal_quarter || 'N/A'}</td>
+                <td>{item.score?.score_v2?.total ?? 'N/A'} / 100</td>
                 <td>{item.score?.total ?? 'N/A'} / 100</td>
-                <td>{item.score?.quality_score?.total ?? 'N/A'} / 100</td>
                 <td>{item.company_name || 'N/A'}</td>
                 <td><button className="table-action" onClick={() => onOpen(item)}>Open</button></td>
               </tr>
@@ -415,8 +551,8 @@ export default function QuarterEarnings() {
 
   const visibleHistory = selectedTicker ? history.filter((item) => item.ticker === selectedTicker) : history;
   const sortedAvailableTickers = [...availableTickers].sort((a, b) => {
-    const scoreA = a.score?.total ?? a.score_total ?? -1;
-    const scoreB = b.score?.total ?? b.score_total ?? -1;
+    const scoreA = a.score?.score_v2?.total ?? a.score?.total ?? a.score_total ?? -1;
+    const scoreB = b.score?.score_v2?.total ?? b.score?.total ?? b.score_total ?? -1;
     return scoreB - scoreA;
   });
 
@@ -794,9 +930,9 @@ export default function QuarterEarnings() {
               </div>}
               {updatingTickers && <div className="ticker-update-progress"><progress value={updateProgress.processed} max={Math.max(updateProgress.total, 1)} /><span>{updateProgress.processed}/{updateProgress.total} filings</span></div>}
               {sortedAvailableTickers.length ? sortedAvailableTickers.map((group) => {
-                const total = group.score?.total ?? group.score_total;
-                const label = group.score?.label ?? group.score_label ?? 'No score';
-                const suggestion = group.score?.suggestion ?? group.score_suggestion ?? '';
+                const total = group.score?.score_v2?.total ?? group.score?.total ?? group.score_total;
+                const label = group.score?.score_v2?.label ?? group.score?.label ?? group.score_label ?? 'No score';
+                const suggestion = group.score?.score_v2?.signal ?? group.score?.suggestion ?? group.score_suggestion ?? '';
                 return (
                 <div className="ticker-choice-row" key={group.ticker}>
                   <input type="checkbox" checked={batchTickers.includes(group.ticker)} onChange={(event) => setBatchTickers((current) => event.target.checked ? [...current, group.ticker] : current.filter((ticker) => ticker !== group.ticker))} aria-label={`Select ${group.ticker} for update`} />

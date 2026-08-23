@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserRouter as Router, Link, Navigate, Route, Routes } from 'react-router-dom';
-import { Activity, Briefcase, Calculator, FileText, GitCompare, LayoutDashboard, LineChart, LogOut, Menu, UserCircle } from 'lucide-react';
+import { BrowserRouter as Router, Navigate, NavLink, Route, Routes } from 'react-router-dom';
+import { Activity, Briefcase, Calculator, ChevronLeft, ChevronRight, FileText, GitCompare, LayoutDashboard, LineChart, LogOut, Menu, UserCircle, X } from 'lucide-react';
 import api from './api';
 import Dashboard from './pages/Dashboard';
 import DCFCalculator from './pages/DCFCalculator';
@@ -13,72 +13,65 @@ import StockComparison from './pages/StockComparison';
 import StockInfo from './pages/StockInfo';
 
 function AuthenticatedApp({ user, onLogout }) {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const showLabels = !isSidebarCollapsed || isMobileOpen;
+  const navigation = [
+    { to: '/', label: 'Market Analysis', icon: LayoutDashboard, end: true },
+    { to: '/stock', label: 'Stock Analysis', icon: LineChart },
+    { to: '/monte-carlo', label: 'Monte Carlo', icon: Activity },
+    { to: '/comparison', label: 'Stock Comparison', icon: GitCompare },
+    { to: '/portfolio', label: 'Portfolio Analysis', icon: Briefcase },
+    { to: '/dcf', label: 'DCF Calculator', icon: Calculator },
+    { to: '/quarter-earnings', label: 'Quarter Earnings', icon: FileText },
+    { to: '/profile', label: 'Profile', icon: UserCircle },
+  ];
 
   return (
     <div className="app-container">
-      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 0' }}>
-          {!isSidebarCollapsed && (
-            <div>
-              <h1 className="text-gradient" style={{ fontSize: '1.8rem' }}>StocksAnalyser</h1>
-              <p className="metric-label" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>Next-Gen Intelligence</p>
+      <button className="mobile-menu-trigger" onClick={() => setIsMobileOpen((open) => !open)} aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={isMobileOpen}>
+        {isMobileOpen ? <X size={22} /> : <Menu size={22} />}
+      </button>
+      {isMobileOpen && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setIsMobileOpen(false)} />}
+      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
+        <div className="sidebar-header">
+          {showLabels ? (
+            <div className="sidebar-brand-copy">
+              <h1 className="text-gradient">StocksAnalyser</h1>
+              <p>Market intelligence</p>
             </div>
-          )}
+          ) : <div className="sidebar-brand-mark" aria-label="StocksAnalyser">SA</div>}
           <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            title="Toggle Sidebar"
+            className="sidebar-collapse-button"
+            onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+            title={isSidebarCollapsed ? 'Expand menu' : 'Collapse menu'}
+            aria-label={isSidebarCollapsed ? 'Expand menu' : 'Collapse menu'}
           >
-            <Menu size={24} />
+            {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <Link to="/" className="nav-link" title="Market Analysis">
-            <LayoutDashboard size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>Market Analysis</span>}
-          </Link>
-          <Link to="/stock" className="nav-link" title="Stock Analysis">
-            <LineChart size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>Stock Analysis</span>}
-          </Link>
-          <Link to="/monte-carlo" className="nav-link" title="Monte Carlo">
-            <Activity size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>Monte Carlo</span>}
-          </Link>
-          <Link to="/comparison" className="nav-link" title="Stock Comparison">
-            <GitCompare size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>Stock Comparison</span>}
-          </Link>
-          <Link to="/portfolio" className="nav-link" title="Portfolio Analysis">
-            <Briefcase size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>Portfolio Analysis</span>}
-          </Link>
-          <Link to="/dcf" className="nav-link" title="DCF Calculator">
-            <Calculator size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>DCF Calculator</span>}
-          </Link>
-          <Link to="/quarter-earnings" className="nav-link" title="Quarter Earnings">
-            <FileText size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>Quarter Earnings</span>}
-          </Link>
-          <Link to="/profile" className="nav-link" title="Profile">
-            <UserCircle size={20} style={{ flexShrink: 0 }} />
-            {!isSidebarCollapsed && <span>Profile</span>}
-          </Link>
+        <nav className="sidebar-navigation">
+          <span className="sidebar-section-label">{showLabels ? 'Workspace' : '•••'}</span>
+          {navigation.map(({ to, label, icon: Icon, end }) => (
+            <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title={isSidebarCollapsed && !isMobileOpen ? label : undefined} onClick={() => setIsMobileOpen(false)}>
+              <Icon size={20} />
+              {showLabels && <span>{label}</span>}
+              {!showLabels && <span className="nav-tooltip">{label}</span>}
+            </NavLink>
+          ))}
         </nav>
 
         <div className={`sidebar-user ${isSidebarCollapsed ? 'collapsed' : ''}`}>
           {user.picture_url ? <img src={user.picture_url} alt="" referrerPolicy="no-referrer" /> : <div className="sidebar-user-fallback">{(user.name || user.email || '?')[0]}</div>}
-          {!isSidebarCollapsed && (
+          {showLabels && (
             <div className="sidebar-user-copy">
               <strong>{user.name || 'Signed-in user'}</strong>
               <small>{user.email}{user.is_admin ? ' | Admin' : ''}</small>
             </div>
           )}
           <button onClick={onLogout} title="Logout" aria-label="Logout">
-            <LogOut size={18} /> {!isSidebarCollapsed && <span>Logout</span>}
+            <LogOut size={18} /> {showLabels && <span>Logout</span>}
           </button>
         </div>
       </aside>

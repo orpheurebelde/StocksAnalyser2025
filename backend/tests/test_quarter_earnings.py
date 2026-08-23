@@ -4,7 +4,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core import quarter_earnings
-from core.quarter_earnings import _business_quality_score, _derive_balance_sheet_totals, _derive_gross_profit, calculate_filing_fair_value
+from core.quarter_earnings import (
+    _business_quality_score,
+    _derive_balance_sheet_totals,
+    _derive_gross_profit,
+    _score_v2,
+    calculate_filing_fair_value,
+    enrich_derived_metrics,
+    find_yoy_previous_report,
+)
 
 
 def statement(current, prior, start="2025-01-01", end="2025-03-31"):
@@ -200,6 +208,56 @@ class DeleteTickerReportsTests(unittest.TestCase):
 
                 self.assertEqual(len(quarter_earnings.list_reports(1, "AAA")), 0)
                 self.assertEqual(len(quarter_earnings.list_reports(2, "AAA")), 1)
+
+
+class DerivedAnalyticsV2Tests(unittest.TestCase):
+    def test_derives_period_matched_margins_and_fcf(self):
+        def item(current, prior, start="2025-01-01", end="2025-03-31"):
+            return {"current": current, "prior": prior, "xbrl_start": start, "xbrl_end": end}
+
+        metrics = {
+            "statements": {
+                "revenue": item(100, 90), "gross_profit": item(60, 50),
+                "operating_income": item(25, 20), "net_income": item(20, 15),
+                "operating_cash_flow": item(30, 24), "capital_expenditures": item(5, 4),
+            },
+            "risk_terms": [], "text_stats": {"words": 10000},
+        }
+
+        result = enrich_derived_metrics(metrics)["derived_metrics"]
+
+        self.assertEqual(result["version"], "2.0")
+        self.assertAlmostEqual(result["metrics"]["net_margin"]["current"], 0.20)
+        self.assertEqual(result["metrics"]["free_cash_flow"]["current"], 25)
+        self.assertAlmostEqual(result["metrics"]["fcf_margin"]["current"], 0.25)
+
+    def test_does_not_mix_periods_for_fcf_margin(self):
+        metrics = {"statements": {
+            "revenue": {"current": 100, "xbrl_start": "2025-04-01", "xbrl_end": "2025-06-30"},
+            "operating_cash_flow": {"current": 60, "xbrl_start": "2025-01-01", "xbrl_end": "2025-06-30"},
+            "capital_expenditures": {"current": 10, "xbrl_start": "2025-01-01", "xbrl_end": "2025-06-30"},
+        }}
+
+        result = enrich_derived_metrics(metrics)["derived_metrics"]["metrics"]
+
+        self.assertEqual(result["free_cash_flow"]["current"], 50)
+        self.assertIsNone(result["fcf_margin"]["current"])
+
+    def test_score_v2_excludes_missing_facts(self):
+        score = _score_v2({"statements": {"revenue": {"current": 100}}})
+
+        self.assertLess(score["coverage"], 40)
+        self.assertEqual(score["label"], "Insufficient evidence")
+        self.assertTrue(any(not row["available"] for row in score["rows"]))
+
+    def test_yoy_selector_uses_prior_year_not_previous_quarter(self):
+        current = {"ticker": "AMD", "report_date": "2025-06-30", "metrics": {"form_type": "10-Q"}}
+        previous_quarter = {"ticker": "AMD", "report_date": "2025-03-31", "metrics": {"form_type": "10-Q"}}
+        prior_year = {"ticker": "AMD", "report_date": "2024-06-29", "metrics": {"form_type": "10-Q"}}
+
+        result = find_yoy_previous_report(current, [previous_quarter, prior_year])
+
+        self.assertIs(result, prior_year)
 
 
 if __name__ == "__main__":

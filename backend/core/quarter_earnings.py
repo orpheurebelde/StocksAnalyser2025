@@ -25,6 +25,13 @@ XBRL_TAGS = {
         "SalesRevenueGoodsNet",
         "Revenues",
     ],
+    "revenue_ytd": [
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "SalesRevenueNet",
+        "SalesRevenueGoodsNet",
+        "Revenues",
+    ],
     "gross_profit": ["GrossProfit"],
     "cost_of_revenue": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
     "operating_income": ["OperatingIncomeLoss", "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"],
@@ -49,6 +56,7 @@ XBRL_TAGS = {
     "total_assets": ["Assets"],
     "total_liabilities": ["Liabilities"],
     "current_liabilities": ["LiabilitiesCurrent"],
+    "current_assets": ["AssetsCurrent"],
     "noncurrent_liabilities": ["LiabilitiesNoncurrent"],
     "total_debt": [
         "LongTermDebtAndFinanceLeaseObligations",
@@ -63,6 +71,18 @@ XBRL_TAGS = {
         "LongTermDebtCurrent",
         "ShortTermBorrowings",
     ],
+    "capital_expenditures": [
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsForAdditionsToPropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
+        "PaymentsToAcquireOtherProductiveAssets",
+    ],
+    "share_based_compensation": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
+    "diluted_eps": ["EarningsPerShareDiluted"],
+    "diluted_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"],
+    "stockholders_equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
+    "interest_expense": ["InterestExpenseNonOperating", "InterestExpenseDebt", "InterestAndDebtExpense"],
+    "income_tax_expense": ["IncomeTaxExpenseBenefit"],
 }
 XBRL_TAG_PATTERNS = {
     "research_development": [
@@ -77,7 +97,11 @@ XBRL_TAG_PATTERNS = {
     ],
 }
 SEC_FORMS = {"10-Q", "10-K"}
-FLOW_STATEMENT_KEYS = {"revenue", "gross_profit", "cost_of_revenue", "operating_income", "net_income", "operating_cash_flow", "research_development"}
+FLOW_STATEMENT_KEYS = {
+    "revenue", "revenue_ytd", "gross_profit", "cost_of_revenue", "operating_income", "net_income",
+    "operating_cash_flow", "research_development", "capital_expenditures",
+    "share_based_compensation", "interest_expense", "income_tax_expense",
+}
 _reprocess_jobs: dict[str, dict[str, Any]] = {}
 _reprocess_jobs_lock = threading.Lock()
 
@@ -572,7 +596,7 @@ def _select_xbrl_prior(rows: list[dict[str, Any]], current: dict[str, Any], pref
 
 
 def _xbrl_item(companyfacts: dict[str, Any], accession: str, key: str, report_date: str | None) -> dict[str, Any] | None:
-    prefer_longest = key == "operating_cash_flow"
+    prefer_longest = key in {"revenue_ytd", "operating_cash_flow", "capital_expenditures"}
     for taxonomy, tag in _matching_xbrl_tags(companyfacts, key):
         rows = _xbrl_facts_for_concept(companyfacts, taxonomy, tag, accession)
         current = _select_xbrl_current(rows, report_date, prefer_longest)
@@ -591,6 +615,8 @@ def _xbrl_item(companyfacts: dict[str, Any], accession: str, key: str, report_da
             "taxonomy": taxonomy,
             "xbrl_end": current.get("end"),
             "xbrl_start": current.get("start"),
+            "fiscal_period": current.get("fp"),
+            "fiscal_year": current.get("fy"),
         }
     return None
 
@@ -671,6 +697,78 @@ def _derive_balance_sheet_totals(statements: dict[str, Any]) -> dict[str, Any]:
             "TotalDebtDerived",
         )
     return updated
+
+
+def _periods_match(*items: dict[str, Any]) -> bool:
+    dated = [(item.get("xbrl_start"), item.get("xbrl_end")) for item in items if item]
+    known = [period for period in dated if period[1]]
+    return not known or len(set(known)) == 1
+
+
+def _derived_ratio(statements: dict[str, Any], numerator: str, denominator: str) -> tuple[float | None, float | None]:
+    top = statements.get(numerator) or {}
+    bottom = statements.get(denominator) or {}
+    if not _periods_match(top, bottom):
+        return None, None
+    current = _ratio(top.get("current"), bottom.get("current"))
+    prior = _ratio(top.get("prior"), bottom.get("prior"))
+    return current, prior
+
+
+def _derived_item(current: float | None, prior: float | None, formula: str) -> dict[str, Any]:
+    return {
+        "current": current,
+        "prior": prior,
+        "change": None if current is None or prior is None else current - prior,
+        "formula": formula,
+        "confidence": "derived_from_sec_xbrl" if current is not None else "unavailable",
+    }
+
+
+def enrich_derived_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Add versioned analytics without removing or rewriting source statement facts."""
+    statements = metrics.get("statements") or {}
+    ratios = {}
+    for key, numerator, denominator, formula in (
+        ("gross_margin", "gross_profit", "revenue", "gross profit / revenue"),
+        ("operating_margin", "operating_income", "revenue", "operating income / revenue"),
+        ("net_margin", "net_income", "revenue", "net income / revenue"),
+        ("ocf_margin", "operating_cash_flow", "revenue_ytd", "operating cash flow / matching YTD revenue"),
+        ("r_and_d_intensity", "research_development", "revenue", "R&D / revenue"),
+        ("sbc_to_revenue", "share_based_compensation", "revenue", "share-based compensation / revenue"),
+        ("current_ratio", "current_assets", "current_liabilities", "current assets / current liabilities"),
+        ("debt_to_assets", "total_debt", "total_assets", "total debt / total assets"),
+        ("liabilities_to_assets", "total_liabilities", "total_assets", "total liabilities / total assets"),
+        ("cash_to_debt", "cash", "total_debt", "cash / total debt"),
+        ("cash_conversion", "operating_cash_flow", "net_income", "operating cash flow / net income"),
+        ("interest_coverage", "operating_income", "interest_expense", "operating income / interest expense"),
+        ("effective_tax_rate", "income_tax_expense", "operating_income", "income tax expense / operating income proxy"),
+    ):
+        current, prior = _derived_ratio(statements, numerator, denominator)
+        ratios[key] = _derived_item(current, prior, formula)
+
+    ocf = statements.get("operating_cash_flow") or {}
+    capex = statements.get("capital_expenditures") or {}
+    free_cash_flow = None
+    prior_free_cash_flow = None
+    if _periods_match(ocf, capex) and ocf.get("current") is not None and capex.get("current") is not None:
+        free_cash_flow = float(ocf["current"]) - abs(float(capex["current"]))
+        if ocf.get("prior") is not None and capex.get("prior") is not None:
+            prior_free_cash_flow = float(ocf["prior"]) - abs(float(capex["prior"]))
+    ratios["free_cash_flow"] = _derived_item(free_cash_flow, prior_free_cash_flow, "operating cash flow - capital expenditures")
+    revenue = statements.get("revenue_ytd") or statements.get("revenue") or {}
+    fcf_margin = None
+    prior_fcf_margin = None
+    if _periods_match(ocf, capex, revenue):
+        fcf_margin = _ratio(free_cash_flow, revenue.get("current"))
+        prior_fcf_margin = _ratio(prior_free_cash_flow, revenue.get("prior"))
+    ratios["fcf_margin"] = _derived_item(fcf_margin, prior_fcf_margin, "free cash flow / revenue")
+
+    words = (metrics.get("text_stats") or {}).get("words") or 0
+    risk_count = sum(item.get("count", 0) for item in metrics.get("risk_terms", []))
+    ratios["risk_density"] = _derived_item((risk_count / words * 10_000) if words else None, None, "tracked risk-term hits per 10,000 filing words")
+    metrics["derived_metrics"] = {"version": "2.0", "metrics": ratios}
+    return metrics
 
 
 def _xbrl_statements(accession: str | None, ticker: str | None, report_date: str | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
@@ -1172,7 +1270,7 @@ def extract_10q_data(ticker: str, report_text: str, filename: str | None = None)
             "words": len(text.split()),
         },
     }
-    return filing
+    return enrich_derived_metrics(filing)
 
 
 def _text_statement_fallbacks(report_text: str) -> dict[str, dict[str, Any]]:
@@ -1340,6 +1438,7 @@ def _sec_payload_from_filing(ticker: str, cik: str, companyfacts: dict[str, Any]
         "risk_terms": risk_hits,
         "text_stats": {"characters": len(report_text), "words": len(report_text.split())},
     }
+    metrics = enrich_derived_metrics(metrics)
     return {
         "ticker": ticker.upper(),
         "fiscal_quarter": fiscal_quarter,
@@ -1488,7 +1587,7 @@ def list_reports(user_id: int, ticker: str) -> list[dict[str, Any]]:
             f"SELECT * FROM quarter_reports WHERE user_id = {ph} AND ticker = {ph} ORDER BY id DESC LIMIT 100",
             (user_id, ticker.upper()),
         ).fetchall()
-    reports = [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    reports = [{**_row_to_dict(row), "metrics": enrich_derived_metrics(json.loads(row["metrics_json"]))} for row in rows]
     return sorted(reports, key=_report_date_key, reverse=True)[:20]
 
 
@@ -1501,7 +1600,7 @@ def list_all_reports(user_id: int, limit: int = 50) -> list[dict[str, Any]]:
             f"SELECT * FROM quarter_reports WHERE user_id = {ph} ORDER BY id DESC LIMIT 200",
             (user_id,),
         ).fetchall()
-    reports = [{**_row_to_dict(row), "metrics": json.loads(row["metrics_json"])} for row in rows]
+    reports = [{**_row_to_dict(row), "metrics": enrich_derived_metrics(json.loads(row["metrics_json"]))} for row in rows]
     return sorted(reports, key=_report_date_key, reverse=True)[:limit]
 
 
@@ -1521,7 +1620,7 @@ def list_tickers(user_id: int) -> list[dict[str, Any]]:
     for row in rows:
         data = _row_to_dict(row)
         try:
-            data["metrics"] = json.loads(data.get("metrics_json") or "{}")
+            data["metrics"] = enrich_derived_metrics(json.loads(data.get("metrics_json") or "{}"))
         except Exception:
             data["metrics"] = {}
         ticker = str(data.get("ticker") or "").upper()
@@ -1532,15 +1631,9 @@ def list_tickers(user_id: int) -> list[dict[str, Any]]:
     for ticker, reports in by_ticker.items():
         sorted_reports = sorted(reports, key=_report_date_key, reverse=True)
         latest = sorted_reports[0]
-        latest_group = _metrics_form_group(latest.get("metrics") or {})
-        previous = next(
-            (
-                item for item in sorted_reports[1:]
-                if _metrics_form_group(item.get("metrics") or {}) == latest_group
-            ),
-            None,
-        )
+        previous = find_yoy_previous_report(latest, sorted_reports[1:])
         score = score_report(latest.get("metrics") or {}, previous.get("metrics") if previous else None)
+        primary_score = score.get("score_v2") or score
         items.append(
             {
                 "ticker": ticker,
@@ -1550,9 +1643,9 @@ def list_tickers(user_id: int) -> list[dict[str, Any]]:
                 "latest_period": latest.get("fiscal_quarter"),
                 "company_name": latest.get("company_name"),
                 "score": score,
-                "score_total": score.get("total"),
-                "score_label": score.get("label"),
-                "score_suggestion": score.get("suggestion"),
+                "score_total": primary_score.get("total"),
+                "score_label": primary_score.get("label"),
+                "score_suggestion": primary_score.get("signal") or score.get("suggestion"),
             }
         )
     return sorted(items, key=lambda item: item.get("score_total") or -1, reverse=True)
@@ -1611,7 +1704,7 @@ def get_report(user_id: int, report_id: int) -> dict[str, Any] | None:
     if not row:
         return None
     data = _row_to_dict(row)
-    data["metrics"] = json.loads(data.pop("metrics_json"))
+    data["metrics"] = enrich_derived_metrics(json.loads(data.pop("metrics_json")))
     return data
 
 
@@ -1630,6 +1723,28 @@ def _report_date_key(report: dict[str, Any]) -> str:
     if parsed:
         return parsed.strftime("%Y-%m-%d")
     return str(value)
+
+
+def find_yoy_previous_report(report: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+    current_raw = report.get("report_date") or (report.get("metrics") or {}).get("report_date")
+    current_date = _parse_period_date(current_raw)
+    if not current_date:
+        return None
+    compatible = []
+    current_group = _metrics_form_group(report.get("metrics") or {})
+    for candidate in candidates:
+        if candidate.get("ticker") != report.get("ticker"):
+            continue
+        if _metrics_form_group(candidate.get("metrics") or {}) != current_group:
+            continue
+        candidate_raw = candidate.get("report_date") or (candidate.get("metrics") or {}).get("report_date")
+        candidate_date = _parse_period_date(candidate_raw)
+        if not candidate_date:
+            continue
+        days = (current_date - candidate_date).days
+        if 300 <= days <= 430:
+            compatible.append((abs(days - 365), candidate))
+    return min(compatible, key=lambda item: item[0])[1] if compatible else None
 
 
 def _metrics_form_group(metrics: dict[str, Any]) -> str:
@@ -1905,6 +2020,99 @@ def _confidence_score(metrics: dict[str, Any], previous_metrics: dict[str, Any] 
     }
 
 
+def _linear_score(value: float | None, weak: float, strong: float, reverse: bool = False) -> float | None:
+    if value is None:
+        return None
+    if strong == weak:
+        return None
+    result = (float(value) - weak) / (strong - weak) * 100
+    if reverse:
+        result = 100 - result
+    return max(0.0, min(100.0, result))
+
+
+def _score_v2(metrics: dict[str, Any], previous_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
+    metrics = enrich_derived_metrics(metrics)
+    if previous_metrics:
+        previous_metrics = enrich_derived_metrics(previous_metrics)
+    derived = (metrics.get("derived_metrics") or {}).get("metrics") or {}
+    previous_derived = ((previous_metrics or {}).get("derived_metrics") or {}).get("metrics") or {}
+
+    def statement_growth(key: str) -> float | None:
+        if not previous_metrics:
+            return None
+        return _growth(_statement_value(metrics, key), _statement_value(previous_metrics, key))
+
+    def derived_value(key: str) -> float | None:
+        return (derived.get(key) or {}).get("current")
+
+    def derived_change(key: str) -> float | None:
+        current = derived_value(key)
+        previous = (previous_derived.get(key) or {}).get("current")
+        return None if current is None or previous is None else current - previous
+
+    factors = [
+        ("Operating momentum", "Revenue YoY", statement_growth("revenue"), 12, -0.10, 0.20, False),
+        ("Operating momentum", "Gross margin", derived_value("gross_margin"), 8, 0.20, 0.60, False),
+        ("Operating momentum", "Gross margin change", derived_change("gross_margin"), 5, -0.03, 0.03, False),
+        ("Operating momentum", "Operating margin", derived_value("operating_margin"), 6, -0.05, 0.25, False),
+        ("Operating momentum", "Net margin", derived_value("net_margin"), 4, -0.05, 0.20, False),
+        ("Cash generation", "Operating cash flow YoY", statement_growth("operating_cash_flow"), 7, -0.15, 0.20, False),
+        ("Cash generation", "Free cash flow margin", derived_value("fcf_margin"), 8, -0.05, 0.20, False),
+        ("Cash generation", "Cash conversion", derived_value("cash_conversion"), 5, 0.50, 1.20, False),
+        ("Cash generation", "SBC to revenue", derived_value("sbc_to_revenue"), 5, 0.15, 0.03, False),
+        ("Balance strength", "Current ratio", derived_value("current_ratio"), 7, 0.75, 2.00, False),
+        ("Balance strength", "Debt to assets", derived_value("debt_to_assets"), 7, 0.55, 0.10, False),
+        ("Balance strength", "Cash to debt", derived_value("cash_to_debt"), 6, 0.25, 1.50, False),
+        ("Earnings quality & risk", "Risk language density", derived_value("risk_density"), 10, 3.0, 0.5, False),
+        ("Earnings quality & risk", "Interest coverage", derived_value("interest_coverage"), 5, 1.0, 8.0, False),
+        ("Earnings quality & risk", "Diluted share change", statement_growth("diluted_shares"), 5, 0.08, -0.02, False),
+    ]
+    rows = []
+    category_totals: dict[str, dict[str, float]] = {}
+    earned = 0.0
+    available_weight = 0.0
+    for category, factor, value, weight, weak, strong, reverse in factors:
+        normalized = _linear_score(value, weak, strong, reverse)
+        points = None if normalized is None else round(weight * normalized / 100, 1)
+        rows.append({"category": category, "factor": factor, "value": value, "weight": weight, "points": points, "available": normalized is not None})
+        bucket = category_totals.setdefault(category, {"earned": 0.0, "available_weight": 0.0, "weight": 0.0})
+        bucket["weight"] += weight
+        if points is not None:
+            earned += points
+            available_weight += weight
+            bucket["earned"] += points
+            bucket["available_weight"] += weight
+    coverage = available_weight
+    total = round(earned / available_weight * 100, 1) if available_weight else None
+    categories = []
+    for name, values in category_totals.items():
+        category_score = round(values["earned"] / values["available_weight"] * 100, 1) if values["available_weight"] else None
+        categories.append({"name": name, "score": category_score, "coverage": round(values["available_weight"] / values["weight"] * 100, 1), "weight": values["weight"]})
+    if coverage < 40:
+        label, signal = "Insufficient evidence", "REVIEW"
+    elif total >= 80:
+        label, signal = "Strong", "POSITIVE QUALITY"
+    elif total >= 65:
+        label, signal = "Healthy", "STABLE QUALITY"
+    elif total >= 50:
+        label, signal = "Mixed", "MONITOR"
+    else:
+        label, signal = "Weak", "CAUTION"
+    return {
+        "version": "2.0",
+        "total": total,
+        "max": 100,
+        "label": label,
+        "signal": signal,
+        "coverage": round(coverage, 1),
+        "comparison_basis": "same fiscal period prior year" if previous_metrics else "current filing only",
+        "categories": categories,
+        "rows": rows,
+        "warnings": ["Coverage below 60%; interpret score cautiously."] if coverage < 60 else [],
+    }
+
+
 def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | None = None) -> dict[str, Any]:
     statements = metrics.get("statements", {})
     def trend(key: str):
@@ -1985,4 +2193,5 @@ def score_report(metrics: dict[str, Any], previous_metrics: dict[str, Any] | Non
         "confidence": confidence,
         "legend": legend,
         "rows": scored,
+        "score_v2": _score_v2(metrics, previous_metrics),
     }

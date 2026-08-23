@@ -18,6 +18,7 @@ from core.quarter_earnings import (
     get_report,
     get_reprocess_job,
     get_sec_filing_text,
+    find_yoy_previous_report,
     import_sec_filings,
     list_all_reports,
     list_reports,
@@ -51,15 +52,7 @@ CONCERN_TERMS = {
 def attach_evolution_scores(items: list[dict]) -> list[dict]:
     scored = []
     for index, item in enumerate(items):
-        item_form = _score_form_group(item)
-        previous = next(
-            (
-                candidate for candidate in items[index + 1:]
-                if candidate.get("ticker") == item.get("ticker")
-                and _score_form_group(candidate) == item_form
-            ),
-            None,
-        )
+        previous = find_yoy_previous_report(item, items[index + 1:])
         scored.append({**item, "score": score_report(item["metrics"], previous["metrics"] if previous else None)})
     return scored
 
