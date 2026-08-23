@@ -36,6 +36,7 @@ XBRL_TAGS = {
     "cost_of_revenue": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
     "operating_income": ["OperatingIncomeLoss", "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"],
     "net_income": ["NetIncomeLoss", "ProfitLoss", "NetIncomeLossAvailableToCommonStockholdersBasic"],
+    "net_income_ytd": ["NetIncomeLoss", "ProfitLoss", "NetIncomeLossAvailableToCommonStockholdersBasic"],
     "operating_cash_flow": [
         "NetCashProvidedByUsedInOperatingActivities",
         "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
@@ -78,10 +79,11 @@ XBRL_TAGS = {
         "PaymentsToAcquireOtherProductiveAssets",
     ],
     "share_based_compensation": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
+    "share_based_compensation_ytd": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
     "diluted_eps": ["EarningsPerShareDiluted"],
     "diluted_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"],
     "stockholders_equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
-    "interest_expense": ["InterestExpenseNonOperating", "InterestExpenseDebt", "InterestAndDebtExpense"],
+    "interest_expense": ["InterestExpense", "InterestExpenseNonOperating", "InterestExpenseDebt", "InterestAndDebtExpense"],
     "income_tax_expense": ["IncomeTaxExpenseBenefit"],
 }
 XBRL_TAG_PATTERNS = {
@@ -100,7 +102,7 @@ SEC_FORMS = {"10-Q", "10-K"}
 FLOW_STATEMENT_KEYS = {
     "revenue", "revenue_ytd", "gross_profit", "cost_of_revenue", "operating_income", "net_income",
     "operating_cash_flow", "research_development", "capital_expenditures",
-    "share_based_compensation", "interest_expense", "income_tax_expense",
+    "net_income_ytd", "share_based_compensation", "share_based_compensation_ytd", "interest_expense", "income_tax_expense",
 }
 _reprocess_jobs: dict[str, dict[str, Any]] = {}
 _reprocess_jobs_lock = threading.Lock()
@@ -596,7 +598,7 @@ def _select_xbrl_prior(rows: list[dict[str, Any]], current: dict[str, Any], pref
 
 
 def _xbrl_item(companyfacts: dict[str, Any], accession: str, key: str, report_date: str | None) -> dict[str, Any] | None:
-    prefer_longest = key in {"revenue_ytd", "operating_cash_flow", "capital_expenditures"}
+    prefer_longest = key in {"revenue_ytd", "net_income_ytd", "operating_cash_flow", "capital_expenditures", "share_based_compensation_ytd"}
     for taxonomy, tag in _matching_xbrl_tags(companyfacts, key):
         rows = _xbrl_facts_for_concept(companyfacts, taxonomy, tag, accession)
         current = _select_xbrl_current(rows, report_date, prefer_longest)
@@ -689,7 +691,12 @@ def _derive_balance_sheet_totals(statements: dict[str, Any]) -> dict[str, Any]:
         ["current_liabilities", "noncurrent_liabilities"],
         "LiabilitiesDerived",
     )
-    if not _is_missing_value(updated.get("current_debt")) and not _is_missing_value(updated.get("total_debt")):
+    total_debt = updated.get("total_debt") or {}
+    if (
+        not _is_missing_value(updated.get("current_debt"))
+        and not _is_missing_value(total_debt)
+        and total_debt.get("confidence") != "xbrl_sec_companyfacts_derived"
+    ):
         updated = _sum_statement_components(
             updated,
             "total_debt",
@@ -735,12 +742,12 @@ def enrich_derived_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
         ("net_margin", "net_income", "revenue", "net income / revenue"),
         ("ocf_margin", "operating_cash_flow", "revenue_ytd", "operating cash flow / matching YTD revenue"),
         ("r_and_d_intensity", "research_development", "revenue", "R&D / revenue"),
-        ("sbc_to_revenue", "share_based_compensation", "revenue", "share-based compensation / revenue"),
+        ("sbc_to_revenue", "share_based_compensation_ytd", "revenue_ytd", "share-based compensation / matching YTD revenue"),
         ("current_ratio", "current_assets", "current_liabilities", "current assets / current liabilities"),
         ("debt_to_assets", "total_debt", "total_assets", "total debt / total assets"),
         ("liabilities_to_assets", "total_liabilities", "total_assets", "total liabilities / total assets"),
         ("cash_to_debt", "cash", "total_debt", "cash / total debt"),
-        ("cash_conversion", "operating_cash_flow", "net_income", "operating cash flow / net income"),
+        ("cash_conversion", "operating_cash_flow", "net_income_ytd", "operating cash flow / matching YTD net income"),
         ("interest_coverage", "operating_income", "interest_expense", "operating income / interest expense"),
         ("effective_tax_rate", "income_tax_expense", "operating_income", "income tax expense / operating income proxy"),
     ):
@@ -767,7 +774,8 @@ def enrich_derived_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
     words = (metrics.get("text_stats") or {}).get("words") or 0
     risk_count = sum(item.get("count", 0) for item in metrics.get("risk_terms", []))
     ratios["risk_density"] = _derived_item((risk_count / words * 10_000) if words else None, None, "tracked risk-term hits per 10,000 filing words")
-    metrics["derived_metrics"] = {"version": "2.0", "metrics": ratios}
+    metrics["sec_enrichment_version"] = "2.1"
+    metrics["derived_metrics"] = {"version": "2.1", "metrics": ratios}
     return metrics
 
 
@@ -1059,6 +1067,78 @@ def backfill_missing_operating_cash_flow(user_id: int, ticker: str | None = None
             if updated:
                 conn.execute(f"UPDATE quarter_reports SET metrics_json = {ph} WHERE id = {ph}", (json.dumps(metrics), report_id))
                 changed += 1
+    return changed
+
+
+def backfill_sec_analytics(user_id: int, ticker: str) -> int:
+    """Merge newly supported SEC facts into stored imports without replacing source data."""
+    init_db()
+    ph = _placeholder()
+    ticker = ticker.upper()
+    with _connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, report_date, metrics_json
+            FROM quarter_reports
+            WHERE user_id = {ph} AND ticker = {ph} AND source_type = {ph}
+            ORDER BY id DESC
+            """,
+            (user_id, ticker, "sec_xbrl_import"),
+        ).fetchall()
+
+    pending: list[tuple[int, str | None, dict[str, Any]]] = []
+    cik = None
+    for report_id, report_date, metrics_json in rows:
+        try:
+            metrics = json.loads(metrics_json)
+        except Exception:
+            continue
+        if metrics.get("sec_enrichment_version") == "2.1":
+            continue
+        xbrl = metrics.get("xbrl") or {}
+        accession = metrics.get("accession") or xbrl.get("accession")
+        cik = cik or xbrl.get("cik") or _cik_from_accession(accession)
+        pending.append((report_id, report_date, metrics))
+
+    if not pending:
+        return 0
+    cik = cik or _cik_from_ticker(ticker)
+    companyfacts = _load_sec_companyfacts(str(cik)) if cik else None
+    if not companyfacts:
+        return 0
+
+    changed = 0
+    with _connect() as conn:
+        for report_id, report_date, metrics in pending:
+            xbrl = metrics.get("xbrl") or {}
+            accession = metrics.get("accession") or xbrl.get("accession")
+            report_date_iso = _date_iso(report_date or metrics.get("report_date"))
+            accession = accession or _find_accession_for_period(companyfacts, report_date_iso)
+            if not accession:
+                continue
+
+            statements = metrics.setdefault("statements", {})
+            for key in XBRL_TAGS:
+                if not _is_missing_value(statements.get(key)):
+                    continue
+                item = _xbrl_item(companyfacts, accession, key, report_date_iso)
+                if item:
+                    statements[key] = item
+
+            if str(metrics.get("form_type") or "").startswith("10-K"):
+                statements = _derive_10k_q4_statements(companyfacts, statements)
+            statements = _derive_gross_profit(statements)
+            statements = _derive_balance_sheet_totals(statements)
+            metrics["statements"] = statements
+            metrics.setdefault("xbrl", {}).update(
+                {"accession": accession, "cik": str(cik), "available": bool(statements), "source": "sec_companyfacts"}
+            )
+            enrich_derived_metrics(metrics)
+            conn.execute(
+                f"UPDATE quarter_reports SET metrics_json = {ph} WHERE id = {ph} AND user_id = {ph}",
+                (json.dumps(metrics), report_id, user_id),
+            )
+            changed += 1
     return changed
 
 
@@ -1580,6 +1660,7 @@ def save_report(user_id: int, payload: dict[str, Any]) -> dict[str, Any]:
 
 def list_reports(user_id: int, ticker: str) -> list[dict[str, Any]]:
     init_db()
+    backfill_sec_analytics(user_id, ticker)
     backfill_missing_operating_cash_flow(user_id, ticker)
     ph = _placeholder()
     with _connect(row_factory=True) as conn:

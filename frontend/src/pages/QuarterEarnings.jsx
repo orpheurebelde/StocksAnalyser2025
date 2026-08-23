@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BarChart3, Brain, Database, Landmark, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../api';
 
 const statementKeys = [
@@ -15,6 +15,21 @@ const statementKeys = [
   ['total_debt', 'Total Debt'],
   ['total_assets', 'Total Assets'],
   ['total_liabilities', 'Total Liabilities'],
+];
+
+const derivedMetricCards = [
+  ['gross_margin', 'Gross Margin'],
+  ['operating_margin', 'Operating Margin'],
+  ['net_margin', 'Net Margin'],
+  ['fcf_margin', 'FCF Margin'],
+  ['free_cash_flow', 'Free Cash Flow', 'money'],
+  ['cash_conversion', 'Cash Conversion', 'ratio'],
+  ['sbc_to_revenue', 'SBC / Revenue'],
+  ['current_ratio', 'Current Ratio', 'ratio'],
+  ['debt_to_assets', 'Debt / Assets'],
+  ['cash_to_debt', 'Cash / Debt', 'ratio'],
+  ['interest_coverage', 'Interest Coverage', 'ratio'],
+  ['risk_density', 'Risk Density', 'number'],
 ];
 
 const money = (value) => {
@@ -125,6 +140,8 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
   const derived = filing.derived_metrics?.metrics || {};
   const qualityScore = score?.quality_score;
   const scoreV2 = score?.score_v2;
+  const availableDerivedMetrics = derivedMetricCards.filter(([key]) => derived[key]?.current != null);
+  const missingDerivedCount = derivedMetricCards.length - availableDerivedMetrics.length;
   return (
     <>
       <div className="filing-hero glass-panel">
@@ -222,21 +239,13 @@ function FilingBoard({ report, score, valuation, valuationLoading, onLoadValuati
       </div>
 
       <div className="glass-panel filing-derived-panel" style={{ marginBottom: '2rem' }}>
-        <div className="filing-panel-heading"><div><div className="metric-label">SEC-derived analytics · V2</div><h3>Margins, cash conversion and capital quality</h3></div><small>Only matching XBRL periods are combined</small></div>
+        <div className="filing-panel-heading"><div><div className="metric-label">SEC-derived analytics · V2.1</div><h3>Margins, cash conversion and capital quality</h3></div><small>Only matching XBRL periods are combined</small></div>
         <div className="grid-4">
-          <DerivedMetricCard label="Gross Margin" item={derived.gross_margin} />
-          <DerivedMetricCard label="Operating Margin" item={derived.operating_margin} />
-          <DerivedMetricCard label="Net Margin" item={derived.net_margin} />
-          <DerivedMetricCard label="FCF Margin" item={derived.fcf_margin} />
-          <DerivedMetricCard label="Free Cash Flow" item={derived.free_cash_flow} format="money" />
-          <DerivedMetricCard label="Cash Conversion" item={derived.cash_conversion} format="ratio" />
-          <DerivedMetricCard label="SBC / Revenue" item={derived.sbc_to_revenue} />
-          <DerivedMetricCard label="Current Ratio" item={derived.current_ratio} format="ratio" />
-          <DerivedMetricCard label="Debt / Assets" item={derived.debt_to_assets} />
-          <DerivedMetricCard label="Cash / Debt" item={derived.cash_to_debt} format="ratio" />
-          <DerivedMetricCard label="Interest Coverage" item={derived.interest_coverage} format="ratio" />
-          <DerivedMetricCard label="Risk Density" item={derived.risk_density} format="number" />
+          {availableDerivedMetrics.map(([key, label, format]) => (
+            <DerivedMetricCard key={key} label={label} item={derived[key]} format={format} />
+          ))}
         </div>
+        {missingDerivedCount > 0 && <small className="metric-label">{missingDerivedCount} metric(s) not disclosed with compatible XBRL periods. Excluded instead of showing misleading N/A cards.</small>}
       </div>
 
       <div className="glass-panel" style={{ marginBottom: '2rem' }}>
@@ -375,17 +384,17 @@ function EvolutionCharts({ history, ticker }) {
       <h3>{ticker || 'Selected ticker'} quarterly evolution</h3>
       <div className="evolution-grid">
         <ChartPanel title="Margin Evolution">
-          <LineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => pct(value)} />
             <Tooltip formatter={(value) => pct(value)} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="grossMargin" name="Gross Margin" stroke="var(--accent-cyan)" strokeWidth={3} connectNulls />
-            <Line type="monotone" dataKey="operatingMargin" name="Operating Margin" stroke="var(--accent-blue)" strokeWidth={3} connectNulls />
-            <Line type="monotone" dataKey="netMargin" name="Net Margin" stroke="var(--status-green)" strokeWidth={3} connectNulls />
-            <Line type="monotone" dataKey="fcfMargin" name="FCF Margin" stroke="var(--accent-purple)" strokeWidth={3} connectNulls />
-          </LineChart>
+            <Bar dataKey="grossMargin" name="Gross Margin" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="operatingMargin" name="Operating Margin" fill="var(--accent-blue)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="netMargin" name="Net Margin" fill="var(--status-green)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="fcfMargin" name="FCF Margin" fill="var(--accent-purple)" radius={[4, 4, 0, 0]} />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="Free Cash Flow">
           <BarChart data={rows}>
@@ -397,27 +406,27 @@ function EvolutionCharts({ history, ticker }) {
           </BarChart>
         </ChartPanel>
         <ChartPanel title="Cash Conversion & SBC">
-          <LineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis stroke="var(--text-secondary)" />
             <Tooltip formatter={(value, name) => name === 'SBC / Revenue' ? pct(value) : `${Number(value).toFixed(2)}x`} contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line type="monotone" dataKey="cashConversion" name="Cash Conversion" stroke="var(--accent-cyan)" strokeWidth={3} connectNulls />
-            <Line type="monotone" dataKey="sbcToRevenue" name="SBC / Revenue" stroke="var(--status-orange)" strokeWidth={3} connectNulls />
-          </LineChart>
+            <Bar dataKey="cashConversion" name="Cash Conversion" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="sbcToRevenue" name="SBC / Revenue" fill="var(--status-orange)" radius={[4, 4, 0, 0]} />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="Dilution & EPS">
-          <LineChart data={rows}>
+          <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="period" stroke="var(--text-secondary)" tick={{ fontSize: 11 }} interval={0} minTickGap={0} />
             <YAxis yAxisId="shares" stroke="var(--text-secondary)" tickFormatter={(value) => `${(value / 1e6).toFixed(0)}M`} />
             <YAxis yAxisId="eps" orientation="right" stroke="var(--text-secondary)" />
             <Tooltip contentStyle={{ background: '#12121a', border: '1px solid var(--border-color)' }} />
             <Legend />
-            <Line yAxisId="shares" type="monotone" dataKey="dilutedShares" name="Diluted Shares" stroke="var(--status-orange)" strokeWidth={3} connectNulls />
-            <Line yAxisId="eps" type="monotone" dataKey="dilutedEps" name="Diluted EPS" stroke="var(--status-green)" strokeWidth={3} connectNulls />
-          </LineChart>
+            <Bar yAxisId="shares" dataKey="dilutedShares" name="Diluted Shares" fill="var(--status-orange)" radius={[4, 4, 0, 0]} />
+            <Bar yAxisId="eps" dataKey="dilutedEps" name="Diluted EPS" fill="var(--status-green)" radius={[4, 4, 0, 0]} />
+          </BarChart>
         </ChartPanel>
         <ChartPanel title="Revenue">
           <BarChart data={rows}>
@@ -485,6 +494,119 @@ function EvolutionCharts({ history, ticker }) {
           </BarChart>
         </ChartPanel>
       </div>
+    </section>
+  );
+}
+
+function CompanyStory({ history, ticker }) {
+  const filings = history
+    .filter((item) => (!ticker || item.ticker === ticker) && formGroup(item) === 'quarter')
+    .slice()
+    .sort((a, b) => periodTime(a) - periodTime(b));
+  if (filings.length < 2) return null;
+
+  const latest = filings[filings.length - 1];
+  const oldest = filings[0];
+  const statementValue = (item, key) => item?.metrics?.statements?.[key]?.current ?? null;
+  const derivedValue = (item, key) => item?.metrics?.derived_metrics?.metrics?.[key]?.current ?? null;
+  const scoreRows = filings
+    .map((item, index) => ({
+      period: quarterLabel(item),
+      score: item.score?.score_v2?.total,
+      coverage: item.score?.score_v2?.coverage,
+      weight: index + 1,
+    }))
+    .filter((item) => typeof item.score === 'number');
+  const weightedScore = scoreRows.length
+    ? scoreRows.reduce((sum, item) => sum + item.score * item.weight, 0) / scoreRows.reduce((sum, item) => sum + item.weight, 0)
+    : null;
+  const latestScore = scoreRows.at(-1)?.score ?? null;
+  const consistency = scoreRows.length ? scoreRows.filter((item) => item.score >= 65).length / scoreRows.length * 100 : null;
+  const evidence = scoreRows.length
+    ? scoreRows.reduce((sum, item) => sum + (item.coverage || 0), 0) / scoreRows.length
+    : null;
+  const historyScore = [latestScore, weightedScore, consistency, evidence].every((item) => typeof item === 'number')
+    ? Math.round(latestScore * 0.4 + weightedScore * 0.35 + consistency * 0.15 + evidence * 0.1)
+    : null;
+  const scoreLabel = historyScore == null ? 'Insufficient evidence' : historyScore >= 80 ? 'Strong compounder' : historyScore >= 65 ? 'Healthy trajectory' : historyScore >= 50 ? 'Mixed trajectory' : 'Fragile trajectory';
+
+  const revenueChange = valueChange(statementValue(latest, 'revenue'), statementValue(oldest, 'revenue'));
+  const operatingMargin = derivedValue(latest, 'operating_margin');
+  const operatingMarginChange = operatingMargin == null || derivedValue(oldest, 'operating_margin') == null ? null : operatingMargin - derivedValue(oldest, 'operating_margin');
+  const fcfPeriods = filings.map((item) => derivedValue(item, 'free_cash_flow')).filter((value) => typeof value === 'number');
+  const positiveFcfRate = fcfPeriods.length ? fcfPeriods.filter((value) => value > 0).length / fcfPeriods.length : null;
+  const dilutedShareChange = valueChange(statementValue(latest, 'diluted_shares'), statementValue(oldest, 'diluted_shares'));
+  const latestFcfMargin = derivedValue(latest, 'fcf_margin');
+  const latestDebtToAssets = derivedValue(latest, 'debt_to_assets');
+  const latestCurrentRatio = derivedValue(latest, 'current_ratio');
+  const latestSbcToRevenue = derivedValue(latest, 'sbc_to_revenue');
+  const narrative = [
+    revenueChange == null ? null : {
+      title: 'Scale', tone: revenueChange >= 0 ? 'positive' : 'negative',
+      text: `Quarterly revenue moved ${pct(revenueChange)} from ${quarterLabel(oldest)} to ${quarterLabel(latest)}, reaching ${money(statementValue(latest, 'revenue'))}.`,
+      evidence: `${filings.length} comparable stored SEC filings`,
+    },
+    operatingMargin == null ? null : {
+      title: 'Profitability', tone: operatingMargin > 0 && (operatingMarginChange ?? 0) >= 0 ? 'positive' : operatingMargin < 0 ? 'negative' : 'neutral',
+      text: `Latest operating margin is ${pct(operatingMargin)}${operatingMarginChange == null ? '' : `, a ${operatingMarginChange >= 0 ? '+' : ''}${(operatingMarginChange * 100).toFixed(1)} pp change across the timeline`}.`,
+      evidence: 'Operating income / matching quarterly revenue',
+    },
+    positiveFcfRate == null ? null : {
+      title: 'Cash generation', tone: positiveFcfRate >= 0.75 ? 'positive' : positiveFcfRate < 0.5 ? 'negative' : 'neutral',
+      text: `Free cash flow was positive in ${fcfPeriods.filter((value) => value > 0).length} of ${fcfPeriods.length} measurable periods.${latestFcfMargin == null ? '' : ` Latest FCF margin: ${pct(latestFcfMargin)}.`}`,
+      evidence: 'Operating cash flow less capital expenditures',
+    },
+    latestDebtToAssets == null && latestCurrentRatio == null ? null : {
+      title: 'Balance sheet', tone: (latestDebtToAssets ?? 1) <= 0.35 && (latestCurrentRatio ?? 0) >= 1 ? 'positive' : 'neutral',
+      text: `${latestDebtToAssets == null ? '' : `Debt/assets is ${pct(latestDebtToAssets)}. `}${latestCurrentRatio == null ? '' : `Current ratio is ${latestCurrentRatio.toFixed(2)}x.`}`,
+      evidence: 'Latest SEC balance-sheet facts',
+    },
+    dilutedShareChange == null && latestSbcToRevenue == null ? null : {
+      title: 'Shareholder impact', tone: (dilutedShareChange ?? 0) <= 0.02 ? 'positive' : 'negative',
+      text: `${dilutedShareChange == null ? '' : `Diluted shares changed ${pct(dilutedShareChange)} across the stored timeline. `}${latestSbcToRevenue == null ? '' : `Latest SBC/revenue is ${pct(latestSbcToRevenue)}.`}`,
+      evidence: 'Diluted shares and matching YTD share compensation',
+    },
+  ].filter(Boolean);
+
+  return (
+    <section className="company-story glass-panel">
+      <div className="company-story-head">
+        <div>
+          <div className="metric-label">SEC COMPANY STORY · AUDITABLE HISTORY</div>
+          <h2>{ticker || latest.ticker} through {filings.length} filings</h2>
+          <p>Facts translated into trajectory, resilience and shareholder-quality signals. No AI estimates.</p>
+        </div>
+        <div className="story-score-ring" style={{ '--story-score': historyScore || 0 }}>
+          <div><strong>{historyScore ?? '—'}</strong><span>/ 100</span></div>
+          <small>{scoreLabel}</small>
+        </div>
+      </div>
+
+      <div className="story-narrative-grid">
+        {narrative.map((item) => (
+          <article key={item.title} className={`story-card ${item.tone}`}>
+            <span>{item.title}</span>
+            <p>{item.text}</p>
+            <small>{item.evidence}</small>
+          </article>
+        ))}
+      </div>
+
+      <div className="story-timeline" aria-label="SEC filing score timeline">
+        {scoreRows.map((item) => (
+          <div key={item.period} title={`Score ${item.score}/100 · evidence coverage ${item.coverage}%`}>
+            <strong>{item.score}</strong>
+            <i><b style={{ height: `${item.score}%` }} /></i>
+            <span>{item.period}</span>
+          </div>
+        ))}
+      </div>
+
+      <details className="story-method">
+        <summary>Historical score methodology</summary>
+        <p>40% latest Score V2 + 35% recency-weighted Score V2 mean + 15% share of periods scoring at least 65 + 10% average evidence coverage. Score V2 excludes unavailable factors and uses matching fiscal periods.</p>
+        <div><span>Latest</span><strong>{latestScore?.toFixed(1) ?? '—'}</strong><span>Weighted history</span><strong>{weightedScore?.toFixed(1) ?? '—'}</strong><span>Consistency</span><strong>{consistency == null ? '—' : `${consistency.toFixed(0)}%`}</strong><span>Evidence</span><strong>{evidence == null ? '—' : `${evidence.toFixed(0)}%`}</strong></div>
+      </details>
     </section>
   );
 }
@@ -760,10 +882,15 @@ export default function QuarterEarnings() {
     setSearchTimeout(timeoutId);
   };
 
-  const selectTicker = (symbol) => {
+  const selectTicker = (result) => {
+    const symbol = String(result?.symbol || result?.ticker || result?.displaySymbol || result || '').trim().toUpperCase();
+    if (!symbol) return;
+    if (searchTimeout) clearTimeout(searchTimeout);
+    setSearchTimeout(null);
     setSecTicker(symbol);
     setSearchResults([]);
     setShowSearchDropdown(false);
+    setIsSearching(false);
   };
 
   const analyze = async () => {
@@ -836,7 +963,10 @@ export default function QuarterEarnings() {
                 {searchResults.map((result, index) => (
                   <li
                     key={`${result.symbol}-${index}`}
-                    onClick={() => selectTicker(result.symbol)}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      selectTicker(result);
+                    }}
                     style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                   >
                     <strong style={{ color: 'var(--accent-cyan)' }}>{result.symbol}</strong>
@@ -896,6 +1026,7 @@ export default function QuarterEarnings() {
         visibleHistory={visibleHistory}
         onOpen={(item) => { setSelectedTicker(item.ticker); setReport(item); setScore(item.score); setAnalysis(''); }}
       />
+      <CompanyStory history={history} ticker={selectedTicker || report?.ticker} />
       <FilingBoard report={report} score={score} valuation={valuation?.report_id === report?.id ? valuation : null} valuationLoading={valuationLoading} onLoadValuation={loadValuation} />
       <QuarterComparison report={report} history={history} />
       <EvolutionCharts history={history} ticker={selectedTicker || report?.ticker} />

@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -226,7 +227,7 @@ class DerivedAnalyticsV2Tests(unittest.TestCase):
 
         result = enrich_derived_metrics(metrics)["derived_metrics"]
 
-        self.assertEqual(result["version"], "2.0")
+        self.assertEqual(result["version"], "2.1")
         self.assertAlmostEqual(result["metrics"]["net_margin"]["current"], 0.20)
         self.assertEqual(result["metrics"]["free_cash_flow"]["current"], 25)
         self.assertAlmostEqual(result["metrics"]["fcf_margin"]["current"], 0.25)
@@ -243,6 +244,19 @@ class DerivedAnalyticsV2Tests(unittest.TestCase):
         self.assertEqual(result["free_cash_flow"]["current"], 50)
         self.assertIsNone(result["fcf_margin"]["current"])
 
+    def test_uses_matching_ytd_facts_for_cash_conversion_and_sbc(self):
+        metrics = {"statements": {
+            "revenue_ytd": statement(300, 260, start="2025-01-01", end="2025-09-30"),
+            "net_income_ytd": statement(60, 50, start="2025-01-01", end="2025-09-30"),
+            "operating_cash_flow": statement(75, 65, start="2025-01-01", end="2025-09-30"),
+            "share_based_compensation_ytd": statement(12, 10, start="2025-01-01", end="2025-09-30"),
+        }}
+
+        result = enrich_derived_metrics(metrics)["derived_metrics"]["metrics"]
+
+        self.assertAlmostEqual(result["cash_conversion"]["current"], 1.25)
+        self.assertAlmostEqual(result["sbc_to_revenue"]["current"], 0.04)
+
     def test_score_v2_excludes_missing_facts(self):
         score = _score_v2({"statements": {"revenue": {"current": 100}}})
 
@@ -258,6 +272,51 @@ class DerivedAnalyticsV2Tests(unittest.TestCase):
         result = find_yoy_previous_report(current, [previous_quarter, prior_year])
 
         self.assertIs(result, prior_year)
+
+
+class SecAnalyticsBackfillTests(unittest.TestCase):
+    def test_merges_missing_sec_facts_and_preserves_existing_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "quarter-earnings.sqlite")
+            stored = {
+                "accession": "0000000001-25-000001",
+                "form_type": "10-Q",
+                "sec_enrichment_version": "2.0",
+                "xbrl": {"cik": "1"},
+                "statements": {"revenue": statement(100, 90)},
+            }
+            with (
+                patch.object(quarter_earnings, "DB_PATH", db_path),
+                patch.object(quarter_earnings, "POSTGRES_URL", None),
+                patch.object(quarter_earnings, "_load_sec_companyfacts", return_value={"facts": {}}),
+                patch.object(
+                    quarter_earnings,
+                    "_xbrl_item",
+                    side_effect=lambda _facts, _accession, key, _date: statement(300, 260, "2025-01-01", "2025-09-30")
+                    if key in {"revenue_ytd", "net_income_ytd", "operating_cash_flow", "share_based_compensation_ytd"}
+                    else None,
+                ),
+            ):
+                quarter_earnings.init_db()
+                with quarter_earnings._connect() as conn:
+                    conn.execute(
+                        """
+                        INSERT INTO quarter_reports
+                        (user_id, ticker, report_date, source_type, metrics_json, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (1, "AAA", "2025-09-30", "sec_xbrl_import", json.dumps(stored), "now"),
+                    )
+
+                changed = quarter_earnings.backfill_sec_analytics(1, "aaa")
+
+                self.assertEqual(changed, 1)
+                with quarter_earnings._connect() as conn:
+                    updated = json.loads(conn.execute("SELECT metrics_json FROM quarter_reports").fetchone()[0])
+                self.assertEqual(updated["statements"]["revenue"]["current"], 100)
+                self.assertEqual(updated["statements"]["revenue_ytd"]["current"], 300)
+                self.assertEqual(updated["sec_enrichment_version"], "2.1")
+                self.assertEqual(quarter_earnings.backfill_sec_analytics(1, "AAA"), 0)
 
 
 if __name__ == "__main__":
