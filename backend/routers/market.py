@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import diagnose_yahoo, download_data
+from core.market_data_client import download_data
 from core.technical import compute_rsi, compute_macd, compute_fibonacci_level
 import numpy as np
 import pandas as pd
@@ -10,14 +10,6 @@ from datetime import datetime
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
-
-@router.get("/yahoo-diagnostics")
-@limiter.limit("6/minute")
-def yahoo_diagnostics(request: Request, ticker: str = "AAPL"):
-    user = request.state.user
-    if not user or not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Administrator access required.")
-    return diagnose_yahoo(ticker)
 
 @router.get("/analysis")
 @limiter.limit("5/minute")

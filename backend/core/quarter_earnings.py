@@ -9,7 +9,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from core.yfinance_client import get_statement
 
 DB_ENV_NAME = "QUARTER_EARNINGS_DB_PATH"
 POSTGRES_ENV_NAMES = ("DATABASE_URL", "POSTGRES_URL")
@@ -864,11 +863,13 @@ def _select_statement_column(columns, report_date: str | None):
     return column, prior
 
 
-def _yfinance_operating_cash_flow(ticker: str, report_date: str | None = None) -> dict[str, Any] | None:
+def _market_operating_cash_flow(ticker: str, report_date: str | None = None) -> dict[str, Any] | None:
     if not ticker or ticker == "UNKNOWN":
         return None
     try:
-        cashflow = get_statement(ticker, "quarterly_cashflow")
+        from core.yfinance_client import get_statement as get_yahoo_statement
+        cashflow = get_yahoo_statement(ticker, "quarterly_cashflow")
+        confidence = "yfinance_period_fallback"
     except Exception:
         return None
     if cashflow is None or getattr(cashflow, "empty", True):
@@ -905,7 +906,7 @@ def _yfinance_operating_cash_flow(ticker: str, report_date: str | None = None) -
         "current": current,
         "prior": prior,
         "growth": _growth(current, prior),
-        "confidence": "yfinance_period_fallback",
+        "confidence": confidence,
     }
 
 
@@ -913,7 +914,7 @@ def enrich_missing_operating_cash_flow(metrics: dict[str, Any], ticker: str, rep
     statements = metrics.setdefault("statements", {})
     if not _is_missing_value(statements.get("operating_cash_flow")):
         return metrics, False
-    fallback = _yfinance_operating_cash_flow(ticker, report_date)
+    fallback = _market_operating_cash_flow(ticker, report_date)
     if not fallback:
         return metrics, False
     statements["operating_cash_flow"] = fallback

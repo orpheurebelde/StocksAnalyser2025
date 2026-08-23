@@ -25,7 +25,7 @@ from core.quarter_earnings import (
     save_report,
     score_report,
 )
-from core.yfinance_client import get_ticker_info
+from core.market_data_client import get_ticker_info
 
 load_dotenv()
 
@@ -502,7 +502,15 @@ def report_valuation(request: Request, report_id: int):
     report = get_report(user["id"], report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Quarter report not found.")
-    market_info = get_ticker_info(report["ticker"]) or {}
+    try:
+        market_info = get_ticker_info(report["ticker"]) or {}
+        if not market_info:
+            raise ValueError("Finnhub returned no market data")
+        market_source = "Finnhub market data"
+    except Exception:
+        from core.yfinance_client import get_ticker_info as get_yahoo_ticker_info
+        market_info = get_yahoo_ticker_info(report["ticker"]) or {}
+        market_source = "Yahoo Finance fallback market data"
     report_score = score_report(report["metrics"])
     fair_value = calculate_filing_fair_value(report, market_info, report_score)
     consensus = {
@@ -513,7 +521,7 @@ def report_valuation(request: Request, report_id: int):
         "target_low": market_info.get("targetLowPrice"),
         "target_high": market_info.get("targetHighPrice"),
         "current_price": market_info.get("currentPrice") or market_info.get("regularMarketPrice"),
-        "source": "Yahoo Finance market data",
+        "source": market_source,
     }
     grounded = {"ticker": report["ticker"], "filing_period": report.get("report_date"), "fair_value": fair_value, "analyst_consensus": consensus}
     mistral_summary = None
@@ -521,7 +529,7 @@ def report_valuation(request: Request, report_id: int):
     try:
         prompt = f"""You are summarizing supplied valuation data for an investor dashboard.
 Use only the JSON below. Do not invent analyst opinions, targets, dates, or live facts.
-In at most 90 words: compare filing-based fair value with current price and analyst mean target; state consensus rating and analyst count; explain the largest limitation. recommendation_mean uses Yahoo's 1=Strong Buy to 5=Sell scale.
+In at most 90 words: compare filing-based fair value with current price and analyst mean target; state consensus rating and analyst count; explain the largest limitation. recommendation_mean uses 1=Strong Buy to 5=Sell scale.
 
 {json.dumps(grounded, indent=2)}"""
         mistral_summary, _model = call_mistral(prompt, "mistral-small-latest")

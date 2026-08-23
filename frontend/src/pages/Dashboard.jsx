@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -61,8 +61,12 @@ Write a very brief and concise market analysis based on these three indicators. 
 
   useEffect(() => {
     if (data && !aiAnalysis && !aiLoading) {
-      handleMarketAIAnalysis();
+      const timer = window.setTimeout(() => handleMarketAIAnalysis(), 0);
+      return () => window.clearTimeout(timer);
     }
+    return undefined;
+    // Auto-run only when fresh market data arrives. Manual reruns use button below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
 
@@ -302,11 +306,8 @@ Write a very brief and concise market analysis based on these three indicators. 
             {Object.entries(data.indices).map(([name, info]) => {
               
               // RSI Class
-              let rsiColor = 'white';
-              let rsiText = 'Neutral';
-              if (info.rsi > 70) { rsiColor = 'var(--status-red)'; rsiText = 'Bearish'; }
-              else if (info.rsi < 30) { rsiColor = 'var(--status-green)'; rsiText = 'Bullish'; }
-              else { rsiColor = 'var(--accent-orange)'; rsiText = 'Neutral'; }
+              const rsiColor = info.rsi > 70 ? 'var(--status-red)' : info.rsi < 30 ? 'var(--status-green)' : 'var(--accent-orange)';
+              const rsiText = info.rsi > 70 ? 'Bearish' : info.rsi < 30 ? 'Bullish' : 'Neutral';
 
               // Trend
               let trendColor = 'var(--accent-orange)';

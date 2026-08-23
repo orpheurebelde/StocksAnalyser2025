@@ -17,7 +17,7 @@ from core.portfolio_store import (
     rename_portfolio,
     update_holding,
 )
-from core.yfinance_client import download_data, get_ticker_info
+from core.market_data_client import get_ticker_info, search_symbols, download_data
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -108,17 +108,7 @@ def _resolve_market_symbol(instrument: dict) -> str:
     base_symbol = broker_ticker.split("_")[0].upper()
     query = instrument.get("isin") or instrument.get("name") or base_symbol
     try:
-        response = requests.get(
-            "https://query2.finance.yahoo.com/v1/finance/search",
-            params={"q": query},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=8,
-        )
-        response.raise_for_status()
-        quotes = [
-            item for item in response.json().get("quotes", [])
-            if item.get("quoteType") in {"EQUITY", "ETF"} and item.get("symbol")
-        ]
+        quotes = search_symbols(str(query))
         preferred = next((item for item in quotes if str(item["symbol"]).upper().split(".")[0] == base_symbol), None)
         if preferred:
             return str(preferred["symbol"]).upper()
@@ -325,7 +315,7 @@ async def analyze_portfolio(request: Request, file: UploadFile = File(...)):
         }).reset_index()
         annual["Unrealized Gain (%)"] = (annual["Unrealized Gain (€)"] / annual["Investment"]) * 100
         
-        # Calculate True Risk Metrics via YFinance
+        # Calculate risk metrics from Finnhub price history.
         tickers = df["Symbol"].unique()
         price_history = {}
         import numpy as np

@@ -34,6 +34,17 @@ const qualityValue = (value) => {
   return value;
 };
 
+function ChartPanel({ title, children }) {
+  return (
+    <div className="chart-box">
+      <div className="metric-label">{title}</div>
+      <ResponsiveContainer width="100%" height={300}>
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 const valueChange = (current, previous) => {
   if (current === null || current === undefined || previous === null || previous === undefined || previous === 0) return null;
   return (current - previous) / Math.abs(previous);
@@ -268,15 +279,6 @@ function EvolutionCharts({ history, ticker }) {
     }));
   if (rows.length < 2) return null;
 
-  const ChartPanel = ({ title, children }) => (
-    <div className="chart-box">
-      <div className="metric-label">{title}</div>
-      <ResponsiveContainer width="100%" height={300}>
-        {children}
-      </ResponsiveContainer>
-    </div>
-  );
-
   return (
     <section className="evolution-section" style={{ marginBottom: '2rem' }}>
       <div className="metric-label">Evolution Graphics</div>
@@ -428,7 +430,9 @@ export default function QuarterEarnings() {
   };
 
   useEffect(() => {
-    loadDbStatus();
+    const timer = window.setTimeout(() => loadDbStatus(), 0);
+    return () => window.clearTimeout(timer);
+    // Initial status load only; mutations refresh explicitly.
   }, []);
 
   const openTicker = async (ticker) => {

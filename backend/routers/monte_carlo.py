@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import download_data
+from core.market_data_client import download_data
 import numpy as np
 
 router = APIRouter()
@@ -10,8 +10,8 @@ limiter = Limiter(key_func=get_remote_address)
 
 class MonteCarloRequest(BaseModel):
     ticker: str
-    n_simulations: int
-    total_days: int
+    n_simulations: int = Field(ge=100, le=10_000)
+    total_days: int = Field(ge=1, le=2_520)
     log_normal: bool
     volatility: float | None = None
 
@@ -19,6 +19,8 @@ class MonteCarloRequest(BaseModel):
 @limiter.limit("10/minute")
 def run_monte_carlo(request: Request, body: MonteCarloRequest):
     try:
+        if body.n_simulations * body.total_days > 2_000_000:
+            raise HTTPException(status_code=400, detail="Simulation is too large. Reduce simulations or projection days.")
         data = download_data(body.ticker, period="2y", interval="1d")
         if data.empty:
             raise HTTPException(status_code=404, detail="No price data found.")
@@ -28,7 +30,7 @@ def run_monte_carlo(request: Request, body: MonteCarloRequest):
         sigma = returns.std() if body.volatility is None else body.volatility
         last_price = float(data['Close'].iloc[-1])
         
-        simulations = np.zeros((body.n_simulations, body.total_days))
+        simulations = np.zeros((body.n_simulations, body.total_days), dtype=np.float32)
         for i in range(body.n_simulations):
             if body.log_normal:
                 daily_returns = np.random.normal(mu - 0.5 * sigma**2, sigma, body.total_days)
@@ -36,7 +38,7 @@ def run_monte_carlo(request: Request, body: MonteCarloRequest):
             else:
                 daily_returns = np.random.normal(mu, sigma, body.total_days)
                 price_path = last_price * np.cumprod(1 + daily_returns)
-            simulations[i, :] = price_path
+            simulations[i, :] = price_path.astype(np.float32, copy=False)
             
         # Instead of sending all raw arrays which could be huge (10000x1000), 
         # we calculate the percentiles on the backend and only send those to the frontend chart.
@@ -72,5 +74,7 @@ def run_monte_carlo(request: Request, body: MonteCarloRequest):
             "prob_increase": prob_increase,
             "chart_data": chart_data
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

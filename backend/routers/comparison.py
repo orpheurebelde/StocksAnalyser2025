@@ -3,7 +3,7 @@ from typing import List
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import get_ticker_info
+from core.market_data_client import get_ticker_info
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)

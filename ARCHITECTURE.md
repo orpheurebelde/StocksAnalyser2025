@@ -1,64 +1,44 @@
-# StocksAnalyser2025 - Architecture Map for AI Agents
+# StocksAnalyser2025 architecture
 
-> [!NOTE]
-> This document provides a high-level architectural overview of the StocksAnalyser2025 application. It is designed to quickly orient AI Agents or developers to the file structure, technology stack, data flow, and routing of the application.
+## Runtime
 
-## 🚀 Technology Stack
+- Frontend: React 19 + Vite, deployed on Vercel.
+- Backend: FastAPI + Uvicorn, deployed on Render.
+- Market data: unified free-provider facade (`market_data_client.py`).
+- Quarter Earnings: SEC/XBRL primary; Finnhub enrichment; yfinance lazy fallback only when Finnhub fails.
+- Persistence: PostgreSQL when `DATABASE_URL` is configured.
 
-- **Frontend:** React 19 (Vite) + React Router DOM + Recharts (for charting) + Tailwind/Vanilla CSS (`index.css`)
-- **Backend:** Python 3.14 + FastAPI + Uvicorn
-- **Data Integrations:** YFinance (Core market data), Mistral AI (LLM Analyst logic)
-- **Deployment Strategy:** Vercel (Frontend) + Render (Backend)
+## Production flow
 
----
+1. Browser loads application from Vercel.
+2. Frontend sends same-origin requests to `/api/*`.
+3. `frontend/vercel.json` rewrites them to `https://stocksanalyser.onrender.com/api/*`.
+4. FastAPI authenticates session, applies route limits, calls Finnhub, and returns existing API contracts.
 
-## 📁 Directory Structure Overview
+Same-origin rewrites keep authentication cookies first-party. `VITE_API_URL` is optional and only needed for another backend URL.
 
-### `/frontend` (React SPA)
-The frontend uses standard Vite architecture. All network requests go through an Axios instance (`api.js`) which points to the FastAPI backend.
+## Market-data compatibility
 
-- `src/App.jsx`: Main routing file defining all 6 major views.
-- `src/index.css`: Global CSS containing the custom "Glassmorphic" design system and markdown styling logic (`.markdown-content`).
-- `src/api.js`: Axios client configured with `import.meta.env.VITE_API_URL`.
-- `src/pages/`:
-  - `Dashboard.jsx`: Market analysis overview (S&P 500, Nasdaq, VIX) with technicals.
-  - `StockInfo.jsx`: Deep dive into a single ticker. Contains TradingView iframe, fundamentals, share dilution, and dynamic Mistral AI prompting.
-  - `Portfolio.jsx`: Portfolio risk metric calculators (CAGR, Sharpe, Max Drawdown).
-  - `DCFCalculator.jsx`: Interactive Discounted Cash Flow modeling with Recharts graphs.
-  - `MonteCarlo.jsx`: Monte Carlo simulation parameters and results.
-  - `StockComparison.jsx`: Side-by-side metric comparison of multiple tickers.
+`backend/core/market_data_client.py` is the only market-data entry point used by routes. It orchestrates Finnhub, Twelve Data, FRED, SEC/XBRL and FMP while preserving existing formats:
 
-### `/backend` (FastAPI)
-The backend is split into logical routers and core calculation modules to maintain separation of concerns and avoid massive files.
+- information keys expected by React and calculations;
+- Pandas OHLCV frames with `Open`, `High`, `Low`, `Close`, `Volume`;
+- financial-statement frames used by DCF and Quarter Earnings;
+- search results shaped as `{symbol, name}`.
 
-- `main.py`: Application entry point. Configures CORS, initializes `slowapi` rate limiter, and mounts all routers.
-- `core/`:
-  - `yfinance_client.py`: The single source of truth for Yahoo Finance scraping. Implements custom JSON/CSV caching to prevent rate-limit blocks.
-  - `technical.py`: Complex math functions (Fibonacci, RSI, MACD calculations, Price Action 9-point score, Dilution estimation).
-- `routers/`:
-  - `stock.py` (`/api/stock`): Contains the master `/full-analysis` endpoint which batches fundamental and historical fetches to bypass YF rate limits. Also handles Mistral AI proxy requests.
-  - `market.py` (`/api/market`): Serves macro market data.
-  - `dcf.py` (`/api/dcf`): Handles Discounted Cash Flow backend formulas.
-  - `monte_carlo.py` (`/api/monte-carlo`): Handles simulation math.
-  - `portfolio.py` (`/api/portfolio`): Processes historical list of tickers to compute portfolio-level volatility and returns.
-  - `comparison.py` (`/api/comparison`): Batches info fetching for multiple stocks.
+HTTP session is shared. Requests use timeouts, rate limiting, and bounded disk caches. No unbounded in-memory response cache exists.
 
----
+`backend/core/yfinance_client.py` remains solely for Quarter Earnings fallback. Lazy imports prevent yfinance loading during normal Finnhub operation.
 
-## 🔄 Data Flow & Rate Limiting Strategy
+## Routes
 
-> [!IMPORTANT]
-> Yahoo Finance rate limits are extremely strict. The application handles this via **Endpoint Batching** and **Disk Caching**.
+- `/api/auth`: authentication, sessions, quotas, administration.
+- `/api/stock`: stock information, history, search, AI analysis.
+- `/api/market`: index analysis and AAII sentiment.
+- `/api/dcf`: DCF calculations.
+- `/api/monte-carlo`: price simulations.
+- `/api/comparison`: multi-stock comparison.
+- `/api/portfolio`: portfolios, imports, history, risk metrics.
+- `/api/quarter-earnings`: SEC/PDF ingestion, scoring, valuation, AI analysis.
 
-1. **Frontend Request:** When a user navigates to `StockInfo.jsx` and searches for "AAPL", React makes a *single* batched request to `/api/stock/AAPL/full-analysis`.
-2. **Backend Intercept:** `stock.py` receives the request.
-3. **Fundamental Cache Check:** `yfinance_client.py` checks `cache/stock_info_cache.json`. If valid, it returns the fundamental dictionary immediately. If missing/stale, it fetches `yf.Ticker().info`.
-4. **Historical Cache Check:** `yfinance_client.py` checks for `cache/AAPL_1y_1d.csv`. If valid, it reads the local CSV. If missing, it downloads a single 1-year history dataset.
-5. **Compute & Respond:** The backend slices the historical data to compute the Price Action score (last 6 months) and Dilution score (1-year span), combines everything with the fundamentals, and returns it in one JSON payload.
-
-## 🤖 AI Integration (Mistral)
-- The React frontend constructs highly structured Markdown prompts using live YFinance data.
-- The user can view/edit these prompts in the UI.
-- The prompt is sent to `POST /api/stock/{ticker}/ai-analysis`.
-- FastAPI proxies the request securely to Mistral's API (hiding the `MISTRAL_API_KEY`).
-- The frontend renders the returned Markdown using `react-markdown` and `remark-gfm` (for table support).
+See `DEPLOYMENT.md` for environment and deployment configuration. Existing `FINHUB_API_KEY` spelling and canonical `FINNHUB_API_KEY` are both supported.

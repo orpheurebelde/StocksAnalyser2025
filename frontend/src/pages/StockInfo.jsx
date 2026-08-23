@@ -131,7 +131,7 @@ export default function StockInfo() {
   const handleAiDCF = async () => {
     if (!info) return;
     const currentYear = new Date().getFullYear();
-    const prompt = `You are a professional equity analyst. Based on the financial metrics retrieved earlier from Yahoo Finance and current market expectations for ${info.shortName || activeTicker} (${activeTicker}), generate a realistic 5-year DCF valuation.
+    const prompt = `You are a professional equity analyst. Based on the financial metrics retrieved earlier from Finnhub and current market expectations for ${info.shortName || activeTicker} (${activeTicker}), generate a realistic 5-year DCF valuation.
 
     Use the following data as a baseline:
     - Company: ${info.shortName || activeTicker}

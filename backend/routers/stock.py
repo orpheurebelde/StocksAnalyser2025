@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from core.yfinance_client import get_ticker_info, download_data
+from core.market_data_client import get_ticker_info, search_symbols, download_data
 from core.technical import analyze_price_action
 from core.auth import ensure_analysis_quota, record_analysis_use
 import os
@@ -119,15 +119,7 @@ def ai_analysis(request: Request, ticker: str, body: AIPrompt):
 @router.get("/search")
 @limiter.limit("30/minute")
 def search_ticker(request: Request, q: str):
-    import requests
-    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={q}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
-        response = requests.get(url, headers=headers, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        quotes = data.get("quotes", [])
-        results = [{"symbol": q.get("symbol"), "name": q.get("shortname", q.get("longname", ""))} for q in quotes if q.get("quoteType") in ["EQUITY", "ETF"]]
-        return {"results": results}
+        return {"results": search_symbols(q)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import api from '../api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -12,10 +12,12 @@ export default function MonteCarlo() {
   });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSimulate = async () => {
     if (!ticker.trim()) return;
     setLoading(true);
+    setError('');
     
     try {
       const payload = {
@@ -29,7 +31,7 @@ export default function MonteCarlo() {
       const res = await api.post(`/api/monte-carlo/simulate`, payload);
       setData(res.data);
     } catch (err) {
-      console.error(err);
+      setError(err.response?.data?.detail || err.message);
     }
     setLoading(false);
   };
@@ -45,17 +47,18 @@ export default function MonteCarlo() {
         </div>
         <div className="glass-panel">
           <label className="metric-label">Number of Simulations</label>
-          <input type="number" value={inputs.n_simulations} onChange={e => setInputs({...inputs, n_simulations: e.target.value})} />
+          <input type="number" min="100" max="10000" value={inputs.n_simulations} onChange={e => setInputs({...inputs, n_simulations: e.target.value})} />
         </div>
         <div className="glass-panel">
           <label className="metric-label">Projection Days</label>
-          <input type="number" value={inputs.total_days} onChange={e => setInputs({...inputs, total_days: e.target.value})} />
+          <input type="number" min="1" max="2520" value={inputs.total_days} onChange={e => setInputs({...inputs, total_days: e.target.value})} />
         </div>
       </div>
       
       <button className="btn-primary" onClick={handleSimulate} disabled={loading} style={{ marginBottom: '2rem' }}>
         {loading ? 'Simulating...' : 'Run Simulation'}
       </button>
+      {error && <p className="login-error" role="alert">{error}</p>}
 
       {data && (
         <>
