@@ -25,6 +25,13 @@ def get_ticker_info(symbol: str):
     for key, value in fmp.items():
         if value is not None and (key in forward_fields or base.get(key) is None):
             base[key] = value
+    price = base.get("currentPrice") or base.get("regularMarketPrice")
+    forward_eps = base.get("forwardEps")
+    forward_pe = base.get("forwardPE")
+    if forward_eps is None and price and forward_pe and forward_pe > 0:
+        base["forwardEps"] = price / forward_pe
+    elif forward_pe is None and price and forward_eps and forward_eps > 0:
+        base["forwardPE"] = price / forward_eps
     return base or None
 
 

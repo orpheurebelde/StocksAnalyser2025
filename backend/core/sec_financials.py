@@ -48,6 +48,52 @@ def _latest(facts: dict, concepts: tuple[str, ...], unit: str = "USD"):
     return float(latest["val"])
 
 
+def _concept_rows(facts: dict, concepts, unit: str = "USD"):
+    us_gaap = facts.get("facts", {}).get("us-gaap", {})
+    rows = []
+    for concept in concepts:
+        for row in us_gaap.get(concept, {}).get("units", {}).get(unit, []):
+            if row.get("form") in {"10-K", "10-Q", "20-F", "40-F"} and row.get("val") is not None:
+                rows.append(row)
+    return rows
+
+
+def _capex_concepts(facts: dict) -> tuple[str, ...]:
+    us_gaap = facts.get("facts", {}).get("us-gaap", {})
+    return tuple(
+        name for name in us_gaap
+        if (name.startswith("PaymentsToAcquire") or name.startswith("PaymentsForAdditionsTo"))
+        and ("PropertyPlantAndEquipment" in name or "ProductiveAssets" in name)
+    )
+
+
+def _latest_matching_pair(facts: dict, minuend_concepts, subtrahend_concepts):
+    minuends = _concept_rows(facts, minuend_concepts)
+    subtrahends = _concept_rows(facts, subtrahend_concepts)
+    matches = []
+    for left in minuends:
+        period = (left.get("start"), left.get("end"))
+        for right in subtrahends:
+            if period == (right.get("start"), right.get("end")):
+                matches.append((left, right))
+    if not matches:
+        return None
+    return max(
+        matches,
+        key=lambda pair: (
+            str(max(pair[0].get("filed") or "", pair[1].get("filed") or "")),
+            str(pair[0].get("end") or ""),
+        ),
+    )
+
+
+def _latest_matching_difference(facts: dict, minuend_concepts, subtrahend_concepts):
+    pair = _latest_matching_pair(facts, minuend_concepts, subtrahend_concepts)
+    if not pair:
+        return None
+    return float(pair[0]["val"]) - float(pair[1]["val"])
+
+
 def get_sec_info_fields(symbol: str) -> dict:
     try:
         cik = _cik(symbol)
@@ -64,15 +110,27 @@ def get_sec_info_fields(symbol: str) -> dict:
     cash = _latest(facts, ("CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"))
     debt = _latest(facts, ("LongTermDebtAndFinanceLeaseObligationsCurrent", "LongTermDebtCurrent", "ShortTermBorrowings")) or 0
     debt += _latest(facts, ("LongTermDebtAndFinanceLeaseObligationsNoncurrent", "LongTermDebtNoncurrent")) or 0
-    operating_cash = _latest(facts, ("NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"))
-    capex = _latest(facts, ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsForAdditionsToPropertyPlantAndEquipment"))
+    operating_cash_concepts = ("NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations")
+    fcf_pair = _latest_matching_pair(facts, operating_cash_concepts, _capex_concepts(facts))
+    free_cashflow = float(fcf_pair[0]["val"]) - float(fcf_pair[1]["val"]) if fcf_pair else None
+    fcf_margin = None
+    if fcf_pair:
+        period = (fcf_pair[0].get("start"), fcf_pair[0].get("end"))
+        matching_revenue = [
+            row for row in _concept_rows(facts, ("RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet"))
+            if period == (row.get("start"), row.get("end")) and float(row["val"]) > 0
+        ]
+        if matching_revenue:
+            latest_revenue = max(matching_revenue, key=lambda row: str(row.get("filed") or ""))
+            fcf_margin = free_cashflow / float(latest_revenue["val"])
     fields = {
         "totalRevenue": revenue,
         "netIncomeToCommon": net_income,
         "ebitda": (operating_income + depreciation) if operating_income is not None and depreciation is not None else None,
         "totalCash": cash,
         "totalDebt": debt or None,
-        "freeCashflow": (operating_cash - capex) if operating_cash is not None and capex is not None else None,
+        "freeCashflow": free_cashflow,
+        "freeCashflowMargin": fcf_margin,
         "shareBasedCompensation": _latest(facts, ("ShareBasedCompensation", "AllocatedShareBasedCompensationExpense")),
         "totalCashFromFinancingActivities": _latest(facts, ("NetCashProvidedByUsedInFinancingActivities",)),
     }

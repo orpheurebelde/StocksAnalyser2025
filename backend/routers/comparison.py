@@ -3,6 +3,7 @@ from typing import List
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from core.comparison_score import score_company
 from core.market_data_client import get_ticker_info
 
 router = APIRouter()
@@ -10,6 +11,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 class CompareRequest(BaseModel):
     tickers: List[str]
+
 
 @router.post("/compare")
 @limiter.limit("20/minute")
@@ -21,7 +23,10 @@ def compare_stocks(request: Request, body: CompareRequest):
             if not info:
                 results[t] = {"error": "No info found."}
                 continue
+            score, coverage = score_company(info)
             results[t] = {
+                "Comparison Score": score,
+                "Score Data Coverage (%)": coverage,
                 "Trailing PE": info.get("trailingPE"),
                 "Forward PE": info.get("forwardPE"),
                 "Price/Book": info.get("priceToBook"),

@@ -5,6 +5,12 @@ from core import fmp_client, market_data_client
 
 
 class MarketDataFacadeTests(unittest.TestCase):
+    def test_derives_forward_eps_from_price_and_forward_pe(self):
+        with patch.object(market_data_client, "_finnhub_info", return_value={"currentPrice": 150, "forwardPE": 15}), patch.object(market_data_client, "get_sec_info_fields", return_value={}), patch.object(market_data_client, "get_fmp_info_fields", return_value={}):
+            result = market_data_client.get_ticker_info("QCOM")
+
+        self.assertEqual(result["forwardEps"], 10)
+
     def test_fmp_maps_profile_estimates_and_targets(self):
         replies = {
             "profile": [{"companyName": "Apple", "description": "Maker", "fullTimeEmployees": 100, "price": 200}],

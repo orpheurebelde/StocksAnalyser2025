@@ -27,6 +27,7 @@ Optional tuning:
 - `FINNHUB_MAX_REQUESTS_PER_MINUTE=55`
 - `FINNHUB_MIN_REQUEST_INTERVAL_SECONDS=0.1`
 - `FINNHUB_TIMEOUT_SECONDS=12`
+- `GROQ_MODEL=openai/gpt-oss-120b`: override Groq model; default is current free-tier replacement for retired Llama 3.3 70B.
 - `AUTH_SESSION_DAYS=7`
 - `MAX_REGISTERED_USERS=90`
 - `ADMIN_EMAILS`: comma-separated emails.

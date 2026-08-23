@@ -81,7 +81,8 @@ def get_market_analysis(request: Request):
                 "sma_200": sma_200
             }
             
-        vix = download_data("^VIX", period="1d", interval="1m")
+        # FRED VIXCLS is daily and may have no observation today (weekend/holiday).
+        vix = download_data("^VIX", period="1mo", interval="1d")
         vix_val = float(vix["Close"].iloc[-1]) if not vix.empty else None
             
         return {"indices": results, "vix": vix_val}

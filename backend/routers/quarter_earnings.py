@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from core.ai.groq_provider import DEFAULT_GROQ_MODEL
 from core.quarter_earnings import (
     build_pdf_payload,
     calculate_filing_fair_value,
@@ -352,7 +353,7 @@ def call_groq(prompt: str, model: str | None):
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="GROQ_API_KEY not configured on server.")
-    selected = model or "llama-3.3-70b-versatile"
+    selected = model or os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL)
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},

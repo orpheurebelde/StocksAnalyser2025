@@ -3,8 +3,10 @@ import requests
 import json
 from .base import AIProvider
 
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+
 class GroqProvider(AIProvider):
-    def __init__(self, model_name: str = "llama-3.3-70b-versatile"):
+    def __init__(self, model_name: str = DEFAULT_GROQ_MODEL):
         self.model_name = os.getenv("GROQ_MODEL", model_name)
         self.api_key = os.getenv("GROQ_API_KEY")
         if not self.api_key:
