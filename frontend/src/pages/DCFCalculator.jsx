@@ -1,312 +1,187 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import api from '../api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const initialInputs = {
+  current_price: 0, starting_cf: 0, net_cash: 0, shares_outstanding: 0,
+  current_revenue: 0, current_margin: 0, target_margin: 15, tax_rate: 21,
+  discount_rate_base: 9, terminal_growth: 2.5,
+  fcf_growth_rates: [10, 9, 8, 7, 6], revenue_growth_rates: [15, 13, 11, 9, 7],
+};
+
+const money = (value) => {
+  if (value == null || !Number.isFinite(Number(value))) return 'N/A';
+  const absolute = Math.abs(value);
+  if (absolute >= 1e9) return `${value < 0 ? '-' : ''}$${(absolute / 1e9).toFixed(2)}B`;
+  if (absolute >= 1e6) return `${value < 0 ? '-' : ''}$${(absolute / 1e6).toFixed(2)}M`;
+  return `${value < 0 ? '-' : ''}$${absolute.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+};
+const percent = (value) => value == null ? 'N/A' : `${(value * 100).toFixed(1)}%`;
+const numberValue = (value) => Number(value) || 0;
+
+function NumericField({ label, value, onChange, suffix, step = 'any', hint }) {
+  return (
+    <label className="dcf-field">
+      <span>{label}</span>
+      <div className="dcf-input-wrap">
+        <input type="number" step={step} value={value} onChange={(event) => onChange(event.target.value)} />
+        {suffix && <small>{suffix}</small>}
+      </div>
+      {hint && <em>{hint}</em>}
+    </label>
+  );
+}
 
 export default function DCFCalculator() {
   const [ticker, setTicker] = useState('AAPL');
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(false);
   const [modelType, setModelType] = useState('Standard');
+  const [inputs, setInputs] = useState(initialInputs);
   const [infoData, setInfoData] = useState(null);
+  const [results, setResults] = useState(null);
+  const [fetching, setFetching] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [quotaBlocked, setQuotaBlocked] = useState(false);
   const [quotaRequested, setQuotaRequested] = useState(false);
 
-  const [inputs, setInputs] = useState({
-    // Shared
-    net_cash: 50000000,
-    shares_outstanding: 15000000,
-    terminal_growth: 2.5,
-    discount_rate_base: 9,
-
-    // Standard specific
-    starting_cf: 100000000,
-    fcf_growth: 10,
-
-    // Revenue specific
-    current_revenue: 1000000000,
-    revenue_growth: 15,
-    current_margin: -5,
-    target_margin: 15,
-    tax_rate: 21,
-  });
+  const growthRates = modelType === 'Standard' ? inputs.fcf_growth_rates : inputs.revenue_growth_rates;
+  const updateInput = (key, value) => setInputs((current) => ({ ...current, [key]: value }));
+  const updateGrowth = (index, value) => {
+    const key = modelType === 'Standard' ? 'fcf_growth_rates' : 'revenue_growth_rates';
+    setInputs((current) => ({ ...current, [key]: current[key].map((rate, position) => position === index ? value : rate) }));
+  };
 
   const fetchStockData = async () => {
     if (!ticker.trim()) return;
-    setFetching(true);
-    setResults(null);
+    setFetching(true); setError(''); setResults(null);
     try {
-      const res = await api.get(`/api/stock/${ticker.toUpperCase()}/full-analysis`);
-      const info = res.data.info;
+      const { data } = await api.get(`/api/stock/${ticker.trim().toUpperCase()}/full-analysis`);
+      const info = data.info || {};
+      const fcf = numberValue(info.freeCashflow);
+      const revenueGrowth = Math.max(-50, Math.min(100, numberValue(info.revenueGrowth || 0.10) * 100));
+      const suggested = [revenueGrowth, revenueGrowth * 0.9, revenueGrowth * 0.8, revenueGrowth * 0.7, revenueGrowth * 0.6].map((rate) => Number(rate.toFixed(1)));
       setInfoData(info);
-      
-      const fcf = info.freeCashflow || 0;
-      const tCash = info.totalCash || 0;
-      const tDebt = info.totalDebt || 0;
-      const shares = info.sharesOutstanding || info.impliedSharesOutstanding || 0;
-      const rev = info.totalRevenue || 0;
-      const revGrowth = info.revenueGrowth || 0.10;
-      const margin = info.operatingMargins || 0;
-
-      const newModelType = fcf > 0 ? 'Standard' : 'Revenue';
-      setModelType(newModelType);
-      
-      setInputs({
-        ...inputs,
+      setModelType(fcf > 0 ? 'Standard' : 'Revenue');
+      setInputs((current) => ({
+        ...current,
+        current_price: numberValue(info.currentPrice || info.regularMarketPrice),
         starting_cf: fcf,
-        net_cash: tCash - tDebt,
-        shares_outstanding: shares,
-        current_revenue: rev,
-        revenue_growth: (revGrowth > 0 ? revGrowth : 0.10) * 100,
-        current_margin: margin * 100,
-        fcf_growth: (revGrowth > 0 ? revGrowth : 0.10) * 100,
-      });
-    } catch (err) {
-      console.error("Failed to preload:", err);
-      alert("Failed to preload stock data. Ensure the ticker is valid.");
-    }
-    setFetching(false);
+        net_cash: numberValue(info.totalCash) - numberValue(info.totalDebt),
+        shares_outstanding: numberValue(info.sharesOutstanding || info.impliedSharesOutstanding),
+        current_revenue: numberValue(info.totalRevenue),
+        current_margin: numberValue(info.operatingMargins) * 100,
+        target_margin: Math.max(10, numberValue(info.operatingMargins) * 100),
+        fcf_growth_rates: suggested,
+        revenue_growth_rates: suggested,
+      }));
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Could not preload this ticker.');
+    } finally { setFetching(false); }
   };
 
   const handleCalculate = async () => {
-    setLoading(true);
+    setLoading(true); setError('');
+    const baseRate = numberValue(inputs.discount_rate_base) / 100;
+    const payload = {
+      ticker: ticker.trim().toUpperCase(), model_type: modelType,
+      starting_cf: numberValue(inputs.starting_cf), net_cash: numberValue(inputs.net_cash),
+      shares_outstanding: numberValue(inputs.shares_outstanding), current_price: numberValue(inputs.current_price),
+      growth_rates: inputs.fcf_growth_rates.map((rate) => numberValue(rate) / 100),
+      discount_rates: { Bull: baseRate - 0.01, Base: baseRate, Bear: baseRate + 0.01 },
+      terminal_growth: numberValue(inputs.terminal_growth) / 100,
+      current_revenue: numberValue(inputs.current_revenue),
+      revenue_growth_rates: inputs.revenue_growth_rates.map((rate) => numberValue(rate) / 100),
+      current_margin: numberValue(inputs.current_margin) / 100,
+      target_margin: numberValue(inputs.target_margin) / 100,
+      tax_rate: numberValue(inputs.tax_rate) / 100,
+    };
     try {
-      const baseDiscount = Number(inputs.discount_rate_base) / 100;
-      const payload = {
-        ticker,
-        model_type: modelType,
-        starting_cf: Number(inputs.starting_cf),
-        net_cash: Number(inputs.net_cash),
-        shares_outstanding: Number(inputs.shares_outstanding),
-        growth_rates: Array(5).fill(Number(inputs.fcf_growth) / 100), // simple 5 yr projection
-        discount_rates: { Bull: baseDiscount - 0.01, Base: baseDiscount, Bear: baseDiscount + 0.01 },
-        terminal_growth: Number(inputs.terminal_growth) / 100,
-        
-        // Revenue Model Specific
-        current_revenue: Number(inputs.current_revenue),
-        revenue_growth: Number(inputs.revenue_growth) / 100,
-        current_margin: Number(inputs.current_margin) / 100,
-        target_margin: Number(inputs.target_margin) / 100,
-        tax_rate: Number(inputs.tax_rate) / 100
-      };
-
-      const res = await api.post(`/api/dcf/calculate`, payload);
-      setResults(res.data);
-    } catch (err) {
-      console.error(err);
-      const detail = err.response?.data?.detail || err.message;
-      if (err.response?.status === 403 && detail.includes('Daily analysis limit')) setQuotaBlocked(true);
-      else alert("Error calculating DCF: " + detail);
-    }
-    setLoading(false);
+      const { data } = await api.post('/api/dcf/calculate', payload);
+      setResults(data);
+    } catch (requestError) {
+      const detail = requestError.response?.data?.detail || requestError.message;
+      if (requestError.response?.status === 403 && detail.includes('Daily analysis limit')) setQuotaBlocked(true);
+      setError(detail);
+    } finally { setLoading(false); }
   };
 
-  const requestQuota = async () => {
-    await api.post('/api/auth/analysis-quota/request');
-    setQuotaRequested(true);
-  };
-
-  const getChartData = () => {
-    if (!results || !results.Base) return [];
-    const base = results.Base;
-    const data = base.pv_years.map((val, idx) => ({
-      name: `Year ${idx + 1}`,
-      PV: val
-    }));
-    data.push({ name: 'Terminal', PV: base.pv_terminal });
-    return data;
-  };
-
-  const formatBil = (val) => val != null ? `$${(val / 1e9).toFixed(2)}B` : 'N/A';
-  const formatPct = (val) => val != null ? `${(val * 100).toFixed(2)}%` : 'N/A';
+  const requestQuota = async () => { await api.post('/api/auth/analysis-quota/request'); setQuotaRequested(true); };
+  const base = results?.scenarios?.Base;
+  const chartData = useMemo(() => results?.forecast?.map((row, index) => ({
+    name: `Y${row.year}`, FCF: row.fcf, PV: base?.pv_years?.[index],
+  })) || [], [results, base]);
+  const valueMix = base ? [
+    { name: 'Explicit forecast', value: base.pv_years.reduce((sum, value) => sum + value, 0) },
+    { name: 'Terminal value', value: base.pv_terminal },
+  ] : [];
 
   return (
-    <div>
-      {quotaBlocked && <div className="glass-panel quota-warning"><p>Daily shared limit of 5 DCF/Stock analyses reached.</p><button type="button" onClick={requestQuota} disabled={quotaRequested}>{quotaRequested ? 'Authorization pending' : 'Request admin authorization'}</button></div>}
-      <h2 style={{ marginBottom: '2rem' }}>📉 Dual-Model DCF Valuation</h2>
-      
-      <div className="glass-panel" style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', alignItems: 'center' }}>
-        <input 
-          type="text" 
-          value={ticker} 
-          onChange={(e) => setTicker(e.target.value)}
-          placeholder="Enter Ticker (e.g. AAPL)"
-          style={{ maxWidth: '300px' }}
-        />
-        <button className="btn-primary" onClick={fetchStockData} disabled={fetching}>
-          {fetching ? 'Preloading...' : 'Preload Ticker Data'}
-        </button>
-        {infoData && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-             <span className="metric-label">Auto-Selected Model:</span>
-             <span style={{ 
-               padding: '0.4rem 1rem', 
-               background: modelType === 'Standard' ? 'var(--status-green)' : 'var(--accent-purple)', 
-               borderRadius: '20px', 
-               fontWeight: 'bold',
-               color: 'white'
-             }}>
-               {modelType} {modelType === 'Standard' ? '(FCF)' : '(Revenue Convergence)'}
-             </span>
+    <div className="dcf-page">
+      {quotaBlocked && <div className="glass-panel quota-warning"><p>Daily shared analysis limit reached.</p><button type="button" onClick={requestQuota} disabled={quotaRequested}>{quotaRequested ? 'Authorization pending' : 'Request authorization'}</button></div>}
+      <header className="dcf-hero">
+        <div><span className="dcf-eyebrow">Intrinsic value laboratory</span><h2>5-Year DCF Calculator</h2><p>Company data sets the baseline. Every forecast assumption remains visible and editable.</p></div>
+        {infoData && <div className="dcf-quote"><small>{ticker.toUpperCase()} market price</small><strong>${numberValue(inputs.current_price).toFixed(2)}</strong><span>{infoData.shortName || infoData.longName}</span></div>}
+      </header>
+
+      <section className="glass-panel dcf-ticker-bar">
+        <label><span>Ticker</span><input value={ticker} onChange={(event) => setTicker(event.target.value.toUpperCase())} placeholder="AAPL" /></label>
+        <button className="btn-primary" onClick={fetchStockData} disabled={fetching}>{fetching ? 'Loading company data…' : 'Load company data'}</button>
+        <div className="dcf-model-tabs" aria-label="Valuation model">
+          <button className={modelType === 'Standard' ? 'active' : ''} onClick={() => setModelType('Standard')}>FCF model</button>
+          <button className={modelType === 'Revenue' ? 'active' : ''} onClick={() => setModelType('Revenue')}>Revenue model</button>
+        </div>
+      </section>
+      {error && <div className="dcf-alert error">{error}</div>}
+
+      <div className="dcf-workspace">
+        <section className="glass-panel dcf-assumptions">
+          <div className="dcf-section-title"><div><span>01</span><h3>Company baseline</h3></div><small>Auto-filled · editable</small></div>
+          <div className="dcf-fields-grid">
+            <NumericField label="Current price" value={inputs.current_price} onChange={(v) => updateInput('current_price', v)} suffix="$ / share" />
+            <NumericField label="Net cash (cash − debt)" value={inputs.net_cash} onChange={(v) => updateInput('net_cash', v)} suffix="$" />
+            <NumericField label="Diluted shares" value={inputs.shares_outstanding} onChange={(v) => updateInput('shares_outstanding', v)} suffix="shares" />
+            {modelType === 'Standard' ?
+              <NumericField label="Starting free cash flow" value={inputs.starting_cf} onChange={(v) => updateInput('starting_cf', v)} suffix="$" hint="Latest provider-reported period" /> :
+              <><NumericField label="Starting revenue" value={inputs.current_revenue} onChange={(v) => updateInput('current_revenue', v)} suffix="$" /><NumericField label="Current operating margin" value={inputs.current_margin} onChange={(v) => updateInput('current_margin', v)} suffix="%" /></>}
           </div>
-        )}
+
+          <div className="dcf-section-title"><div><span>02</span><h3>Explicit forecast</h3></div><small>Five annual assumptions</small></div>
+          <div className="dcf-growth-grid">
+            {growthRates.map((rate, index) => <NumericField key={index} label={`Year ${index + 1}`} value={rate} onChange={(v) => updateGrowth(index, v)} suffix="% growth" step="0.1" />)}
+          </div>
+          {modelType === 'Revenue' && <div className="dcf-fields-grid compact"><NumericField label="Year 5 target operating margin" value={inputs.target_margin} onChange={(v) => updateInput('target_margin', v)} suffix="%" /><NumericField label="Cash tax rate" value={inputs.tax_rate} onChange={(v) => updateInput('tax_rate', v)} suffix="%" /></div>}
+
+          <div className="dcf-section-title"><div><span>03</span><h3>Valuation assumptions</h3></div><small>WACC ±1% creates scenarios</small></div>
+          <div className="dcf-fields-grid compact">
+            <NumericField label="Base discount rate (WACC)" value={inputs.discount_rate_base} onChange={(v) => updateInput('discount_rate_base', v)} suffix="%" step="0.1" />
+            <NumericField label="Perpetual growth" value={inputs.terminal_growth} onChange={(v) => updateInput('terminal_growth', v)} suffix="%" step="0.1" />
+          </div>
+          <button className="btn-primary dcf-run" onClick={handleCalculate} disabled={loading || !numberValue(inputs.shares_outstanding)}>{loading ? 'Calculating…' : 'Calculate intrinsic value'}</button>
+        </section>
+
+        <aside className="glass-panel dcf-result-panel">
+          {!base ? <div className="dcf-empty"><span>DCF</span><h3>Load a company, refine assumptions, calculate.</h3><p>Results will include scenario range, margin of safety and sensitivity.</p></div> : <>
+            <span className="dcf-eyebrow">Base case fair value</span>
+            <div className="dcf-fair-value">${base.per_share.toFixed(2)}</div>
+            <div className={`dcf-mos ${base.upside >= 0 ? 'positive' : 'negative'}`}><span>Margin of safety</span><strong>{percent(base.upside)}</strong></div>
+            <div className="dcf-value-scale"><i style={{ left: `${Math.max(2, Math.min(98, 50 + (base.upside || 0) * 50))}%` }} /><span>Overvalued</span><span>Fair value</span><span>Undervalued</span></div>
+            <div className="dcf-result-stats"><div><span>Enterprise value</span><strong>{money(base.ev)}</strong></div><div><span>Equity value</span><strong>{money(base.equity)}</strong></div><div><span>Terminal value weight</span><strong>{percent(base.terminal_share)}</strong></div><div><span>Market price</span><strong>${numberValue(inputs.current_price).toFixed(2)}</strong></div></div>
+            <div className="dcf-value-mix"><div className="dcf-donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={valueMix} dataKey="value" innerRadius={42} outerRadius={62} paddingAngle={3} stroke="none">{valueMix.map((item, index) => <Cell key={item.name} fill={index === 0 ? '#32d6c5' : '#5f7cff'} />)}</Pie><Tooltip formatter={(value) => money(value)} contentStyle={{ background: '#111a2b', border: '1px solid #24324a' }} /></PieChart></ResponsiveContainer><strong>{percent(base.terminal_share)}</strong></div><div><span><i className="explicit" />5-year cash flows</span><span><i className="terminal" />Terminal value</span></div></div>
+            {results.warnings?.map((warning) => <div className="dcf-alert" key={warning}>⚠ {warning}</div>)}
+          </>}
+        </aside>
       </div>
 
-      <div className="grid-2" style={{ gap: '2rem', marginBottom: '2rem' }}>
-        {/* Core Metrics (Read-only reference) */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <h3 className="metric-label" style={{ color: 'var(--accent-cyan)' }}>Fundamental Data (Auto-Filled)</h3>
-          
-          <div className="grid-2">
-            <div>
-              <label className="metric-label">Net Cash (Cash - Debt)</label>
-              <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{formatBil(inputs.net_cash)}</div>
-            </div>
-            <div>
-              <label className="metric-label">Shares Outstanding</label>
-              <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{(inputs.shares_outstanding / 1e6).toFixed(2)}M</div>
-            </div>
-            
-            {modelType === 'Standard' ? (
-              <div>
-                <label className="metric-label">Starting FCF (TTM)</label>
-                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--status-green)' }}>{formatBil(inputs.starting_cf)}</div>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="metric-label">TTM Revenue</label>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{formatBil(inputs.current_revenue)}</div>
-                </div>
-                <div>
-                  <label className="metric-label">Current Operating Margin</label>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: inputs.current_margin < 0 ? 'var(--status-red)' : 'var(--status-green)' }}>
-                    {formatPct(inputs.current_margin / 100)}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Projection Inputs (Editable) */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <h3 className="metric-label" style={{ color: 'var(--accent-blue)' }}>User Assumptions (Editable)</h3>
-          
-          <div className="grid-2">
-            {modelType === 'Standard' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <label className="metric-label">Year 1-5 FCF Growth Rate (%)</label>
-                  <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.fcf_growth}%</span>
-                </div>
-                <input type="range" min="-50" max="100" step="0.5" value={inputs.fcf_growth} onChange={e => setInputs({...inputs, fcf_growth: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
-              </div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <label className="metric-label">Year 1-5 Rev Growth Rate (%)</label>
-                    <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.revenue_growth}%</span>
-                  </div>
-                  <input type="range" min="-50" max="200" step="0.5" value={inputs.revenue_growth} onChange={e => setInputs({...inputs, revenue_growth: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <label className="metric-label">Target Margin Year 5 (%)</label>
-                    <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.target_margin}%</span>
-                  </div>
-                  <input type="range" min="-20" max="50" step="0.5" value={inputs.target_margin} onChange={e => setInputs({...inputs, target_margin: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <label className="metric-label">Tax Rate (%)</label>
-                    <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.tax_rate}%</span>
-                  </div>
-                  <input type="range" min="0" max="50" step="0.5" value={inputs.tax_rate} onChange={e => setInputs({...inputs, tax_rate: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
-                </div>
-              </>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <label className="metric-label">Discount Rate Base (%)</label>
-                <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.discount_rate_base}%</span>
-              </div>
-              <input type="range" min="1" max="20" step="0.5" value={inputs.discount_rate_base} onChange={e => setInputs({...inputs, discount_rate_base: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <label className="metric-label">Terminal Growth Rate (%)</label>
-                <span style={{ fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{inputs.terminal_growth}%</span>
-              </div>
-              <input type="range" min="-5" max="10" step="0.1" value={inputs.terminal_growth} onChange={e => setInputs({...inputs, terminal_growth: e.target.value})} style={{ width: '100%', cursor: 'pointer' }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <button className="btn-primary" onClick={handleCalculate} disabled={loading} style={{ marginBottom: '2rem', width: '100%', fontSize: '1.2rem', padding: '1rem' }}>
-        {loading ? 'Calculating Valuation...' : 'Run Valuation'}
-      </button>
-
-      {results && (
-        <>
-          <div className="grid-3" style={{ marginBottom: '2rem' }}>
-            {Object.entries(results).map(([scenario, data]) => {
-               // Assuming inputs.currentPrice is not tracked here natively, we can use infoData if available to show upside/downside
-               const currentPrice = infoData?.currentPrice || 0;
-               const impliedPrice = data.per_share || 0;
-               const upside = currentPrice > 0 ? ((impliedPrice - currentPrice) / currentPrice) * 100 : 0;
-               const isUpside = upside > 0;
-
-               return (
-                <div key={scenario} className="glass-panel" style={{ borderTop: `4px solid ${scenario === 'Base' ? 'var(--accent-cyan)' : 'transparent'}` }}>
-                  <h3 className="metric-label">{scenario} Scenario</h3>
-                  <div className="metric-value" style={{ color: scenario === 'Base' ? 'var(--accent-cyan)' : 'white' }}>
-                    ${impliedPrice.toFixed(2)}
-                  </div>
-                  <p className="metric-label" style={{ marginTop: '0.2rem' }}>Implied Share Price</p>
-                  
-                  {currentPrice > 0 && (
-                    <div style={{ marginTop: '0.5rem', fontWeight: 'bold', color: isUpside ? 'var(--status-green)' : 'var(--status-red)' }}>
-                      {isUpside ? '▲' : '▼'} {Math.abs(upside).toFixed(2)}% vs Current (${currentPrice.toFixed(2)})
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                      <span className="metric-label">Enterprise Value:</span>
-                      <span style={{ fontWeight: 'bold' }}>{formatBil(data.ev)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                      <span className="metric-label">Equity Value:</span>
-                      <span style={{ fontWeight: 'bold' }}>{formatBil(data.equity)}</span>
-                    </div>
-                  </div>
-                </div>
-               );
-            })}
-          </div>
-
-          <div className="glass-panel">
-            <h3 className="metric-label" style={{ marginBottom: '1rem' }}>Present Value of Cash Flows (Base Scenario)</h3>
-            <div style={{ height: '400px', width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={getChartData()} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" tickFormatter={(val) => `$${(val/1e9).toFixed(1)}B`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
-                    formatter={(val) => [`$${(val/1e9).toFixed(2)}B`, 'Present Value']}
-                  />
-                  <Bar dataKey="PV" fill="var(--accent-blue)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </>
-      )}
+      {results && <>
+        <section className="dcf-scenarios">
+          {['Bear', 'Base', 'Bull'].map((name) => { const scenario = results.scenarios[name]; return <article className={`glass-panel ${name === 'Base' ? 'featured' : ''}`} key={name}><span>{name} case · {percent(scenario.discount_rate)} WACC</span><strong>${scenario.per_share.toFixed(2)}</strong><small className={scenario.upside >= 0 ? 'positive' : 'negative'}>{percent(scenario.upside)} vs market</small></article>; })}
+        </section>
+        <section className="grid-2 dcf-analysis-grid">
+          <div className="glass-panel"><div className="dcf-section-title"><div><span>04</span><h3>5-year cash-flow path</h3></div></div><div className="dcf-chart"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData}><defs><linearGradient id="fcfGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#32d6c5" stopOpacity=".45"/><stop offset="100%" stopColor="#32d6c5" stopOpacity=".02"/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.08)" /><XAxis dataKey="name" stroke="#8291a8" /><YAxis stroke="#8291a8" tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} /><Tooltip formatter={(v) => money(v)} contentStyle={{ background: '#111a2b', border: '1px solid #24324a' }} /><Area type="monotone" dataKey="FCF" fill="url(#fcfGradient)" stroke="#32d6c5" strokeWidth={3} /><Bar dataKey="PV" fill="#5f7cff" fillOpacity={0.75} radius={[5,5,0,0]} maxBarSize={38} /></ComposedChart></ResponsiveContainer></div><div className="dcf-chart-legend"><span><i className="fcf" />Projected FCF</span><span><i className="pv" />Discounted value</span></div></div>
+          <div className="glass-panel"><div className="dcf-section-title"><div><span>05</span><h3>Forecast detail</h3></div></div><div className="dcf-table-wrap"><table className="dcf-table"><thead><tr><th>Year</th><th>Growth</th>{modelType === 'Revenue' && <th>Revenue</th>}{modelType === 'Revenue' && <th>Margin</th>}<th>FCF</th><th>Present value</th></tr></thead><tbody>{results.forecast.map((row, index) => <tr key={row.year}><td>Y{row.year}</td><td>{percent(row.growth_rate)}</td>{modelType === 'Revenue' && <td>{money(row.revenue)}</td>}{modelType === 'Revenue' && <td>{percent(row.margin)}</td>}<td>{money(row.fcf)}</td><td>{money(base.pv_years[index])}</td></tr>)}</tbody></table></div></div>
+        </section>
+        {results.sensitivity && <section className="glass-panel"><div className="dcf-section-title"><div><span>06</span><h3>Fair-value sensitivity</h3></div><small>Rows: WACC · Columns: perpetual growth</small></div><div className="dcf-table-wrap"><table className="dcf-table sensitivity"><thead><tr><th>WACC \ g</th>{results.sensitivity.terminal_growth_rates.map((g) => <th key={g}>{percent(g)}</th>)}</tr></thead><tbody>{results.sensitivity.discount_rates.map((rate, rowIndex) => <tr key={rate}><th>{percent(rate)}</th>{results.sensitivity.values[rowIndex].map((value, columnIndex) => <td className={rate === numberValue(inputs.discount_rate_base) / 100 && results.sensitivity.terminal_growth_rates[columnIndex] === numberValue(inputs.terminal_growth) / 100 ? 'selected' : ''} key={columnIndex}>{value == null ? '—' : `$${value.toFixed(2)}`}</td>)}</tr>)}</tbody></table></div></section>}
+      </>}
     </div>
   );
 }
